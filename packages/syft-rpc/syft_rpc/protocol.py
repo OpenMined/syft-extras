@@ -252,6 +252,15 @@ class SyftFuture(Base):
         """Check if the future has expired."""
         return datetime.now(timezone.utc) > self.expires
 
+    @property
+    def state_path(request_path: Path) -> Path:
+        try:
+            request = SyftRequest.load(request_path)
+        except FileNotFoundError:
+            raise SyftError("Request file not found")
+        message_hash = request.get_message_hash()
+        return request_path.parent / f".{message_hash}.state"
+
     @staticmethod
     def load_state(request_path: PathLike) -> Self:
         try:
@@ -319,6 +328,7 @@ class SyftFuture(Base):
         """
         # Check for rejection first
         if self.is_rejected:
+            self.__clean_up()
             return SyftResponse(
                 status_code=SyftStatus.SYFT_403_FORBIDDEN,
                 url=self.url,
@@ -353,6 +363,24 @@ class SyftFuture(Base):
             logger.info("Response not ready, still waiting...")
         return None
 
+    def __clean_up(self) -> None:
+        """Remove temporary request, state, and response files from the filesystem.
+
+        This method safely deletes the temporary files used during the RPC communication,
+        ignoring any cases where files might already be missing.
+
+        Notes:
+            - Uses `unlink(missing_ok=True)` to prevent errors if files don't exist
+            - Removes state, request, and response files
+        """
+        try:
+            self.state_path.unlink(missing_ok=True)
+        except SyftError as e:
+            logger.error(f"Error cleaning up state file: {str(e)}")
+
+        self.request_path.unlink(missing_ok=True)
+        self.response_path.unlink(missing_ok=True)
+
     def _handle_existing_response(self) -> SyftResponse:
         """Process an existing response file.
 
@@ -366,20 +394,18 @@ class SyftFuture(Base):
         try:
             response = SyftResponse.load(self.response_path)
             if response.is_expired:
-                return SyftResponse(
-                    status_code=SyftStatus.SYFT_419_EXPIRED,
-                    url=self.url,
-                    sender=response.sender,
-                )
-            return response
+                response.status_code = SyftStatus.SYFT_419_EXPIRED
         except (PydanticValidationError, ValueError, UnicodeDecodeError) as e:
             logger.error(f"Error loading response: {str(e)}")
-            return SyftResponse(
+            response = SyftResponse(
                 status_code=SyftStatus.SYFT_500_SERVER_ERROR,
                 body=str(e).encode(),
                 url=self.url,
                 sender="SYSTEM",
             )
+
+        self.__clean_up()
+        return response
 
     def __hash__(self):
         return hash(self.ulid)
