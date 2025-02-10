@@ -192,13 +192,9 @@ class SyftMessage(Base):
     )
     """Timestamp when the message expires."""
 
-    @field_serializer("created")
-    def serialize_created(self, dt: datetime, _info):
-        return dt.timestamp()
-
-    @field_serializer("expires")
-    def serialize_expires(self, dt: datetime, _info):
-        return dt.timestamp()
+    @field_serializer("created", "expires")
+    def serialize_dt(self, dt: datetime, _info):
+        return dt.isoformat()
 
     @property
     def age(self) -> float:
