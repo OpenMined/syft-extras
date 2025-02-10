@@ -16,3 +16,8 @@ build-backend = "hatchling.build"
 
 [tool.uv.sources]
 syft-core = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+]

@@ -5,7 +5,6 @@ from pathlib import Path
 from threading import Event
 
 from loguru import logger
-from pydantic import BaseModel
 from syft_core import Client
 from syft_rpc import rpc
 from syft_rpc.protocol import SyftRequest, SyftStatus

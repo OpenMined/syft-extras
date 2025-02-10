@@ -9,7 +9,14 @@ from enum import Enum, IntEnum
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_serializer,
+    field_validator,
+)
 from pydantic import ValidationError as PydanticValidationError
 from syft_core.types import PathLike, to_path
 from syft_core.url import SyftBoxURL
@@ -84,15 +91,6 @@ class SyftStatus(IntEnum):
 class Base(BaseModel):
     """Base model with enhanced serialization capabilities."""
 
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,
-        json_encoders={
-            datetime: lambda dt: dt.isoformat(),
-        },
-        ser_json_bytes="base64",
-        val_json_bytes="base64",
-    )
-
     def dumps(self) -> str:
         """Serialize the model instance to JSON formatted str.
 
@@ -162,6 +160,12 @@ class Base(BaseModel):
 class SyftMessage(Base):
     """Base message class for Syft protocol communication."""
 
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        ser_json_bytes="base64",
+        val_json_bytes="base64",
+    )
+
     VERSION: ClassVar[int] = 1
 
     id: UUID = Field(default_factory=uuid4)
@@ -187,6 +191,10 @@ class SyftMessage(Base):
         + timedelta(seconds=DEFAULT_MESSAGE_EXPIRY)
     )
     """Timestamp when the message expires."""
+
+    @field_serializer("created", "expires")
+    def serialize_dt(self, dt: datetime, _info):
+        return dt.isoformat()
 
     @property
     def age(self) -> float:

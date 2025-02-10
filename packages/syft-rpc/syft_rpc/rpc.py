@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,18 +35,25 @@ def make_url(datasite: str, app_name: str, endpoint: str) -> SyftBoxURL:
     )
 
 
+class GenericModel(BaseModel):
+    class Config:
+        extra = "allow"
+
+
 def serialize(obj: Any) -> Optional[bytes]:
+    """Serialize an object to bytes for sending over the network."""
+
     if obj is None:
         return None
+    elif isinstance(obj, str):
+        return obj.encode()
     elif isinstance(obj, BaseModel):
         return obj.model_dump_json().encode()
     elif is_dataclass(obj) and not isinstance(obj, type):
-        return json.dumps(asdict(obj), default=str, ensure_ascii=False).encode()
-    elif isinstance(obj, str):
-        return obj.encode()
+        return GenericModel(**asdict(obj)).model_dump_json().encode()
     else:
-        # dict, list, tuple, float, int, str
-        return json.dumps(obj, ensure_ascii=False).encode()
+        # dict, list, tuple, float, int
+        return GenericModel(**obj).model_dump_json().encode()
 
 
 def send(
