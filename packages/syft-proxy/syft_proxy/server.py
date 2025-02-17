@@ -65,6 +65,7 @@ async def rpc_send(rpc_req: RPCSendRequest, blocking: bool = False):
             headers=rpc_req.headers,
             body=rpc_req.body,
             expiry=rpc_req.expiry,
+            cache=rpc_req.cache,
         )
 
         if not blocking:
