@@ -372,18 +372,18 @@
               `&nbsp;&nbsp;Status: ${response.status}<br>` +
               `&nbsp;&nbsp;Status Code: ${response.status_code}<br>` +
               `&nbsp;&nbsp;Message: ${response.body}<br><br>`,
-            "pollingOutput",
+            "statusOutput",
           );
         } catch (error) {
           if (error instanceof SyftRPCError) {
             appendOutput(
               `RPC Request "${error.result.id}" failed with message ${error.message}<br>`,
-              "pollingOutput",
+              "statusOutput",
             );
           } else {
             appendOutput(
               `Request failed with unexpected error: ${error.message}<br>`,
-              "pollingOutput",
+              "statusOutput",
             );
           }
         } finally {
