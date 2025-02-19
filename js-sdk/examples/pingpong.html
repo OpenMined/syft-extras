@@ -237,6 +237,14 @@
         showError("SDK initialization failed: " + error.message);
       }
 
+      try {
+        const pingResponse = syft.rpc.ping();
+        console.log("Pinging proxy...");
+        pingResponse.then((res) => console.log(res));
+      } catch (error) {
+        console.error("Can't ping proxy server. Error: " + error.message);
+      }
+
       function showStatus(message, isError = false, elementId = "status") {
         const statusDiv = document.getElementById(elementId);
         statusDiv.textContent = message;
