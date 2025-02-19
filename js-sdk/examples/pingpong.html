@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ping Pong Demo</title>
+    <style>
+      body {
+        background-color: #1a1a1a;
+        color: #e0e0e0;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+
+      .form-group {
+        margin-bottom: 10px;
+      }
+
+      .form-group input[type="text"] {
+        background-color: #2d2d2d;
+        border: 1px solid #404040;
+        color: #e0e0e0;
+        padding: 8px;
+        border-radius: 4px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .form-group input[type="text"]:focus {
+        outline: none;
+        border-color: #0066cc;
+        box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.25);
+      }
+
+      .checkbox-group {
+        margin: 15px 0;
+      }
+
+      .button {
+        background-color: #0066cc;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-bottom: 10px;
+        transition: background-color 0.2s;
+      }
+
+      .button:hover {
+        background-color: #0077ee;
+      }
+
+      .button:disabled {
+        background-color: #404040;
+        cursor: not-allowed;
+      }
+
+      .container {
+        display: flex;
+        gap: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .column {
+        flex: 1;
+        padding: 20px;
+        background-color: #2d2d2d;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      #output,
+      #statusOutput {
+        background-color: #1a1a1a;
+        color: #e0e0e0;
+        padding: 12px;
+        border-radius: 4px;
+        border: 1px solid #404040;
+        margin-top: 10px;
+        white-space: pre-wrap;
+        font-family: "Consolas", "Monaco", "Menlo", monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        overflow-x: auto;
+      }
+
+      /* JSON syntax highlighting */
+      .json-key {
+        color: #9cdcfe;
+      }
+      .json-string {
+        color: #ce9178;
+      }
+      .json-number {
+        color: #b5cea8;
+      }
+      .json-boolean {
+        color: #569cd6;
+      }
+      .json-null {
+        color: #569cd6;
+      }
+
+      .error {
+        color: #ff6b6b;
+        margin: 10px 0;
+      }
+
+      .success {
+        color: #69db7c;
+        margin: 10px 0;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 5px;
+        color: #b0b0b0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="column">
+        <div class="form-group">
+          <label for="datasite">Datasite:</label>
+          <input
+            type="text"
+            id="datasite"
+            placeholder="e.g., yash@openmined.org"
+            value="khoa@openmined.org"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="endpoint">Endpoint:</label>
+          <input
+            type="text"
+            id="endpoint"
+            placeholder="e.g., ping"
+            value="ping"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="message">Message:</label>
+          <input
+            type="text"
+            id="message"
+            placeholder="Enter your message"
+            value="Ping!"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="message">Expiry Time:</label>
+          <input type="text" id="expiry" placeholder="e.g., 30s" value="30s" />
+        </div>
+
+        <div class="checkbox-group">
+          <label>
+            <input type="checkbox" id="blocking" />
+            Blocking Request
+          </label>
+        </div>
+
+        <div class="checkbox-group">
+          <label>
+            <input type="checkbox" id="cache" checked />
+            Using Cache?
+          </label>
+        </div>
+
+        <button id="sendButton" class="button" onclick="sendRPCRequest()">
+          Send RPC Request
+        </button>
+        <div id="status"></div>
+        <pre
+          id="output"
+          readonly
+          placeholder="Response will appear here..."
+        ></pre>
+      </div>
+
+      <div class="column">
+        <button id="pollingButton" class="button" onclick="polling()">
+          Start Polling
+        </button>
+        <div id="pollingOutput"></div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="column">
+        <button
+          id="listFuturesButton"
+          class="button"
+          onclick="listingFutures()"
+        >
+          List Pending Requests
+        </button>
+        <div id="listFuturesOutputs"></div>
+      </div>
+
+      <div class="column">
+        <div class="form-group">
+          <label for="futureID">Future ID:</label>
+          <input
+            type="text"
+            id="futureID"
+            placeholder="Check Status of Request with ID: "
+          />
+        </div>
+        <button
+          id="checkStatusButton"
+          class="button"
+          onclick="rpcRequestStatus()"
+        >
+          Check RPC Request Status
+        </button>
+        <div id="statusOutput"></div>
+      </div>
+    </div>
+
+    <!-- ----------- script ------------ -->
+    <script type="text/javascript" src="../src/sdk.js"></script>
+    <script type="text/javascript">
+      let syft;
+      const appName = "pingpong";
+      try {
+        syft = new SyftProxySDK("pingpong");
+      } catch (error) {
+        showError("SDK initialization failed: " + error.message);
+      }
+
+      try {
+        const pingResponse = syft.rpc.ping();
+        console.log("Pinging proxy...");
+        pingResponse.then((res) => console.log(res));
+      } catch (error) {
+        console.error("Can't ping proxy server. Error: " + error.message);
+      }
+
+      function showStatus(message, isError = false, elementId = "status") {
+        const statusDiv = document.getElementById(elementId);
+        statusDiv.textContent = message;
+        statusDiv.className = isError ? "error" : "success";
+      }
+
+      function showError(error, elementId = "status") {
+        showStatus(error, true, elementId);
+        console.error(error);
+      }
+
+      function syntaxHighlight(json) {
+        if (typeof json !== "string") {
+          json = JSON.stringify(json, null, 2);
+        }
+        return json.replace(
+          /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+          function (match) {
+            let cls = "json-number";
+            if (/^"/.test(match)) {
+              if (/:$/.test(match)) {
+                cls = "json-key";
+              } else {
+                cls = "json-string";
+              }
+            } else if (/true|false/.test(match)) {
+              cls = "json-boolean";
+            } else if (/null/.test(match)) {
+              cls = "json-null";
+            }
+            return '<span class="' + cls + '">' + match + "</span>";
+          },
+        );
+      }
+
+      function appendOutput(message, elementId = "output") {
+        const output = document.getElementById(elementId);
+        if (typeof message === "string" && message.startsWith("Response: ")) {
+          try {
+            const jsonPart = message.substring(10); // Remove "Response: " prefix
+            const jsonObj = JSON.parse(jsonPart);
+            output.innerHTML += "Response:\n" + syntaxHighlight(jsonObj) + "\n";
+          } catch (e) {
+            output.innerHTML += message + "\n";
+          }
+        } else {
+          output.innerHTML += message + "\n";
+        }
+      }
+
+      async function sendRPCRequest() {
+        const button = document.getElementById("sendButton");
+        const datasite = document.getElementById("datasite").value;
+        const endpoint = document.getElementById("endpoint").value;
+        const message = document.getElementById("message").value;
+        const blocking = document.getElementById("blocking").checked;
+        const expiry = document.getElementById("expiry").value;
+        const cache = document.getElementById("cache").checked;
+
+        if (!datasite || !endpoint || !message) {
+          showError("Please fill in all fields");
+          return;
+        }
+
+        // Clear the output element at the start of new request
+        document.getElementById("output").innerHTML = "";
+
+        button.disabled = true;
+        showStatus("Sending request...");
+
+        try {
+          const url = syft.rpc.makeURL(datasite, appName, endpoint);
+
+          const response = await syft.rpc.send(url, {
+            body: {
+              msg: message,
+              // ts: new Date().toISOString(),
+              ts: "2025-02-14T03:41:57.171Z", // use a fixed timestamp for testing cached responses
+            },
+            blocking: blocking,
+            expiry: expiry,
+            cache: cache,
+          });
+
+          showStatus(`Request sent to ${url} successfully!`);
+          console.log(response.data);
+          console.log("response.text() = ", response.text());
+          console.log("response.json() = ", response.json());
+
+          appendOutput(`Response: ${JSON.stringify(response, null, 2)}`);
+        } catch (error) {
+          if (error.code === "PARSE_ERROR") {
+            showError("Failed to parse response: " + error.message);
+          } else if (error.code === "NETWORK_ERROR") {
+            showError("Network error: " + error.message);
+          } else {
+            showError("RPC Request failed: " + error.message);
+          }
+          appendOutput(`Error: ${error.message}`);
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      async function rpcRequestStatus() {
+        const button = document.getElementById("checkStatusButton");
+        const futureID = document.getElementById("futureID").value;
+        console.log("Checking RPC Request Status with ID: ", futureID);
+
+        document.getElementById("statusOutput").innerHTML = "";
+        button.disabled = true;
+
+        try {
+          response = await syft.rpc.status(futureID);
+          console.log("response = ", response);
+          appendOutput(
+            `&nbsp;&nbsp;Request ${response.id}: <br>` +
+              `&nbsp;&nbsp;Status: ${response.status}<br>` +
+              `&nbsp;&nbsp;Status Code: ${response.status_code}<br>` +
+              `&nbsp;&nbsp;Message: ${response.body}<br><br>`,
+            "statusOutput",
+          );
+        } catch (error) {
+          if (error instanceof SyftRPCError) {
+            appendOutput(
+              `RPC Request "${error.result.id}" failed with message ${error.message}<br>`,
+              "statusOutput",
+            );
+          } else {
+            appendOutput(
+              `Request failed with unexpected error: ${error.message}<br>`,
+              "statusOutput",
+            );
+          }
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      async function listingFutures() {
+        const button = document.getElementById("listFuturesButton");
+        const listFuturesOutputs =
+          document.getElementById("listFuturesOutputs");
+        listFuturesOutputs.innerHTML = "";
+        button.disabled = true;
+
+        try {
+          const pendingRequests = await syft.rpc.listFutures();
+          console.log("pendingRequests = ", pendingRequests);
+
+          if (pendingRequests.length === 0) {
+            appendOutput("No pending requests found", "listFuturesOutputs");
+          } else {
+            appendOutput(
+              `There are ${pendingRequests.length} pending requests:<br>`,
+              "listFuturesOutputs",
+            );
+            pendingRequests.forEach((futureId) => {
+              appendOutput(`${futureId}<br>`, "listFuturesOutputs");
+            });
+          }
+        } catch (error) {
+          appendOutput(
+            "Listing failed: " + error.message,
+            "listFuturesOutputs",
+          );
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      let isPolling = false;
+      async function polling() {
+        const button = document.getElementById("pollingButton");
+        const pollingOutput = document.getElementById("pollingOutput");
+
+        // Toggle polling state
+        if (isPolling) {
+          isPolling = false;
+          button.textContent = "Start Polling";
+          return;
+        }
+
+        isPolling = true;
+        button.textContent = "Stop Polling";
+        // pollingOutput.innerHTML = "";
+
+        while (isPolling) {
+          try {
+            const pendingFutures = await syft.rpc.listFutures();
+
+            if (pendingFutures.length === 0) {
+              appendOutput(
+                `&nbsp;&nbsp;No futures to poll for now...<br>`,
+                "pollingOutput",
+              );
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              continue;
+            }
+
+            appendOutput(
+              `&nbsp;&nbsp;Polling ${pendingFutures.length} futures...<br>`,
+              "pollingOutput",
+            );
+            // Poll all futures concurrently
+            const pollPromises = pendingFutures.map((futureId) =>
+              syft.rpc
+                .pollFuture(futureId, 2000)
+                .then((result) => {
+                  appendOutput(
+                    `&nbsp;&nbsp;Request ${result.id}: <br>` +
+                      `&nbsp;&nbsp;Status: ${result.status}<br>` +
+                      `&nbsp;&nbsp;Status Code: ${result.status_code}<br>` +
+                      `&nbsp;&nbsp;Message: ${result.body}<br><br>`,
+                    "pollingOutput",
+                  );
+
+                  return result;
+                })
+                .catch((error) => {
+                  if (error instanceof SyftRPCError) {
+                    appendOutput(
+                      `RPC Request "${error.result.id}" failed with message ${error.message}<br><br>`,
+                      "pollingOutput",
+                    );
+                  } else {
+                    appendOutput(
+                      `Request failed with unexpected error: ${error.message}<br><br>`,
+                      "pollingOutput",
+                    );
+                  }
+                }),
+            );
+
+            await Promise.all(pollPromises);
+
+            // Brief pause before next polling cycle
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error("Polling error:", error);
+            appendOutput(`Polling error: ${error.message}`, "pollingOutput");
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
+        }
+
+        button.disabled = false;
+      }
+    </script>
+  </body>
+</html>
