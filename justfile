@@ -53,3 +53,19 @@ run-pong:
 run-ping:
     uv sync
     uv run examples/pingpong/ping_request.py
+
+[group('js-sdk')]
+serve-static-files:
+    cd js-sdk && python -m http.server 8000 --bind 127.0.0.1
+
+[group('js-sdk')]
+test-scenarios:
+    # need to start the proxy and pong server first
+    @for file in js-sdk/tests/scenarios/*.js; do \
+        echo "{{ _cyan }}Running test: $file{{ _nc }}"; \
+        if ! node "$file"; then \
+            echo "{{ _red }}Test failed: $file{{ _nc }}"; \
+            exit 1; \
+        fi; \
+    done
+    @echo "{{ _green }}Congrats! All tests have passed!{{ _nc }}"
