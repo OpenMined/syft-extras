@@ -9,14 +9,7 @@ from enum import Enum, IntEnum
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    PrivateAttr,
-    field_serializer,
-    field_validator,
-)
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_serializer
 from pydantic import ValidationError as PydanticValidationError
 from syft_core.types import PathLike, to_path
 from syft_core.url import SyftBoxURL
@@ -46,14 +39,6 @@ PYDANTIC = TypeVar("PYDANTIC", bound=BaseModel)
 DEFAULT_MESSAGE_EXPIRY: int = 60 * 60 * 24  # 1 days in seconds
 DEFAULT_POLL_INTERVAL: float = 0.1
 DEFAULT_TIMEOUT: float = 300  # 5 minutes in seconds
-
-
-def validate_syftbox_url(url: Union[SyftBoxURL, str]) -> SyftBoxURL:
-    if isinstance(url, str):
-        return SyftBoxURL(url)
-    if isinstance(url, SyftBoxURL):
-        return url
-    raise ValueError(f"Invalid type for url: {type(url)}. Expected str or SyftBoxURL.")
 
 
 class SyftMethod(str, Enum):
@@ -205,11 +190,6 @@ class SyftMessage(Base):
     def is_expired(self) -> bool:
         """Check if the message has expired."""
         return datetime.now(timezone.utc) > self.expires
-
-    @field_validator("url", mode="before")
-    @classmethod
-    def validate_url(cls, value) -> SyftBoxURL:
-        return validate_syftbox_url(value)
 
     def get_message_id(self) -> UUID:
         """Generate a deterministic UUID from the message contents."""

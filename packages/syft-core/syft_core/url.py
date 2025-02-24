@@ -1,7 +1,9 @@
 import re
 from pathlib import Path
+from typing import Generator, Union
 from urllib.parse import urlencode, urlparse
 
+from pydantic import ValidationInfo
 from typing_extensions import Self
 
 from syft_core.types import PathLike, to_path
@@ -69,6 +71,24 @@ class SyftBoxURL(str):
     def from_path(cls, path: PathLike, workspace: SyftWorkspace) -> Self:
         rel_path = to_path(path).relative_to(workspace.datasites)
         return cls(f"syft://{rel_path}")
+
+    @classmethod
+    def __get_validators__(cls) -> Generator:
+        """Pydantic validators for custom type."""
+        yield cls.validate
+
+    @classmethod
+    def validate(
+        cls, value: Union["SyftBoxURL", str], info: ValidationInfo
+    ) -> "SyftBoxURL":
+        if type(value) not in (str, cls):
+            raise ValueError(
+                f"Invalid type for url: {type(value)}. Expected str or SyftBoxURL."
+            )
+        value = str(value)
+        if not cls.is_valid(value):
+            raise ValueError(f"Invalid SyftBoxURL: {value}")
+        return cls(value)
 
 
 if __name__ == "__main__":
