@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from threading import Event
+from typing import Any
 
 from loguru import logger
 from syft_core import Client
@@ -14,6 +15,7 @@ from watchdog.observers import Observer
 
 from syft_event.deps import func_args_from_request
 from syft_event.handlers import AnyPatternHandler, RpcRequestHandler
+from syft_event.router import EventRouter
 from syft_event.schema import generate_schema
 from syft_event.types import Response
 
@@ -50,6 +52,7 @@ class SyftEvents:
     ):
         self.app_name = app_name
         self.schema = publish_schema
+        self.state: dict[str, Any] = {}
         self.client = client or Client.load()
         self.app_dir = self.client.api_data(self.app_name)
         self.app_rpc_dir = self.app_dir / "rpc"
@@ -122,6 +125,12 @@ class SyftEvents:
         self.obs.stop()
         self.obs.join()
 
+    def include_router(self, router: EventRouter, *, prefix: str = "") -> None:
+        """Include all routes from a router with an optional prefix."""
+        for endpoint, func in router.routes.items():
+            endpoint_with_prefix = f"{prefix}{endpoint}"
+            _ = self.on_request(endpoint_with_prefix)(func)
+
     def on_request(self, endpoint: str) -> Callable:
         """Bind function to RPC requests at an endpoint"""
 
@@ -189,7 +198,7 @@ class SyftEvents:
                 return
 
             try:
-                kwargs = func_args_from_request(func, req)
+                kwargs = func_args_from_request(func, req, self)
             except Exception as e:
                 logger.warning(f"Invalid request body schema {req.url}: {e}")
                 rpc.reply_to(

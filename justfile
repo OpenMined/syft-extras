@@ -54,6 +54,14 @@ run-ping:
     uv sync
     uv run examples/pingpong/ping_request.py
 
+run-crud-server:
+    uv sync
+    uv run examples/crud/crud_server.py
+
+run-crud-client:
+    uv sync
+    uv run examples/crud/crud_client.py
+
 [group('js-sdk')]
 serve-static-files:
     cd js-sdk && python -m http.server 8000 --bind 127.0.0.1
