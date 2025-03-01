@@ -582,4 +582,4 @@ if __name__ == '__main__':
     cleanup_thread.start()
     
     # Run the app
-    socketio.run(app, debug=False, host='0.0.0.0', port=5000) 
+    socketio.run(app, debug=False, host='0.0.0.0', port=5002) 
