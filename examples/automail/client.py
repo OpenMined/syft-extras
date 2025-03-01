@@ -278,12 +278,13 @@ def send_message(recipient: str, content: str, message_id: str = None, timestamp
             future = rpc.send(
                 url=f"syft://{recipient}/api_data/automail/rpc/message",
                 body=message,
-                expiry="5m",
+                expiry="10m",  # Increase from 5m to 10m
                 cache=False,
             )
             
-            # Use a shorter timeout for immediate feedback
-            response = future.wait(timeout=120)
+            # Use a longer timeout for messages on slow networks
+            response = future.wait(timeout=180)  # Increase from 120 to 180 seconds for extra margin
+            
             response.raise_for_status()
             chat_response = response.model(ChatResponse)
             
@@ -1068,9 +1069,9 @@ def check_pending_messages():
     
     # Iterate through all conversations
     for recipient, messages in conversations.items():
-        # Find messages in "sending" state
+        # Find messages in "sending" or "unknown" state
         for msg in messages:
-            if msg.get("is_self", False) and msg.get("status") == "sending":
+            if msg.get("is_self", False) and msg.get("status") in ["sending", "unknown"]:
                 pending_count += 1
                 
                 # Check if this message was actually delivered
@@ -1085,31 +1086,111 @@ def check_pending_messages():
                     else:
                         timestamp = None
                     
-                    # Create a thread to verify this message
-                    threading.Thread(
-                        target=verify_message_delivery,
-                        args=(recipient, msg_content, msg_id, timestamp)
-                    ).start()
+                    logger.info(f"Verifying message to {recipient}: {msg_id}")
+                    
+                    # For unknown status messages, we could also try to resend them
+                    if msg.get("status") == "unknown" and msg.get("content"):
+                        logger.info(f"Attempting to resend message with unknown status: {msg_id}")
+                        
+                        # Start a thread to resend the message
+                        threading.Thread(
+                            target=resend_message,
+                            args=(recipient, msg.get("content"), msg_id, timestamp)
+                        ).start()
+                    else:
+                        # For sending status, just verify delivery as before
+                        threading.Thread(
+                            target=verify_message_delivery,
+                            args=(recipient, msg_content, msg_id, timestamp)
+                        ).start()
                 except Exception as e:
                     logger.error(f"Error checking message {msg_id}: {e}")
                     
-                    # Mark as unknown status since we couldn't verify
-                    msg["status"] = "unknown"
-                    
-                    # Update UI if this is the current recipient
-                    if recipient == client_info["recipient"]:
-                        socketio.emit('message_status_update', {
-                            "id": msg_id,
-                            "status": "unknown"
-                        })
+                    # Keep the unknown status
+                    if msg.get("status") != "unknown":
+                        msg["status"] = "unknown"
+                        
+                        # Update UI if this is the current recipient
+                        if recipient == client_info["recipient"]:
+                            socketio.emit('message_status_update', {
+                                "id": msg_id,
+                                "status": "unknown"
+                            })
     
     if pending_count > 0:
-        logger.info(f"Found {pending_count} pending messages to verify")
+        logger.info(f"Found {pending_count} pending messages to verify/resend")
     else:
         logger.info("No pending messages found")
     
     # Save any status changes to disk
     chat_storage.save_conversations(conversations)
+
+
+def resend_message(recipient, content, message_id, timestamp=None):
+    """Attempt to resend a message with unknown delivery status."""
+    logger.info(f"Resending message {message_id} to {recipient}")
+    
+    # Update UI to show we're retrying
+    socketio.emit('message_status_update', {
+        "id": message_id,
+        "status": "sending"
+    })
+    
+    # Update status in memory
+    for msg in conversations[recipient]:
+        if msg.get("id") == message_id:
+            msg["status"] = "sending"
+            break
+    
+    # Save the updated status to disk
+    chat_storage.save_conversations(conversations)
+    
+    # Actually resend the message
+    client = client_info["client"]
+    if not client:
+        return
+    
+    # Create the message with the correct timestamp
+    if timestamp is None:
+        timestamp = datetime.now(timezone.utc)
+        
+    message = ChatMessage(content=content, sender=client.email, ts=timestamp)
+    
+    try:
+        # Send the message again
+        future = rpc.send(
+            url=f"syft://{recipient}/api_data/automail/rpc/message",
+            body=message,
+            expiry="10m",
+            cache=False,
+        )
+        
+        # Use a longer timeout for slow networks
+        response = future.wait(timeout=180)
+        response.raise_for_status()
+        chat_response = response.model(ChatResponse)
+        
+        # Update message as delivered
+        for msg in conversations[recipient]:
+            if msg.get("id") == message_id:
+                msg["status"] = "delivered"
+                break
+        
+        # Save the updated status to disk
+        chat_storage.save_conversations(conversations)
+        
+        # Update UI
+        socketio.emit('message_status_update', {
+            "id": message_id,
+            "status": "delivered"
+        })
+        
+        logger.info(f"Successfully resent message {message_id}")
+    except Exception as e:
+        logger.error(f"Error resending message {message_id}: {e}")
+        
+        # If resending fails, fall back to verification
+        verify_message_delivery(recipient, content, message_id, timestamp)
 
 
 def verify_message_delivery(recipient, content, message_id, timestamp=None):
@@ -1133,12 +1214,12 @@ def verify_message_delivery(recipient, content, message_id, timestamp=None):
         future = rpc.send(
             url=f"syft://{recipient}/api_data/automail/rpc/verify",
             body=verification_msg,
-            expiry="5m",
+            expiry="10m",  # Increase from 5m to 10m
             cache=False,
         )
         
-        # Wait for response with a shorter timeout
-        response = future.wait(timeout=30)
+        # Use a longer timeout for messages on slow networks
+        response = future.wait(timeout=120)  # Increase from 30 to 120 seconds for extra margin
         
         if response.status_code == 200:
             # Message was delivered - update status
