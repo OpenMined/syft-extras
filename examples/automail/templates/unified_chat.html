@@ -388,6 +388,51 @@
             }
         });
         
+        // Handle incoming messages that need AI responses
+        socket.on('message_needs_response', (data) => {
+            const { sender, message, timestamp, message_id } = data;
+            
+            // Display the received message
+            if (sender === currentContact || (sender === username && currentContact === username)) {
+                addMessage(message, timestamp, false, false, message_id);
+                // Scroll to bottom
+                messages.scrollTop = messages.scrollHeight;
+            }
+            
+            // Generate AI response locally using Ollama
+            generateAIResponse(sender, message, message_id);
+        });
+        
+        // Function to generate AI response locally
+        function generateAIResponse(sender, message, originalMessageId) {
+            // Make a request to local Ollama instance
+            fetch('/generate_ai_response', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sender: sender,
+                    message: message,
+                    original_message_id: originalMessageId,
+                    recipient: username  // This client is generating the response
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Send the AI-generated response back through the server
+                socket.emit('ai_response', {
+                    original_sender: sender,
+                    responder: username,
+                    message: data.response,
+                    original_message_id: originalMessageId
+                });
+            })
+            .catch(error => {
+                console.error('Error generating AI response:', error);
+            });
+        }
+        
         // Select a contact to chat with
         function selectContact(contact) {
             currentContact = contact;
