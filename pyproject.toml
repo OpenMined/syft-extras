@@ -27,6 +27,3 @@ extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401"]
-
-[dependency-groups]
-dev = ["ruff>=0.9.3"]

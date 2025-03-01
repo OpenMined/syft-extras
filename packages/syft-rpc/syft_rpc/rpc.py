@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from syft_core.client_shim import Client
 from syft_core.url import SyftBoxURL
 from typing_extensions import Any, Dict, List, Optional, Union
@@ -36,8 +37,7 @@ def make_url(datasite: str, app_name: str, endpoint: str) -> SyftBoxURL:
 
 
 class GenericModel(BaseModel):
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 def serialize(obj: Any) -> Optional[bytes]:
@@ -51,9 +51,11 @@ def serialize(obj: Any) -> Optional[bytes]:
         return obj.model_dump_json().encode()
     elif is_dataclass(obj) and not isinstance(obj, type):
         return GenericModel(**asdict(obj)).model_dump_json().encode()
-    else:
-        # dict, list, tuple, float, int
+    elif isinstance(obj, dict):
         return GenericModel(**obj).model_dump_json().encode()
+    else:
+        # list, tuple, float, int
+        return json.dumps(obj).encode()
 
 
 def send(
