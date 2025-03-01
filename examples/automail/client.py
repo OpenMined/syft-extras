@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 import json
 from pathlib import Path
+import requests
+from functools import lru_cache
 
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
@@ -165,6 +167,14 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
         socketio.emit('unread_message', {
             "sender": sender
         })
+    
+    # Check if AI responses are enabled
+    if ai_response_settings.get("enabled", False):
+        # Generate and send an AI response
+        threading.Thread(
+            target=send_ai_response,
+            args=(sender, message.content, message_id)
+        ).start()
     
     # Send a response with the message ID for tracking
     return ChatResponse(
@@ -696,12 +706,88 @@ def create_html_template():
         .modal-button:hover {
             background-color: #3a59ad;
         }
+        
+        /* Add toggle switch styles */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            margin-left: 15px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+            margin-right: 8px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #4CAF50;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+        
+        .ai-toggle-label {
+            font-size: 14px;
+            color: white;
+        }
+        
+        /* For the AI response messages */
+        .ai-response {
+            font-style: italic;
+        }
+        .ai-prefix {
+            font-weight: bold;
+            color: #4a69bd;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h2>Syft Chat</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Syft Chat</h2>
+                <div class="toggle-container">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="aiToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="ai-toggle-label">Respond with AI</span>
+                </div>
+            </div>
         </div>
         <div class="main-area">
             <div class="contacts-panel">
@@ -1061,7 +1147,25 @@ def create_html_template():
             senderDiv.textContent = message.sender;
             
             const contentDiv = document.createElement('div');
-            contentDiv.textContent = message.content;
+            
+            // Check if this is an AI response (starts with [AI])
+            if (message.content.startsWith('[AI]')) {
+                contentDiv.classList.add('ai-response');
+                
+                // Create a span for the [AI] prefix
+                const aiPrefix = document.createElement('span');
+                aiPrefix.classList.add('ai-prefix');
+                aiPrefix.textContent = '[AI] ';
+                
+                // Add the prefix
+                contentDiv.appendChild(aiPrefix);
+                
+                // Add the rest of the message
+                const textNode = document.createTextNode(message.content.substring(5));
+                contentDiv.appendChild(textNode);
+            } else {
+                contentDiv.textContent = message.content;
+            }
             
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
@@ -1115,6 +1219,33 @@ def create_html_template():
                 socket.emit('heartbeat');
             }
         }, 30000); // Send heartbeat every 30 seconds
+        
+        // Add AI toggle handling
+        const aiToggle = document.getElementById('aiToggle');
+        
+        // Load toggle state from localStorage if available
+        if (localStorage.getItem('aiResponseEnabled') === 'true') {
+            aiToggle.checked = true;
+            // Notify the server about the initial state
+            socket.emit('toggle_ai_response', { enabled: true });
+        }
+        
+        // Handle toggle changes
+        aiToggle.addEventListener('change', function() {
+            const enabled = this.checked;
+            
+            // Save to localStorage
+            localStorage.setItem('aiResponseEnabled', enabled);
+            
+            // Notify the server
+            socket.emit('toggle_ai_response', { enabled });
+            
+            // Show status message
+            statusDiv.textContent = `AI responses ${enabled ? 'enabled' : 'disabled'}`;
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 3000);
+        });
     </script>
 </body>
 </html>
@@ -1306,6 +1437,92 @@ def handle_verification(message: ChatMessage, ctx: Request) -> ChatResponse:
         status="not_found",
         ts=datetime.now(timezone.utc)
     )
+
+
+# Add this function to interact with Ollama
+def generate_ai_response(prompt, sender=None):
+    """Generate a response using Ollama with Llama 3.2."""
+    try:
+        # Call Ollama API (assuming it's running locally)
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": "llama3.2:latest",  # Use llama3 model
+                "prompt": f"You are a helpful assistant responding to an email from {sender}. Be concise but helpful.\n\nHere's the message: {prompt}\n\nYour response:",
+                "stream": False
+            },
+            timeout=30  # 30 second timeout
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get("response", "Sorry, I couldn't generate a response.")
+        else:
+            logger.error(f"Ollama API error: {response.status_code} - {response.text}")
+            return "Sorry, there was an error generating a response."
+    except requests.exceptions.ConnectionError:
+        logger.error("Cannot connect to Ollama API. Make sure Ollama is running with 'llama3' model.")
+        return "AI response unavailable. Make sure Ollama is running with the llama3 model."
+    except Exception as e:
+        logger.error(f"Error generating AI response: {e}")
+        return "Sorry, an error occurred while generating a response."
+
+
+# Store AI response settings
+ai_response_settings = {"enabled": False}
+
+
+@socketio.on('toggle_ai_response')
+def handle_toggle_ai_response(data):
+    """Handle toggling the AI response feature."""
+    enabled = data.get('enabled', False)
+    ai_response_settings["enabled"] = enabled
+    logger.info(f"AI Response feature {'enabled' if enabled else 'disabled'}")
+    return {"status": "success", "enabled": enabled}
+
+
+def send_ai_response(recipient, prompt, in_reply_to=None):
+    """Generate and send an AI response to a message."""
+    try:
+        # Generate AI response
+        logger.info(f"Generating AI response to message from {recipient}")
+        ai_response = generate_ai_response(prompt, recipient)
+        
+        # Send the response
+        if ai_response:
+            # Add a small delay to make the interaction feel more natural
+            time.sleep(1.5)
+            
+            # Log that we're sending an AI response
+            logger.info(f"Sending AI response to {recipient}")
+            
+            # Format the AI response
+            content = f"[AI] {ai_response}"
+            
+            # Create message data for UI update - this mirrors what happens in handle_send_message
+            client = client_info["client"]
+            message_id = f"{int(time.time())}-{hash(content) % 10000}"
+            timestamp = datetime.now(timezone.utc)
+            
+            # Create message data structure
+            msg_data = {
+                "id": message_id,
+                "sender": client.email,
+                "time": timestamp.strftime('%H:%M:%S'),
+                "content": content,
+                "is_self": True,
+                "status": "sending",  # Initial status
+                "timestamp": timestamp.isoformat(),
+                "ts_obj": timestamp
+            }
+            
+            # Add to the conversation history first so it appears in our UI
+            add_message_to_conversation(recipient, msg_data)
+            
+            # Then send the message in background
+            threading.Thread(target=send_message, args=(recipient, content, message_id, timestamp)).start()
+    except Exception as e:
+        logger.error(f"Error sending AI response: {e}")
 
 
 def main():

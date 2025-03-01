@@ -266,12 +266,88 @@
         .modal-button:hover {
             background-color: #3a59ad;
         }
+        
+        /* Add toggle switch styles */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            margin-left: 15px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+            margin-right: 8px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #4CAF50;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+        
+        .ai-toggle-label {
+            font-size: 14px;
+            color: white;
+        }
+        
+        /* For the AI response messages */
+        .ai-response {
+            font-style: italic;
+        }
+        .ai-prefix {
+            font-weight: bold;
+            color: #4a69bd;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h2>Syft Chat</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Syft Chat</h2>
+                <div class="toggle-container">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="aiToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="ai-toggle-label">Respond with AI</span>
+                </div>
+            </div>
         </div>
         <div class="main-area">
             <div class="contacts-panel">
@@ -631,7 +707,25 @@
             senderDiv.textContent = message.sender;
             
             const contentDiv = document.createElement('div');
-            contentDiv.textContent = message.content;
+            
+            // Check if this is an AI response (starts with [AI])
+            if (message.content.startsWith('[AI]')) {
+                contentDiv.classList.add('ai-response');
+                
+                // Create a span for the [AI] prefix
+                const aiPrefix = document.createElement('span');
+                aiPrefix.classList.add('ai-prefix');
+                aiPrefix.textContent = '[AI] ';
+                
+                // Add the prefix
+                contentDiv.appendChild(aiPrefix);
+                
+                // Add the rest of the message
+                const textNode = document.createTextNode(message.content.substring(5));
+                contentDiv.appendChild(textNode);
+            } else {
+                contentDiv.textContent = message.content;
+            }
             
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
@@ -685,6 +779,33 @@
                 socket.emit('heartbeat');
             }
         }, 30000); // Send heartbeat every 30 seconds
+        
+        // Add AI toggle handling
+        const aiToggle = document.getElementById('aiToggle');
+        
+        // Load toggle state from localStorage if available
+        if (localStorage.getItem('aiResponseEnabled') === 'true') {
+            aiToggle.checked = true;
+            // Notify the server about the initial state
+            socket.emit('toggle_ai_response', { enabled: true });
+        }
+        
+        // Handle toggle changes
+        aiToggle.addEventListener('change', function() {
+            const enabled = this.checked;
+            
+            // Save to localStorage
+            localStorage.setItem('aiResponseEnabled', enabled);
+            
+            // Notify the server
+            socket.emit('toggle_ai_response', { enabled });
+            
+            // Show status message
+            statusDiv.textContent = `AI responses ${enabled ? 'enabled' : 'disabled'}`;
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 3000);
+        });
     </script>
 </body>
 </html>
