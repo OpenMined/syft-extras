@@ -171,7 +171,7 @@ def send_message(recipient: str, content: str, message_id: str = None, timestamp
             )
             
             # Use a shorter timeout for immediate feedback
-            response = future.wait(timeout=30)
+            response = future.wait(timeout=120)
             response.raise_for_status()
             chat_response = response.model(ChatResponse)
             
