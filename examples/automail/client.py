@@ -396,7 +396,7 @@ def create_flask_app(chat_client):
 
 
 def create_html_templates(templates_dir):
-    """Create HTML templates for the web interface with consistent sidebar"""
+    """Create HTML templates for the web interface with modern dark mode design"""
     
     # Create index.html (main application view with sidebar)
     index_path = os.path.join(templates_dir, 'index.html')
@@ -409,206 +409,387 @@ def create_html_templates(templates_dir):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Syft Chat</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body {
-            font-family: Arial, sans-serif;
+        :root {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-tertiary: #252525;
+            --bg-accent: #2d2d2d;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --text-muted: #6e6e6e;
+            --accent-color: #7289da;
+            --accent-hover: #5f73bc;
+            --danger-color: #f04747;
+            --success-color: #43b581;
+            --border-color: #333333;
+            --message-self: #3b4b8a;
+            --message-other: #2f3136;
+            --message-system: rgba(255, 255, 255, 0.05);
+            --sidebar-width: 280px;
+            --header-height: 60px;
+            --input-height: 70px;
+            --transition-speed: 0.2s;
+            --border-radius: 8px;
+        }
+        
+        * {
             margin: 0;
             padding: 0;
-            background-color: #f4f7f9;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
             height: 100vh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
         }
+        
         .app-container {
             display: flex;
             flex: 1;
             overflow: hidden;
+            height: 100vh;
         }
+        
+        /* Sidebar Styles */
         .sidebar {
-            width: 300px;
-            background-color: #2c3e50;
-            color: white;
+            width: var(--sidebar-width);
+            background-color: var(--bg-secondary);
             display: flex;
             flex-direction: column;
-            border-right: 1px solid #1a2430;
+            border-right: 1px solid var(--border-color);
+            transition: width var(--transition-speed);
         }
+        
         .sidebar-header {
-            padding: 15px;
-            background-color: #1a2430;
+            height: var(--header-height);
+            padding: 0 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 1px solid var(--border-color);
         }
+        
         .sidebar-header h2 {
-            margin: 0;
             font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
         }
-        .user-info {
-            font-size: 12px;
-            opacity: 0.9;
-            padding: 10px 15px;
-            background-color: #1a2430;
-            border-top: 1px solid #34495e;
-        }
+        
         .new-chat-btn {
-            background-color: #3498db;
+            background-color: var(--accent-color);
             color: white;
             border: none;
-            padding: 8px 12px;
-            border-radius: 4px;
+            padding: 8px 14px;
+            border-radius: var(--border-radius);
             cursor: pointer;
             font-size: 14px;
+            font-weight: 500;
+            transition: background-color var(--transition-speed);
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
+        
+        .new-chat-btn:hover {
+            background-color: var(--accent-hover);
+        }
+        
+        .new-chat-btn i {
+            font-size: 12px;
+        }
+        
+        .user-info {
+            font-size: 12px;
+            color: var(--text-secondary);
+            padding: 12px 16px;
+            background-color: var(--bg-tertiary);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .user-info i {
+            color: var(--accent-color);
+            font-size: 14px;
+        }
+        
         .conversation-list {
             flex: 1;
             overflow-y: auto;
-            padding: 10px 0;
+            padding: 12px 0;
         }
+        
+        .conversation-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .conversation-list::-webkit-scrollbar-thumb {
+            background-color: var(--bg-accent);
+            border-radius: 3px;
+        }
+        
+        .conversation-list::-webkit-scrollbar-track {
+            background-color: var(--bg-secondary);
+        }
+        
         .conversation-item {
-            padding: 12px 15px;
+            padding: 12px 16px;
             cursor: pointer;
-            transition: background-color 0.2s;
-            border-left: 3px solid transparent;
+            transition: background-color var(--transition-speed);
+            border-radius: 4px;
+            margin: 2px 8px;
         }
+        
         .conversation-item:hover {
-            background-color: #34495e;
+            background-color: var(--bg-accent);
         }
+        
         .conversation-item.active {
-            background-color: #34495e;
-            border-left-color: #3498db;
+            background-color: rgba(114, 137, 218, 0.15);
+            border-left: 3px solid var(--accent-color);
         }
+        
         .conversation-title {
-            font-weight: bold;
+            font-weight: 600;
             font-size: 15px;
-            margin-bottom: 3px;
+            margin-bottom: 4px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            color: var(--text-primary);
         }
+        
         .conversation-details {
             font-size: 12px;
-            color: #bdc3c7;
+            color: var(--text-secondary);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        
+        .no-conversations {
+            padding: 20px 16px;
+            text-align: center;
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 14px;
+        }
+        
+        /* Main Content Styles */
         .main-content {
             flex: 1;
             display: flex;
             flex-direction: column;
-            background-color: white;
+            background-color: var(--bg-primary);
+            position: relative;
         }
+        
         .chat-header {
-            background-color: #4a90e2;
-            color: white;
-            padding: 15px;
+            height: var(--header-height);
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 0 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            z-index: 10;
         }
+        
         .chat-header h2 {
-            margin: 0;
             font-size: 18px;
+            font-weight: 600;
+            margin: 0;
         }
+        
         .chat-recipients {
             font-size: 13px;
-            opacity: 0.9;
+            color: var(--text-secondary);
             margin-top: 4px;
         }
+        
         .chat-messages {
             flex: 1;
             padding: 20px;
             overflow-y: auto;
-            background-color: #f4f7f9;
+            background-color: var(--bg-primary);
+            scroll-behavior: smooth;
         }
+        
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb {
+            background-color: var(--bg-accent);
+            border-radius: 3px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-track {
+            background-color: var(--bg-primary);
+        }
+        
         .message {
-            margin-bottom: 15px;
+            margin-bottom: 16px;
             display: flex;
             flex-direction: column;
+            max-width: 80%;
         }
-        .message-content {
-            max-width: 70%;
-            padding: 10px 15px;
-            border-radius: 18px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            position: relative;
-        }
+        
         .message.self {
             align-items: flex-end;
+            margin-left: auto;
         }
+        
         .message.other {
             align-items: flex-start;
+            margin-right: auto;
         }
+        
         .message.system {
             align-items: center;
+            max-width: 90%;
+            margin: 10px auto;
         }
+        
+        .message-content {
+            padding: 10px 15px;
+            border-radius: 18px;
+            position: relative;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            word-break: break-word;
+        }
+        
         .message.self .message-content {
-            background-color: #4a90e2;
+            background-color: var(--message-self);
             color: white;
-            border-bottom-right-radius: 5px;
+            border-bottom-right-radius: 4px;
         }
+        
         .message.other .message-content {
-            background-color: #e5e5ea;
-            color: black;
-            border-bottom-left-radius: 5px;
+            background-color: var(--message-other);
+            color: var(--text-primary);
+            border-bottom-left-radius: 4px;
         }
+        
         .message.system .message-content {
-            background-color: #f0f0f0;
-            color: #666;
+            background-color: var(--message-system);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            border-radius: 8px;
             font-style: italic;
-            padding: 8px 12px;
-            border-radius: 10px;
-            font-size: 0.9em;
-            max-width: 100%;
+            font-size: 13px;
             text-align: center;
         }
+        
         .message-meta {
-            font-size: 12px;
-            margin-top: 5px;
-            opacity: 0.7;
+            font-size: 11px;
+            margin-top: 4px;
+            color: var(--text-secondary);
         }
+        
+        .system-timestamp {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+        
         .message-form {
+            height: var(--input-height);
             display: flex;
-            padding: 15px;
-            border-top: 1px solid #e6e6e6;
-            background-color: white;
+            align-items: center;
+            padding: 12px 16px;
+            background-color: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
         }
+        
         .message-input {
             flex: 1;
-            padding: 10px 15px;
-            border: 1px solid #ddd;
-            border-radius: 20px;
+            padding: 12px 15px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
             outline: none;
+            color: var(--text-primary);
+            font-size: 14px;
             margin-right: 10px;
+            transition: border-color var(--transition-speed);
         }
+        
+        .message-input:focus {
+            border-color: var(--accent-color);
+        }
+        
         .send-button {
-            background-color: #4a90e2;
+            background-color: var(--accent-color);
             color: white;
             border: none;
-            border-radius: 20px;
-            padding: 10px 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             cursor: pointer;
-            font-weight: bold;
+            transition: background-color var(--transition-speed);
         }
+        
+        .send-button:hover {
+            background-color: var(--accent-hover);
+        }
+        
+        .send-button i {
+            font-size: 16px;
+        }
+        
+        /* Welcome Screen */
         .welcome-screen {
             flex: 1;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 20px;
-            background-color: #f4f7f9;
+            padding: 40px;
+            background-color: var(--bg-primary);
             text-align: center;
         }
+        
         .welcome-screen h2 {
             margin-top: 0;
-            color: #2c3e50;
+            color: var(--text-primary);
+            font-size: 24px;
+            margin-bottom: 16px;
         }
+        
         .welcome-screen p {
-            color: #7f8c8d;
+            color: var(--text-secondary);
             max-width: 600px;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
+            line-height: 1.5;
         }
+        
+        .welcome-screen .new-chat-btn {
+            padding: 10px 20px;
+        }
+        
+        .welcome-icon {
+            font-size: 64px;
+            color: var(--accent-color);
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+        
+        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -616,88 +797,141 @@ def create_html_templates(templates_dir):
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: rgba(0, 0, 0, 0.7);
             justify-content: center;
             align-items: center;
             z-index: 1000;
         }
+        
         .modal-content {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            background-color: var(--bg-secondary);
+            padding: 24px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
             width: 100%;
             max-width: 500px;
+            border: 1px solid var(--border-color);
         }
+        
         .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
+        
         .modal-header h3 {
             margin: 0;
-            color: #2c3e50;
+            color: var(--text-primary);
+            font-size: 18px;
         }
+        
         .close-modal {
             background: none;
             border: none;
-            font-size: 20px;
+            font-size: 18px;
             cursor: pointer;
-            color: #7f8c8d;
+            color: var(--text-secondary);
+            transition: color var(--transition-speed);
         }
+        
+        .close-modal:hover {
+            color: var(--text-primary);
+        }
+        
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
+        
         .form-group label {
             display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #2c3e50;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-primary);
         }
+        
         .form-group input {
             width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 12px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: border-color var(--transition-speed);
         }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+        
         .form-error {
-            color: #e74c3c;
+            color: var(--danger-color);
             font-size: 12px;
-            margin-top: 5px;
+            margin-top: 6px;
             display: none;
         }
+        
         .modal-actions {
             display: flex;
             justify-content: flex-end;
-            margin-top: 20px;
+            margin-top: 24px;
+            gap: 12px;
         }
+        
         .modal-actions button {
-            padding: 8px 15px;
-            border-radius: 4px;
+            padding: 10px 16px;
+            border-radius: var(--border-radius);
             cursor: pointer;
+            font-weight: 500;
+            transition: background-color var(--transition-speed);
         }
+        
         .cancel-btn {
-            background-color: #ecf0f1;
-            border: 1px solid #ddd;
-            color: #7f8c8d;
-            margin-right: 10px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
         }
+        
+        .cancel-btn:hover {
+            background-color: var(--bg-accent);
+            color: var(--text-primary);
+        }
+        
         .create-btn {
-            background-color: #3498db;
+            background-color: var(--accent-color);
             border: none;
             color: white;
         }
-        .system-timestamp {
-            font-size: 11px;
-            color: #999;
-            margin-top: 3px;
+        
+        .create-btn:hover {
+            background-color: var(--accent-hover);
         }
-        .no-conversations {
-            padding: 15px;
-            text-align: center;
-            color: #bdc3c7;
-            font-style: italic;
+        
+        /* Responsive adjustments */
+        @media screen and (max-width: 768px) {
+            .sidebar {
+                width: 240px;
+            }
+            
+            .message {
+                max-width: 90%;
+            }
+        }
+        
+        @media screen and (max-width: 576px) {
+            .sidebar {
+                width: 200px;
+            }
+            
+            .new-chat-btn span {
+                display: none;
+            }
+            
+            .sidebar-header h2 {
+                font-size: 16px;
+            }
         }
     </style>
 </head>
@@ -706,49 +940,58 @@ def create_html_templates(templates_dir):
         <div class="sidebar">
             <div class="sidebar-header">
                 <h2>Conversations</h2>
-                <button id="new-chat-btn" class="new-chat-btn">New Chat</button>
+                <button id="new-chat-btn" class="new-chat-btn">
+                    <i class="fas fa-plus"></i>
+                    <span>New Chat</span>
+                </button>
             </div>
             <div id="conversation-list" class="conversation-list">
                 <!-- Conversations will be populated here -->
                 <div class="no-conversations">No conversations yet</div>
             </div>
             <div class="user-info">
-                Connected as {{ user_email }}
+                <i class="fas fa-user-circle"></i>
+                <span>{{ user_email }}</span>
             </div>
         </div>
         
         <div class="main-content">
             <div id="welcome-screen" class="welcome-screen">
+                <div class="welcome-icon">
+                    <i class="fas fa-comments"></i>
+                </div>
                 <h2>Welcome to Syft Chat</h2>
                 <p>Select a conversation from the sidebar or create a new one to get started.</p>
-                <button id="welcome-new-chat-btn" class="new-chat-btn">Create New Conversation</button>
+                <button id="welcome-new-chat-btn" class="new-chat-btn">
+                    <i class="fas fa-plus"></i>
+                    <span>Create New Conversation</span>
+                </button>
             </div>
             
             <div id="chat-interface" style="display: none; flex: 1; display: flex; flex-direction: column;">
                 <div class="chat-header">
                     <div>
-                        <h2 id="conversation-title"></h2>
-                        <div id="conversation-recipients" class="chat-recipients"></div>
+                        <h2 id="conversation-title">Conversation Title</h2>
+                        <div id="conversation-recipients" class="chat-recipients">Recipients</div>
                     </div>
                 </div>
-                
                 <div id="chat-messages" class="chat-messages">
                     <!-- Messages will be populated here -->
                 </div>
-                
                 <div class="message-form">
-                    <input type="text" id="message-input" class="message-input" placeholder="Type a message...">
-                    <button id="send-button" class="send-button">Send</button>
+                    <input type="text" id="message-input" class="message-input" placeholder="Type a message..." autocomplete="off">
+                    <button id="send-button" class="send-button">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- New Chat Modal -->
     <div id="new-chat-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>New Conversation</h3>
+                <h3>Create New Conversation</h3>
                 <button class="close-modal" onclick="closeNewChatModal()">&times;</button>
             </div>
             <div class="form-group">
@@ -821,18 +1064,6 @@ def create_html_templates(templates_dir):
                     console.error('Error loading conversations:', error);
                     conversationList.innerHTML = '<div class="no-conversations">Error loading conversations</div>';
                 });
-        }
-        
-        // Handle conversation item click
-        function handleConversationClick(conversationId, event) {
-            // Prevent default navigation
-            if (event) event.preventDefault();
-            
-            // Use our client-side routing function
-            selectConversation(conversationId);
-            
-            // Return false to prevent any further handling
-            return false;
         }
         
         // Select and display a conversation
@@ -1079,7 +1310,7 @@ def create_html_templates(templates_dir):
 </body>
 </html>
             """)
-            
+    
     # We no longer need the conversation.html template
     # Remove it if it exists to avoid confusion
     conversation_path = os.path.join(templates_dir, 'conversation.html')
