@@ -53,29 +53,49 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
             ts=datetime.now(timezone.utc),
         )
     
-    # Handle timestamp formatting - might be string or datetime
+    # Handle timestamp formatting - ensure we have a datetime object
     if isinstance(message.ts, datetime):
+        timestamp = message.ts
         time_str = message.ts.strftime('%H:%M:%S')
     else:
-        # If ts is a string, just use it directly
-        time_str = str(message.ts)
+        # If ts is a string, try to parse it
+        try:
+            timestamp = datetime.fromisoformat(str(message.ts).replace('Z', '+00:00'))
+            time_str = timestamp.strftime('%H:%M:%S')
+        except ValueError:
+            # If parsing fails, use current time
+            timestamp = datetime.now(timezone.utc)
+            time_str = str(message.ts)
     
     # Format the message for the UI
     msg_data = {
         "sender": sender,
         "time": time_str,
         "content": message.content,
-        "is_self": False
+        "is_self": False,
+        "timestamp": timestamp.isoformat(),  # Store ISO format for sorting
+        "ts_obj": timestamp  # Store the actual datetime for sorting
     }
     
-    # Add to history and update UI
-    message_history.append(msg_data)
-    socketio.emit('new_message', msg_data)
+    # Add to history, sort, and update UI
+    add_message_to_history(msg_data)
     
     return ChatResponse(
         status="received",
         ts=datetime.now(timezone.utc),
     )
+
+
+def add_message_to_history(msg_data):
+    """Add a message to history and ensure chronological ordering."""
+    # Add the message to history
+    message_history.append(msg_data)
+    
+    # Sort messages by timestamp
+    message_history.sort(key=lambda x: x.get("ts_obj", datetime.fromtimestamp(0, tz=timezone.utc)))
+    
+    # Emit the entire sorted history to ensure correct order in UI
+    socketio.emit('message_history', message_history)
 
 
 @socketio.on('send_message')
@@ -90,48 +110,45 @@ def handle_send_message(data):
     # Generate a message ID here for consistent optimistic updates
     client = client_info["client"]
     message_id = f"{int(time.time())}-{hash(content) % 10000}"
+    timestamp = datetime.now(timezone.utc)
     
     # Send optimistic UI update immediately to sender
     msg_data = {
         "id": message_id,
         "sender": client.email,
-        "time": datetime.now().strftime('%H:%M:%S'),
+        "time": timestamp.strftime('%H:%M:%S'),
         "content": content,
         "is_self": True,
-        "confirmed": False
+        "confirmed": False,
+        "timestamp": timestamp.isoformat(),  # Store ISO format for sorting
+        "ts_obj": timestamp  # Store the actual datetime for sorting
     }
     
-    # Emit directly to the requesting client first for immediate UI update
-    socketio.emit('optimistic_message', msg_data, room=request.sid)
+    # Add to history with proper ordering
+    add_message_to_history(msg_data)
     
     # Then start the background sending process
-    threading.Thread(target=send_message, args=(recipient, content, message_id)).start()
+    threading.Thread(target=send_message, args=(recipient, content, message_id, timestamp)).start()
 
 
-def send_message(recipient: str, content: str, message_id: str = None) -> None:
+def send_message(recipient: str, content: str, message_id: str = None, timestamp: datetime = None) -> None:
     """Send a chat message to another user."""
     client = client_info["client"]
     if not client:
         socketio.emit('status', {"message": "Not logged in"})
         return
     
-    # Create the message
-    message = ChatMessage(content=content, sender=client.email)
+    # Create the message with the correct timestamp
+    if timestamp is None:
+        timestamp = datetime.now(timezone.utc)
+        
+    message = ChatMessage(content=content, sender=client.email, ts=timestamp)
     
     # Generate a unique message ID if not provided
     if message_id is None:
         message_id = f"{int(time.time())}-{hash(content) % 10000}"
     
-    # Add to history
-    msg_data = {
-        "id": message_id,
-        "sender": client.email,
-        "time": datetime.now().strftime('%H:%M:%S'),
-        "content": content,
-        "is_self": True,
-        "confirmed": False
-    }
-    message_history.append(msg_data)
+    # Note: We don't need to add to history here since it's already added in handle_send_message
     
     # Send in background thread to keep UI responsive
     def send_and_confirm():
@@ -479,20 +496,24 @@ def create_html_template():
         // Load message history
         socket.on('message_history', (messages) => {
             console.log(`Received message history: ${messages.length} messages`);
+            
+            // Clear the chat box
             chatBox.innerHTML = '';
+            
+            // Add all messages in the order they were sorted on the server
             messages.forEach(message => {
                 addMessageToChat(message);
             });
+            
             scrollToBottom();
             statusDiv.textContent = `Loaded ${messages.length} messages`;
         });
         
-        // Handle optimistic messages (guaranteed to be from self)
-        socket.on('optimistic_message', (message) => {
-            console.log('Optimistic message:', message);
-            addMessageToChat(message);
-            scrollToBottom();
-        });
+        // We don't need to modify the optimistic_message handler as it now
+        // uses the message_history event to ensure correct ordering
+        
+        // Instead of directly adding messages to the chat on new_message,
+        // we now rely on the server sending us the sorted message_history
         
         // Handle confirmed messages
         socket.on('message_confirmed', (data) => {
@@ -501,22 +522,6 @@ def create_html_template():
             messageElements.forEach(el => {
                 el.classList.add('confirmed');
             });
-        });
-        
-        // Receive new messages (from others)
-        socket.on('new_message', (message) => {
-            console.log('Received new message:', message);
-            
-            // Skip if this is our own message (already handled by optimistic_message)
-            if (message.is_self) {
-                return;
-            }
-            
-            addMessageToChat(message);
-            scrollToBottom();
-            
-            // Play sound or flash title for notification
-            notifyNewMessage();
         });
         
         // Update status
@@ -558,6 +563,16 @@ def create_html_template():
         });
         
         function addMessageToChat(message) {
+            // Check if this message already exists in the chat
+            const existingMsg = document.querySelector(`.message[data-id="${message.id}"]`);
+            if (existingMsg) {
+                // If it's a confirmation update, just update the existing message
+                if (message.confirmed) {
+                    existingMsg.classList.add('confirmed');
+                }
+                return;
+            }
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${message.is_self ? 'self' : 'other'}`;
             if (message.id) {
@@ -565,6 +580,11 @@ def create_html_template():
                 if (message.confirmed) {
                     messageDiv.classList.add('confirmed');
                 }
+            }
+            
+            // Store timestamp as attribute for potential client-side sorting
+            if (message.timestamp) {
+                messageDiv.setAttribute('data-timestamp', message.timestamp);
             }
             
             const senderDiv = document.createElement('div');
