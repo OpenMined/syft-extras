@@ -94,8 +94,18 @@ def add_message_to_history(msg_data):
     # Sort messages by timestamp
     message_history.sort(key=lambda x: x.get("ts_obj", datetime.fromtimestamp(0, tz=timezone.utc)))
     
-    # Emit the entire sorted history to ensure correct order in UI
-    socketio.emit('message_history', message_history)
+    # Create a JSON-serializable copy of the message history
+    serializable_history = []
+    for msg in message_history:
+        # Create a copy to avoid modifying the original
+        serializable_msg = msg.copy()
+        # Remove the datetime object that can't be JSON serialized
+        if "ts_obj" in serializable_msg:
+            del serializable_msg["ts_obj"]
+        serializable_history.append(serializable_msg)
+    
+    # Emit the serializable copy of the history
+    socketio.emit('message_history', serializable_history)
 
 
 @socketio.on('send_message')
@@ -506,14 +516,8 @@ def create_html_template():
             });
             
             scrollToBottom();
-            statusDiv.textContent = `Loaded ${messages.length} messages`;
+            statusDiv.textContent = `${messages.length} messages loaded`;
         });
-        
-        // We don't need to modify the optimistic_message handler as it now
-        // uses the message_history event to ensure correct ordering
-        
-        // Instead of directly adding messages to the chat on new_message,
-        // we now rely on the server sending us the sorted message_history
         
         // Handle confirmed messages
         socket.on('message_confirmed', (data) => {
