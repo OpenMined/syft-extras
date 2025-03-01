@@ -216,10 +216,25 @@ def index():
     return render_template('chat.html')
 
 
+# Create a serializable version of the message history for sending to clients
+def get_serializable_messages():
+    """Create a JSON-serializable copy of the message history."""
+    serializable_history = []
+    for msg in message_history:
+        # Create a copy to avoid modifying the original
+        serializable_msg = msg.copy()
+        # Remove the datetime object that can't be JSON serialized
+        if "ts_obj" in serializable_msg:
+            del serializable_msg["ts_obj"]
+        serializable_history.append(serializable_msg)
+    return serializable_history
+
+
 @socketio.on('connect')
-def handle_connect():
-    # Send the message history to newly connected clients
-    socketio.emit('message_history', message_history)
+def handle_connect(auth=None):
+    """Handle client connection - with proper argument handling."""
+    # Send the serializable message history to newly connected clients
+    socketio.emit('message_history', get_serializable_messages())
     
     if client_info["client"] and client_info["recipient"]:
         socketio.emit('user_info', {
@@ -245,7 +260,7 @@ def handle_heartbeat():
 @socketio.on('get_messages')
 def handle_get_messages():
     """Send message history to the client on request."""
-    socketio.emit('message_history', message_history)
+    socketio.emit('message_history', get_serializable_messages())
     return {'status': 'sent'}
 
 
