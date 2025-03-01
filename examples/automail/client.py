@@ -78,7 +78,37 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
     )
 
 
-def send_message(recipient: str, content: str) -> None:
+@socketio.on('send_message')
+def handle_send_message(data):
+    content = data.get('message')
+    recipient = client_info["recipient"]
+    
+    if not content or not recipient:
+        socketio.emit('status', {"message": "Message or recipient missing"})
+        return
+    
+    # Generate a message ID here for consistent optimistic updates
+    client = client_info["client"]
+    message_id = f"{int(time.time())}-{hash(content) % 10000}"
+    
+    # Send optimistic UI update immediately to sender
+    msg_data = {
+        "id": message_id,
+        "sender": client.email,
+        "time": datetime.now().strftime('%H:%M:%S'),
+        "content": content,
+        "is_self": True,
+        "confirmed": False
+    }
+    
+    # Emit directly to the requesting client first for immediate UI update
+    socketio.emit('optimistic_message', msg_data, room=request.sid)
+    
+    # Then start the background sending process
+    threading.Thread(target=send_message, args=(recipient, content, message_id)).start()
+
+
+def send_message(recipient: str, content: str, message_id: str = None) -> None:
     """Send a chat message to another user."""
     client = client_info["client"]
     if not client:
@@ -88,20 +118,20 @@ def send_message(recipient: str, content: str) -> None:
     # Create the message
     message = ChatMessage(content=content, sender=client.email)
     
-    # Generate a unique message ID to prevent duplicates
-    message_id = f"{int(time.time())}-{hash(content) % 10000}"
+    # Generate a unique message ID if not provided
+    if message_id is None:
+        message_id = f"{int(time.time())}-{hash(content) % 10000}"
     
-    # Add to history immediately (optimistic UI update)
+    # Add to history
     msg_data = {
         "id": message_id,
         "sender": client.email,
         "time": datetime.now().strftime('%H:%M:%S'),
         "content": content,
         "is_self": True,
-        "confirmed": False  # Mark as unconfirmed initially
+        "confirmed": False
     }
     message_history.append(msg_data)
-    socketio.emit('new_message', msg_data)
     
     # Send in background thread to keep UI responsive
     def send_and_confirm():
@@ -125,7 +155,7 @@ def send_message(recipient: str, content: str) -> None:
                     break
             
             # Send confirmation to UI
-            socketio.emit('new_message', {
+            socketio.emit('message_confirmed', {
                 "id": message_id,
                 "confirmed": True
             })
@@ -136,8 +166,7 @@ def send_message(recipient: str, content: str) -> None:
             socketio.emit('status', {"message": f"Delivery status unknown: {str(e)}"})
             logger.error(f"Error sending message: {e}")
     
-    # Start a thread to handle the send and confirmation
-    threading.Thread(target=send_and_confirm).start()
+    send_and_confirm()
 
 
 def start_server():
@@ -178,19 +207,6 @@ def handle_set_recipient(data):
     if recipient:
         client_info["recipient"] = recipient
         socketio.emit('status', {"message": f"Now chatting with {recipient}"})
-
-
-@socketio.on('send_message')
-def handle_send_message(data):
-    content = data.get('message')
-    recipient = client_info["recipient"]
-    
-    if not content or not recipient:
-        socketio.emit('status', {"message": "Message or recipient missing"})
-        return
-    
-    # Send the message in a background thread to avoid blocking the Socket.IO event loop
-    threading.Thread(target=send_message, args=(recipient, content)).start()
 
 
 @socketio.on('heartbeat')
@@ -471,16 +487,28 @@ def create_html_template():
             statusDiv.textContent = `Loaded ${messages.length} messages`;
         });
         
-        // Receive new messages
+        // Handle optimistic messages (guaranteed to be from self)
+        socket.on('optimistic_message', (message) => {
+            console.log('Optimistic message:', message);
+            addMessageToChat(message);
+            scrollToBottom();
+        });
+        
+        // Handle confirmed messages
+        socket.on('message_confirmed', (data) => {
+            console.log('Message confirmed:', data);
+            const messageElements = document.querySelectorAll(`.message[data-id="${data.id}"]`);
+            messageElements.forEach(el => {
+                el.classList.add('confirmed');
+            });
+        });
+        
+        // Receive new messages (from others)
         socket.on('new_message', (message) => {
             console.log('Received new message:', message);
             
-            // If this is a message confirmation update
-            if (message.id && message.confirmed && !message.content) {
-                const messageElements = document.querySelectorAll(`.message[data-id="${message.id}"]`);
-                messageElements.forEach(el => {
-                    el.classList.add('confirmed');
-                });
+            // Skip if this is our own message (already handled by optimistic_message)
+            if (message.is_self) {
                 return;
             }
             

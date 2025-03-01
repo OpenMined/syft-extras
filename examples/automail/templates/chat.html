@@ -250,16 +250,28 @@
             statusDiv.textContent = `Loaded ${messages.length} messages`;
         });
         
-        // Receive new messages
+        // Handle optimistic messages (guaranteed to be from self)
+        socket.on('optimistic_message', (message) => {
+            console.log('Optimistic message:', message);
+            addMessageToChat(message);
+            scrollToBottom();
+        });
+        
+        // Handle confirmed messages
+        socket.on('message_confirmed', (data) => {
+            console.log('Message confirmed:', data);
+            const messageElements = document.querySelectorAll(`.message[data-id="${data.id}"]`);
+            messageElements.forEach(el => {
+                el.classList.add('confirmed');
+            });
+        });
+        
+        // Receive new messages (from others)
         socket.on('new_message', (message) => {
             console.log('Received new message:', message);
             
-            // If this is a message confirmation update
-            if (message.id && message.confirmed && !message.content) {
-                const messageElements = document.querySelectorAll(`.message[data-id="${message.id}"]`);
-                messageElements.forEach(el => {
-                    el.classList.add('confirmed');
-                });
+            // Skip if this is our own message (already handled by optimistic_message)
+            if (message.is_self) {
                 return;
             }
             
