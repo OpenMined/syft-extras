@@ -5,808 +5,264 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Syft Chat</title>
-    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f5f5f5;
+            background-color: #f4f7f9;
         }
         .container {
-            max-width: 1000px;
+            max-width: 800px;
             margin: 20px auto;
-            background: white;
             border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
             overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
             display: flex;
             flex-direction: column;
-            height: 90vh;
+            height: calc(100vh - 40px);
+            background-color: white;
         }
         .header {
-            background: #4a69bd;
+            background-color: #4a90e2;
             color: white;
             padding: 15px;
-            text-align: center;
-            flex: 0 0 auto;
-        }
-        .main-area {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-        .contacts-panel {
-            width: 250px;
-            background-color: #f0f0f0;
-            overflow-y: auto;
-            border-right: 1px solid #ddd;
-            flex: 0 0 auto;
-            display: flex;
-            flex-direction: column; /* Make it a column layout */
-        }
-        .contacts-header {
-            padding: 10px;
-            background-color: #e6e6e6;
-            border-bottom: 1px solid #ddd;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex: 0 0 auto; /* Don't grow or shrink */
         }
-        .contact-list-container {
-            flex: 1;
-            overflow-y: auto; /* Allow this to scroll */
-        }
-        .add-contact-container {
-            padding: 10px;
-            border-top: 1px solid #ddd;
-            background-color: #e6e6e6;
-            flex: 0 0 auto; /* Don't grow or shrink */
-        }
-        .add-contact-btn {
-            background: #4a69bd;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 8px 10px;
-            cursor: pointer;
-            width: 100%;
+        .recipient-info {
             display: flex;
             align-items: center;
-            justify-content: center;
         }
-        .add-contact-btn:hover {
-            background: #3a59ad;
-        }
-        .contact-list {
-            list-style: none;
-            padding: 0;
+        .recipient-info h2 {
             margin: 0;
+            font-size: 18px;
         }
-        .contact-item {
-            padding: 10px 15px;
-            border-bottom: 1px solid #ddd;
-            cursor: pointer;
+        .user-info {
+            font-size: 12px;
+            opacity: 0.9;
         }
-        .contact-item:hover {
-            background-color: #e9e9e9;
-        }
-        .contact-item.active {
-            background-color: #d4e4fc;
-            font-weight: bold;
-        }
-        .chat-panel {
+        .chat-messages {
             flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .chat-box {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-            background-color: #f9f9f9;
-        }
-        .no-recipient {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: #888;
-            text-align: center;
             padding: 20px;
+            overflow-y: auto;
         }
         .message {
-            margin-bottom: 10px;
-            padding: 10px;
-            border-radius: 5px;
-            max-width: 70%;
-            clear: both;
-        }
-        .self {
-            background-color: #dcf8c6;
-            float: right;
-        }
-        .other {
-            background-color: #fff;
-            float: left;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        .message-time {
-            font-size: 0.7em;
-            color: #999;
-            margin-top: 5px;
-            text-align: right;
-        }
-        .message-sender {
-            font-weight: bold;
-            margin-bottom: 3px;
-        }
-        .input-area {
-            padding: 15px;
+            margin-bottom: 15px;
             display: flex;
-            background-color: #f9f9f9;
-            border-top: 1px solid #ddd;
+            flex-direction: column;
+        }
+        .message-content {
+            max-width: 70%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        .message.self {
+            align-items: flex-end;
+        }
+        .message.other {
+            align-items: flex-start;
+        }
+        .message.system {
+            align-items: center;
+        }
+        .message.self .message-content {
+            background-color: #4a90e2;
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+        .message.other .message-content {
+            background-color: #e5e5ea;
+            color: black;
+            border-bottom-left-radius: 5px;
+        }
+        .message.system .message-content {
+            background-color: #f0f0f0;
+            color: #666;
+            font-style: italic;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            max-width: 100%;
+            text-align: center;
+        }
+        .message-meta {
+            font-size: 12px;
+            margin-top: 5px;
+            opacity: 0.7;
+        }
+        .message-form {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid #e6e6e6;
+            background-color: white;
         }
         .message-input {
             flex: 1;
-            padding: 10px;
+            padding: 10px 15px;
             border: 1px solid #ddd;
-            border-radius: 4px;
+            border-radius: 20px;
+            outline: none;
+            margin-right: 10px;
         }
         .send-button {
-            padding: 10px 15px;
-            background: #4a69bd;
+            background-color: #4a90e2;
             color: white;
             border: none;
-            border-radius: 4px;
-            margin-left: 10px;
+            border-radius: 20px;
+            padding: 10px 20px;
             cursor: pointer;
+            font-weight: bold;
         }
-        .status {
-            text-align: center;
-            padding: 10px;
-            color: #666;
-            border-top: 1px solid #ddd;
-        }
-        .controls {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 15px;
-            background-color: #f3f3f3;
-            border-bottom: 1px solid #ddd;
-        }
-        .connection-status {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }
-        .connected {
-            background-color: #4CAF50;
-        }
-        .disconnected {
-            background-color: #F44336;
-        }
-        .reconnecting {
-            background-color: #FFC107;
-        }
-        .refresh-button {
-            background: #4a69bd;
+        .change-recipient {
+            background-color: transparent;
             color: white;
-            border: none;
-            border-radius: 4px;
+            border: 1px solid white;
+            border-radius: 15px;
             padding: 5px 10px;
-            cursor: pointer;
             font-size: 12px;
-        }
-        .message-status {
-            display: inline-block;
-            margin-left: 5px;
-            font-size: 1em;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
-        }
-        
-        .modal-content {
-            background-color: #fefefe;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 300px;
-            border-radius: 5px;
-        }
-        
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
             cursor: pointer;
         }
-        
-        .close:hover,
-        .close:focus {
-            color: black;
-            text-decoration: none;
-        }
-        
-        .modal-input {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        
-        .modal-button {
-            background-color: #4a69bd;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 10px;
-        }
-        
-        .modal-button:hover {
-            background-color: #3a59ad;
-        }
-        
-        /* Add toggle switch styles */
-        .toggle-container {
-            display: flex;
-            align-items: center;
-            margin-left: 15px;
-        }
-        
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 40px;
-            height: 20px;
-            margin-right: 8px;
-        }
-        
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
-        }
-        
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 16px;
-            width: 16px;
-            left: 2px;
-            bottom: 2px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        
-        input:checked + .toggle-slider {
-            background-color: #4CAF50;
-        }
-        
-        input:checked + .toggle-slider:before {
-            transform: translateX(20px);
-        }
-        
-        .ai-toggle-label {
-            font-size: 14px;
-            color: white;
-        }
-        
-        /* For the AI response messages */
-        .ai-response {
-            font-style: italic;
-        }
-        .ai-prefix {
-            font-weight: bold;
-            color: #4a69bd;
+        .system-timestamp {
+            font-size: 11px;
+            color: #999;
+            margin-top: 3px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2>Syft Chat</h2>
-                <div class="toggle-container">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="aiToggle">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span class="ai-toggle-label">Respond with AI</span>
-                </div>
+            <div class="recipient-info">
+                <h2>Chat with <span id="recipient-name">{{ recipient }}</span></h2>
+            </div>
+            <div class="user-info">
+                Connected as {{ user_email }}
+                <button class="change-recipient" onclick="changeRecipient()">Change Recipient</button>
             </div>
         </div>
-        <div class="main-area">
-            <div class="contacts-panel">
-                <div class="contacts-header">
-                    <h3>Contacts</h3>
-                </div>
-                <div class="contact-list-container">
-                    <ul class="contact-list" id="contactList">
-                        <!-- Contacts will be added here dynamically -->
-                    </ul>
-                </div>
-                <div class="add-contact-container">
-                    <button class="add-contact-btn" id="addContactBtn">+ Add Contact</button>
-                </div>
-            </div>
-            <div class="chat-panel">
-                <div class="controls">
-                    <div>
-                        <span class="connection-status" id="connectionStatus"></span>
-                        <span id="userInfo">Not connected</span>
-                    </div>
-                    <button class="refresh-button" id="refreshButton">Refresh</button>
-                </div>
-                <div class="chat-box" id="chatBox">
-                    <div class="no-recipient" id="noRecipientMessage">
-                        <h3>Select a contact to start chatting</h3>
-                        <p>Or add a new contact using the button on the left</p>
-                    </div>
-                    <!-- Messages will be added here dynamically -->
-                </div>
-                <div class="input-area">
-                    <input type="text" class="message-input" id="messageInput" placeholder="Type a message...">
-                    <button class="send-button" id="sendButton">Send</button>
-                </div>
-                <div class="status" id="status"></div>
-            </div>
+        <div id="chat-messages" class="chat-messages">
+            <!-- Messages will be populated here -->
         </div>
-    </div>
-    
-    <!-- Add Contact Modal -->
-    <div id="addContactModal" class="modal">
-        <div class="modal-content">
-            <span class="close" id="closeModal">&times;</span>
-            <h3>Add New Contact</h3>
-            <input type="text" id="newContactInput" class="modal-input" placeholder="Enter email address">
-            <button id="confirmAddContact" class="modal-button">Add</button>
+        <div class="message-form">
+            <input type="text" id="message-input" class="message-input" placeholder="Type a message...">
+            <button id="send-button" class="send-button">Send</button>
         </div>
     </div>
 
     <script>
-        // DOM Elements
-        const chatBox = document.getElementById('chatBox');
-        const messageInput = document.getElementById('messageInput');
-        const sendButton = document.getElementById('sendButton');
-        const statusDiv = document.getElementById('status');
-        const connectionStatus = document.getElementById('connectionStatus');
-        const userInfoDiv = document.getElementById('userInfo');
-        const contactList = document.getElementById('contactList');
-        const addContactBtn = document.getElementById('addContactBtn');
-        const addContactModal = document.getElementById('addContactModal');
-        const newContactInput = document.getElementById('newContactInput');
-        const closeModal = document.getElementById('closeModal');
-        const confirmAddContact = document.getElementById('confirmAddContact');
-        const refreshButton = document.getElementById('refreshButton');
-        const noRecipientMessage = document.getElementById('noRecipientMessage');
-        
-        // Variables to track state
-        let isConnected = false;
-        let currentRecipient = null;
-        let unreadCounts = {};
-        
-        // Connect to the Socket.IO server
-        const socket = io();
-        
-        // Connection status
-        socket.on('connect', () => {
-            isConnected = true;
-            connectionStatus.classList.add('connected');
-            connectionStatus.classList.remove('disconnected', 'reconnecting');
-            statusDiv.textContent = 'Connected';
-        });
-        
-        socket.on('disconnect', () => {
-            isConnected = false;
-            connectionStatus.classList.add('disconnected');
-            connectionStatus.classList.remove('connected', 'reconnecting');
-            statusDiv.textContent = 'Disconnected';
-        });
-        
-        socket.on('reconnecting', () => {
-            connectionStatus.classList.add('reconnecting');
-            connectionStatus.classList.remove('connected', 'disconnected');
-            statusDiv.textContent = 'Reconnecting...';
-        });
-        
-        // Receive user info
-        socket.on('user_info', (data) => {
-            console.log('User info:', data);
-            userInfoDiv.textContent = `Logged in as: ${data.client}`;
-            
-            if (data.recipient) {
-                currentRecipient = data.recipient;
-                noRecipientMessage.style.display = 'none';
-            } else {
-                noRecipientMessage.style.display = 'flex';
-            }
-        });
-        
-        // Load contact list
-        socket.on('contact_list', (contacts) => {
-            console.log('Contacts:', contacts);
-            contactList.innerHTML = '';
-            
-            contacts.forEach(contact => {
-                const li = document.createElement('li');
-                li.className = 'contact-item';
-                li.textContent = contact;
-                li.setAttribute('data-email', contact);
-                
-                if (contact === currentRecipient) {
-                    li.classList.add('active');
-                }
-                
-                li.addEventListener('click', () => {
-                    setCurrentRecipient(contact);
-                });
-                
-                contactList.appendChild(li);
-            });
-            
-            if (contacts.length === 0) {
-                const li = document.createElement('li');
-                li.className = 'contact-item no-contacts';
-                li.textContent = 'No contacts yet';
-                li.style.cursor = 'default';
-                li.style.fontStyle = 'italic';
-                li.style.color = '#888';
-                contactList.appendChild(li);
-            }
-        });
-        
-        // Load message history
-        socket.on('message_history', (messages) => {
-            console.log(`Received message history: ${messages.length} messages`);
-            
-            // Clear the chat box
-            chatBox.innerHTML = '';
-            
-            // Add all messages in the order they were sorted on the server
-            messages.forEach(message => {
-                addMessageToChat(message);
-            });
-            
-            scrollToBottom();
-            statusDiv.textContent = `${messages.length} messages loaded`;
-            
-            // Hide the no-recipient message when we have a conversation
-            if (currentRecipient) {
-                noRecipientMessage.style.display = 'none';
-            } else {
-                noRecipientMessage.style.display = 'flex';
-            }
-        });
-        
-        // Handle message status updates
-        socket.on('message_status_update', (data) => {
-            console.log('Message status update:', data);
-            const messageElements = document.querySelectorAll(`.message[data-id="${data.id}"]`);
-            messageElements.forEach(el => {
-                // Remove all status classes first
-                el.classList.remove('status-sending', 'status-delivered', 'status-failed', 'status-unknown');
-                // Add the new status class
-                el.classList.add(`status-${data.status}`);
-                
-                // Update the status indicator element
-                let statusElement = el.querySelector('.message-status');
-                if (statusElement) {
-                    updateStatusIndicator(statusElement, data.status);
-                }
-            });
-        });
-        
-        // Handle notification of unread message
-        socket.on('unread_message', (data) => {
-            console.log('Unread message from:', data.sender);
-            
-            // Highlight the contact in the list or add it if not present
-            const contactItem = document.querySelector(`.contact-item[data-email="${data.sender}"]`);
-            if (contactItem) {
-                contactItem.style.fontWeight = 'bold';
-            } else {
-                // Request updated contact list
-                socket.emit('get_contacts');
-            }
-            
-            // Notify the user if not the current conversation
-            if (data.sender !== currentRecipient) {
-                notifyNewMessage(data.sender);
-            }
-        });
-        
-        // Update status
-        socket.on('status', (data) => {
-            statusDiv.textContent = data.message;
-            setTimeout(() => {
-                statusDiv.textContent = '';
-            }, 3000);
-        });
-        
-        // Function to set the current recipient
-        function setCurrentRecipient(recipient) {
-            if (recipient === currentRecipient) return;
-            
-            currentRecipient = recipient;
-            console.log('Set current recipient:', currentRecipient);
-            
-            // Tell the server about the change
-            socket.emit('set_recipient', { recipient });
-            
-            // Update the UI to show the correct contact as selected
-            document.querySelectorAll('.contact-item').forEach(item => {
-                item.classList.remove('active');
-                item.style.fontWeight = 'normal'; // Reset any unread styling
-            });
-            
-            const contactItem = document.querySelector(`.contact-item[data-email="${recipient}"]`);
-            if (contactItem) {
-                contactItem.classList.add('active');
-            }
-            
-            // Hide the no-recipient message
-            noRecipientMessage.style.display = 'none';
-            
-            // Request the message history for this recipient
-            socket.emit('get_messages');
-        }
-        
-        // Send message
-        function sendMessage() {
-            const message = messageInput.value.trim();
-            if (message && isConnected && currentRecipient) {
-                socket.emit('send_message', { message });
-                messageInput.value = '';
-                statusDiv.textContent = 'Sending...';
-            } else if (!isConnected) {
-                statusDiv.textContent = 'Cannot send: disconnected';
-            } else if (!currentRecipient) {
-                statusDiv.textContent = 'Select a recipient first';
-            }
-        }
-        
-        sendButton.addEventListener('click', sendMessage);
-        
-        messageInput.addEventListener('keypress', (e) => {
+        // Send a message
+        document.getElementById('send-button').addEventListener('click', sendMessage);
+        document.getElementById('message-input').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 sendMessage();
             }
         });
-        
-        // Manual refresh button
-        refreshButton.addEventListener('click', () => {
-            socket.emit('get_contacts');
-            if (currentRecipient) {
-                socket.emit('get_messages');
-                statusDiv.textContent = 'Refreshing...';
-            } else {
-                statusDiv.textContent = 'No conversation selected';
-            }
-        });
-        
-        // Add Contact Modal functionality
-        addContactBtn.addEventListener('click', () => {
-            addContactModal.style.display = 'block';
-            newContactInput.focus();
-        });
-        
-        closeModal.addEventListener('click', () => {
-            addContactModal.style.display = 'none';
-        });
-        
-        window.addEventListener('click', (e) => {
-            if (e.target === addContactModal) {
-                addContactModal.style.display = 'none';
-            }
-        });
-        
-        confirmAddContact.addEventListener('click', addNewContact);
-        
-        newContactInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addNewContact();
-            }
-        });
-        
-        function addNewContact() {
-            const contact = newContactInput.value.trim();
-            if (contact) {
-                socket.emit('add_contact', { contact });
-                addContactModal.style.display = 'none';
-                newContactInput.value = '';
-            }
-        }
-        
-        // Handle adding messages to the chat
-        function updateStatusIndicator(element, status) {
-            if (status === "sending") {
-                element.textContent = "•";  // Gray dot instead of checkmark
-                element.style.color = "#999";
-                element.title = "Sending...";
-            } else if (status === "delivered") {
-                element.textContent = "✓";  // Single checkmark (easier to understand)
-                element.style.color = "#4CAF50";
-                element.title = "Delivered";
-            } else if (status === "failed") {
-                element.textContent = "⚠️";
-                element.style.color = "#F44336";
-                element.title = "Failed to send";
-            } else if (status === "unknown") {
-                element.textContent = "?";
-                element.style.color = "#FFA500";  // Orange for unknown status
-                element.title = "Delivery status unknown";
-            } else {
-                // Default/unknown status
-                element.textContent = "";
-            }
-        }
-        
-        function addMessageToChat(message) {
-            // Check if this message already exists in the chat
-            const existingMsg = document.querySelector(`.message[data-id="${message.id}"]`);
-            if (existingMsg) {
-                // If it's a status update, just update the existing message
-                if (message.status) {
-                    existingMsg.classList.remove('status-sending', 'status-delivered', 'status-failed', 'status-unknown');
-                    existingMsg.classList.add(`status-${message.status}`);
-                    
-                    // Update the status indicator
-                    const statusElement = existingMsg.querySelector('.message-status');
-                    if (statusElement) {
-                        updateStatusIndicator(statusElement, message.status);
+
+        function sendMessage() {
+            const messageInput = document.getElementById('message-input');
+            const message = messageInput.value.trim();
+            
+            if (message) {
+                fetch('/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        messageInput.value = '';
+                        refreshMessages();
                     }
-                }
-                return;
+                })
+                .catch(error => {
+                    console.error('Error sending message:', error);
+                });
             }
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${message.is_self ? 'self' : 'other'}`;
-            if (message.id) {
-                messageDiv.setAttribute('data-id', message.id);
-                if (message.status) {
-                    messageDiv.classList.add(`status-${message.status}`);
-                }
-            }
-            
-            const senderDiv = document.createElement('div');
-            senderDiv.className = 'message-sender';
-            senderDiv.textContent = message.sender;
-            
-            const contentDiv = document.createElement('div');
-            
-            // Check if this is an AI response (starts with [AI])
-            if (message.content.startsWith('[AI]')) {
-                contentDiv.classList.add('ai-response');
-                
-                // Create a span for the [AI] prefix
-                const aiPrefix = document.createElement('span');
-                aiPrefix.classList.add('ai-prefix');
-                aiPrefix.textContent = '[AI] ';
-                
-                // Add the prefix
-                contentDiv.appendChild(aiPrefix);
-                
-                // Add the rest of the message
-                const textNode = document.createTextNode(message.content.substring(5));
-                contentDiv.appendChild(textNode);
-            } else {
-                contentDiv.textContent = message.content;
-            }
-            
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            timeDiv.textContent = message.time;
-            
-            // Add status indicator for self messages
-            if (message.is_self) {
-                const statusElement = document.createElement('span');
-                statusElement.className = 'message-status';
-                
-                // Set status indicator using the utility function
-                updateStatusIndicator(statusElement, message.status);
-                
-                timeDiv.appendChild(statusElement);
-            }
-            
-            messageDiv.appendChild(senderDiv);
-            messageDiv.appendChild(contentDiv);
-            messageDiv.appendChild(timeDiv);
-            
-            chatBox.appendChild(messageDiv);
-            
-            // Also add a div to clear the float
-            const clearDiv = document.createElement('div');
-            clearDiv.style.clear = 'both';
-            chatBox.appendChild(clearDiv);
         }
-        
-        function scrollToBottom() {
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-        
-        function notifyNewMessage(sender) {
-            // You could add sound or browser notifications here
-            // For now, just flash the title
-            let originalTitle = document.title;
-            let interval = setInterval(() => {
-                document.title = document.title === "New Message!" ? originalTitle : "New Message!";
-            }, 1000);
-            
-            // Stop flashing after 5 seconds
-            setTimeout(() => {
-                clearInterval(interval);
-                document.title = originalTitle;
-            }, 5000);
-        }
-        
-        // Implement heartbeat to keep connection alive
-        setInterval(() => {
-            if (isConnected) {
-                socket.emit('heartbeat');
+
+        // Change recipient
+        function changeRecipient() {
+            const newRecipient = prompt("Enter new recipient's email address:");
+            if (newRecipient) {
+                fetch('/change_recipient', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ recipient: newRecipient }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('recipient-name').textContent = newRecipient;
+                        refreshMessages();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error changing recipient:', error);
+                });
             }
-        }, 30000); // Send heartbeat every 30 seconds
-        
-        // Add AI toggle handling
-        const aiToggle = document.getElementById('aiToggle');
-        
-        // Load toggle state from localStorage if available
-        if (localStorage.getItem('aiResponseEnabled') === 'true') {
-            aiToggle.checked = true;
-            // Notify the server about the initial state
-            socket.emit('toggle_ai_response', { enabled: true });
         }
-        
-        // Handle toggle changes
-        aiToggle.addEventListener('change', function() {
-            const enabled = this.checked;
-            
-            // Save to localStorage
-            localStorage.setItem('aiResponseEnabled', enabled);
-            
-            // Notify the server
-            socket.emit('toggle_ai_response', { enabled });
-            
-            // Show status message
-            statusDiv.textContent = `AI responses ${enabled ? 'enabled' : 'disabled'}`;
-            setTimeout(() => {
-                statusDiv.textContent = '';
-            }, 3000);
-        });
+
+        // Format timestamp
+        function formatTimestamp(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Refresh messages
+        function refreshMessages() {
+            fetch('/messages')
+                .then(response => response.json())
+                .then(data => {
+                    const messagesContainer = document.getElementById('chat-messages');
+                    
+                    // Clear existing content for simplicity
+                    messagesContainer.innerHTML = '';
+                    
+                    data.messages.forEach(msg => {
+                        const messageEl = document.createElement('div');
+                        if (msg.sender === 'System') {
+                            messageEl.className = 'message system';
+                            messageEl.innerHTML = `
+                                <div class="message-content">${msg.content}</div>
+                                <div class="system-timestamp">${formatTimestamp(msg.timestamp)}</div>
+                            `;
+                        } else if (msg.is_self) {
+                            messageEl.className = 'message self';
+                            messageEl.innerHTML = `
+                                <div class="message-content">${msg.content}</div>
+                                <div class="message-meta">${formatTimestamp(msg.timestamp)}</div>
+                            `;
+                        } else {
+                            messageEl.className = 'message other';
+                            messageEl.innerHTML = `
+                                <div class="message-content">${msg.content}</div>
+                                <div class="message-meta">${msg.sender} • ${formatTimestamp(msg.timestamp)}</div>
+                            `;
+                        }
+                        messagesContainer.appendChild(messageEl);
+                    });
+                    
+                    // Scroll to bottom
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                })
+                .catch(error => {
+                    console.error('Error fetching messages:', error);
+                });
+        }
+
+        // Initially load messages and set up periodic refresh
+        refreshMessages();
+        setInterval(refreshMessages, 2000);  // Poll every 2 seconds
     </script>
 </body>
 </html>
-    
+            
