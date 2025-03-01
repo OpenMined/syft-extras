@@ -7,6 +7,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import uuid
 
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
@@ -60,8 +61,12 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
         # If ts is a string, just use it directly
         time_str = str(message.ts)
     
+    # Generate a unique ID for this message
+    msg_id = str(uuid.uuid4())
+    
     # Format the message for the UI
     msg_data = {
+        "id": msg_id,
         "sender": sender,
         "time": time_str,
         "content": message.content,
@@ -70,7 +75,9 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
     
     # Add to history and update UI
     message_history.append(msg_data)
-    socketio.emit('new_message', msg_data)
+    
+    # This is the crucial part - we need to broadcast to all connected clients
+    socketio.emit('new_message', msg_data, broadcast=True)
     
     return ChatResponse(
         status="received",
@@ -88,8 +95,8 @@ def send_message(recipient: str, content: str) -> None:
     # Create the message
     message = ChatMessage(content=content, sender=client.email)
     
-    # Generate a unique message ID to prevent duplicates
-    message_id = f"{int(time.time())}-{hash(content) % 10000}"
+    # Generate a unique message ID
+    message_id = str(uuid.uuid4())
     
     # Add to history immediately (optimistic UI update)
     msg_data = {
@@ -98,10 +105,12 @@ def send_message(recipient: str, content: str) -> None:
         "time": datetime.now().strftime('%H:%M:%S'),
         "content": content,
         "is_self": True,
-        "confirmed": False  # Mark as unconfirmed initially
+        "confirmed": False
     }
     message_history.append(msg_data)
-    socketio.emit('new_message', msg_data)
+    
+    # Broadcast to all connected clients, including the sender
+    socketio.emit('new_message', msg_data, broadcast=True)
     
     # Send in background thread to keep UI responsive
     def send_and_confirm():
@@ -113,8 +122,7 @@ def send_message(recipient: str, content: str) -> None:
                 cache=False,
             )
             
-            # Use a shorter timeout for immediate feedback
-            response = future.wait(timeout=30)
+            response = future.wait(timeout=120)
             response.raise_for_status()
             chat_response = response.model(ChatResponse)
             
@@ -124,16 +132,15 @@ def send_message(recipient: str, content: str) -> None:
                     msg["confirmed"] = True
                     break
             
-            # Send confirmation to UI
-            socketio.emit('new_message', {
-                "id": message_id,
-                "confirmed": True
-            })
+            # Broadcast confirmation to all clients
+            socketio.emit('message_confirmed', {
+                "id": message_id
+            }, broadcast=True)
             
-            socketio.emit('status', {"message": "Message delivered"})
+            socketio.emit('status', {"message": "Message delivered"}, broadcast=True)
             logger.debug(f"Message delivered: {chat_response.status}")
         except Exception as e:
-            socketio.emit('status', {"message": f"Delivery status unknown: {str(e)}"})
+            socketio.emit('status', {"message": f"Delivery status unknown: {str(e)}"}, broadcast=True)
             logger.error(f"Error sending message: {e}")
     
     # Start a thread to handle the send and confirmation
@@ -191,6 +198,12 @@ def handle_send_message(data):
     
     # Send the message in a background thread to avoid blocking the Socket.IO event loop
     threading.Thread(target=send_message, args=(recipient, content)).start()
+
+
+@socketio.on('request_messages')
+def handle_request_messages():
+    """Send message history to the client."""
+    socketio.emit('message_history', message_history)
 
 
 def ensure_template_dir():
