@@ -8,6 +8,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+import json
+from pathlib import Path
 
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
@@ -41,8 +43,74 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # Store client and recipient information
 client_info = {"client": None, "recipient": None}
 
-# Change from a single message_history to per-recipient conversations
-conversations = {}  # Dictionary to store conversations by recipient
+# Add this class for persistent storage
+class ChatStorage:
+    """Handles persistent storage of conversations and contacts."""
+    
+    def __init__(self):
+        # Create storage directory in user's home folder
+        self.storage_dir = Path.home() / ".syft" / "automail"
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Path to the conversations file
+        self.conversations_file = self.storage_dir / "conversations.json"
+    
+    def load_conversations(self):
+        """Load conversations from disk."""
+        if not self.conversations_file.exists():
+            return {}
+        
+        try:
+            with open(self.conversations_file, 'r') as f:
+                data = json.load(f)
+                
+                # Convert timestamp strings back to datetime objects
+                for recipient, messages in data.items():
+                    for msg in messages:
+                        if "timestamp" in msg:
+                            try:
+                                msg["ts_obj"] = datetime.fromisoformat(msg["timestamp"].replace('Z', '+00:00'))
+                            except (ValueError, TypeError):
+                                # If parsing fails, use a default timestamp
+                                msg["ts_obj"] = datetime.now(timezone.utc)
+                
+                return data
+        except Exception as e:
+            logger.error(f"Error loading conversations: {e}")
+            return {}
+    
+    def save_conversations(self, conversations):
+        """Save conversations to disk."""
+        try:
+            # Create a serializable copy of the conversations
+            serializable_data = {}
+            
+            for recipient, messages in conversations.items():
+                serializable_data[recipient] = []
+                for msg in messages:
+                    # Create a copy to avoid modifying the original
+                    serializable_msg = msg.copy()
+                    # Remove the datetime object that can't be JSON serialized
+                    if "ts_obj" in serializable_msg:
+                        del serializable_msg["ts_obj"]
+                    serializable_data[recipient].append(serializable_msg)
+            
+            # Write to file
+            with open(self.conversations_file, 'w') as f:
+                json.dump(serializable_data, f, indent=2)
+                
+            logger.debug("Conversations saved to disk")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving conversations: {e}")
+            return False
+
+
+# Initialize the storage
+chat_storage = ChatStorage()
+
+# Update the global conversations dict
+conversations = {}
 
 
 @box.on_request("/message")
@@ -107,7 +175,7 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
 
 
 def add_message_to_conversation(recipient, msg_data):
-    """Add a message to a specific conversation."""
+    """Add a message to a specific conversation and save to disk."""
     # Initialize the conversation if it doesn't exist
     if recipient not in conversations:
         conversations[recipient] = []
@@ -117,6 +185,9 @@ def add_message_to_conversation(recipient, msg_data):
     
     # Sort messages by timestamp
     conversations[recipient].sort(key=lambda x: x.get("ts_obj", datetime.fromtimestamp(0, tz=timezone.utc)))
+    
+    # Save conversations to disk
+    chat_storage.save_conversations(conversations)
     
     # Update UI only if this is the current recipient
     if recipient == client_info["recipient"]:
@@ -222,6 +293,9 @@ def send_message(recipient: str, content: str, message_id: str = None, timestamp
                     msg["status"] = "delivered"
                     break
             
+            # Save the updated status to disk
+            chat_storage.save_conversations(conversations)
+            
             # Send confirmation to UI (two checkmarks)
             socketio.emit('message_status_update', {
                 "id": message_id,
@@ -313,12 +387,14 @@ def handle_get_contacts():
 
 @socketio.on('add_contact')
 def handle_add_contact(data):
-    """Add a new contact."""
+    """Add a new contact and save to disk."""
     new_contact = data.get('contact')
     if new_contact and '@' in new_contact:
         # Initialize an empty conversation if it doesn't exist
         if new_contact not in conversations:
             conversations[new_contact] = []
+            # Save the updated conversations to disk
+            chat_storage.save_conversations(conversations)
         
         # Send updated contacts list
         socketio.emit('contact_list', list(conversations.keys()))
@@ -1043,6 +1119,10 @@ def main():
         client_info["recipient"] = args.recipient
     
     print(f"Logged in as: {client_info['client'].email}")
+    
+    # Load conversations from disk
+    global conversations
+    conversations = chat_storage.load_conversations()
     
     # Create the HTML template
     create_html_template()
