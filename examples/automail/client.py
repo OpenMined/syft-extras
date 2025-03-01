@@ -46,6 +46,13 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
     """Handle incoming chat messages."""
     sender = message.sender if message.sender else "Unknown"
     
+    # Skip processing if message is from ourselves
+    if sender == client_info["client"].email:
+        return ChatResponse(
+            status="received (self)",
+            ts=datetime.now(timezone.utc),
+        )
+    
     # Handle timestamp formatting - might be string or datetime
     if isinstance(message.ts, datetime):
         time_str = message.ts.strftime('%H:%M:%S')
@@ -61,10 +68,8 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
         "is_self": False
     }
     
-    # Add to history
+    # Add to history and update UI
     message_history.append(msg_data)
-    
-    # Emit the message to all connected clients
     socketio.emit('new_message', msg_data)
     
     return ChatResponse(
@@ -83,35 +88,56 @@ def send_message(recipient: str, content: str) -> None:
     # Create the message
     message = ChatMessage(content=content, sender=client.email)
     
+    # Generate a unique message ID to prevent duplicates
+    message_id = f"{int(time.time())}-{hash(content) % 10000}"
+    
     # Add to history immediately (optimistic UI update)
     msg_data = {
+        "id": message_id,
         "sender": client.email,
         "time": datetime.now().strftime('%H:%M:%S'),
         "content": content,
-        "is_self": True
+        "is_self": True,
+        "confirmed": False  # Mark as unconfirmed initially
     }
     message_history.append(msg_data)
     socketio.emit('new_message', msg_data)
     
-    try:
-        future = rpc.send(
-            url=f"syft://{recipient}/api_data/automail/rpc/message",
-            body=message,
-            expiry="5m",
-            cache=False,
-        )
-        
-        # Wait for the response
-        response = future.wait(timeout=120)
-        response.raise_for_status()
-        chat_response = response.model(ChatResponse)
-        
-        # Notify about success
-        socketio.emit('status', {"message": "Message sent successfully"})
-        logger.debug(f"Message delivered: {chat_response.status}")
-    except Exception as e:
-        socketio.emit('status', {"message": f"Error: {str(e)}"})
-        logger.error(f"Error sending message: {e}")
+    # Send in background thread to keep UI responsive
+    def send_and_confirm():
+        try:
+            future = rpc.send(
+                url=f"syft://{recipient}/api_data/automail/rpc/message",
+                body=message,
+                expiry="5m",
+                cache=False,
+            )
+            
+            # Use a shorter timeout for immediate feedback
+            response = future.wait(timeout=30)
+            response.raise_for_status()
+            chat_response = response.model(ChatResponse)
+            
+            # Update message as confirmed
+            for msg in message_history:
+                if msg.get("id") == message_id:
+                    msg["confirmed"] = True
+                    break
+            
+            # Send confirmation to UI
+            socketio.emit('new_message', {
+                "id": message_id,
+                "confirmed": True
+            })
+            
+            socketio.emit('status', {"message": "Message delivered"})
+            logger.debug(f"Message delivered: {chat_response.status}")
+        except Exception as e:
+            socketio.emit('status', {"message": f"Delivery status unknown: {str(e)}"})
+            logger.error(f"Error sending message: {e}")
+    
+    # Start a thread to handle the send and confirmation
+    threading.Thread(target=send_and_confirm).start()
 
 
 def start_server():
