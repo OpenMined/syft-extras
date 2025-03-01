@@ -304,6 +304,20 @@
                 </div>
             </div>
             
+            <!-- Conversations Panel (new) -->
+            <div class="conversations-panel" id="conversations-panel">
+                <div class="conversations-header">
+                    <h3>Conversations</h3>
+                    <button class="new-conversation-btn" id="new-conversation-btn">+ New</button>
+                </div>
+                <ul class="conversation-list" id="conversation-list">
+                    <!-- Conversations will be added here -->
+                </ul>
+                <div class="no-conversations-message" id="no-conversations-message">
+                    No conversations yet.<br>Click "New" to start a conversation.
+                </div>
+            </div>
+            
             <!-- Chat Panel -->
             <div class="chat-panel">
                 <div class="controls">
@@ -311,6 +325,7 @@
                         <span class="connection-status" id="connection-status"></span>
                         <span id="connection-text">Connecting...</span>
                     </div>
+                    <div class="conversation-title" id="conversation-title"></div>
                     <button class="refresh-button" id="refresh-button">Refresh</button>
                 </div>
                 
@@ -318,12 +333,12 @@
                     <!-- Messages will be added here -->
                 </div>
                 
-                <div class="no-recipient-message" id="no-recipient-message">
-                    Select a contact to start chatting or add a new contact using the + button.
+                <div class="no-conversation-message" id="no-conversation-message">
+                    Select or create a conversation to start chatting.
                 </div>
                 
                 <div class="input-area">
-                    <input type="text" class="message-input" id="message-input" placeholder="Type your message...">
+                    <input type="text" class="message-input" id="message-input" placeholder="Type a message...">
                     <button class="send-button" id="send-button">Send</button>
                 </div>
                 
@@ -337,13 +352,29 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Add New Contact</h3>
-                <span class="close" id="close-modal">&times;</span>
+                <span class="close" id="close-contact-modal">&times;</span>
             </div>
             <div class="modal-body">
-                <input type="email" id="new-contact-input" class="modal-input" placeholder="Enter email address">
+                <input type="text" id="new-contact-input" class="modal-input" placeholder="Enter email address">
             </div>
             <div class="modal-footer">
-                <button id="confirm-add-contact" class="modal-button">Add Contact</button>
+                <button id="confirm-add-contact" class="modal-button">Add</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- New Conversation Modal -->
+    <div id="new-conversation-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>New Conversation</h3>
+                <span class="close" id="close-conversation-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="conversation-title-input" class="modal-input" placeholder="Conversation title (optional)">
+            </div>
+            <div class="modal-footer">
+                <button id="confirm-new-conversation" class="modal-button">Create</button>
             </div>
         </div>
     </div>
@@ -359,18 +390,30 @@
         const refreshButton = document.getElementById('refresh-button');
         const userInfoDiv = document.getElementById('user-info');
         const contactList = document.getElementById('contact-list');
-        const noRecipientMessage = document.getElementById('no-recipient-message');
+        const conversationList = document.getElementById('conversation-list');
         const noContactsMessage = document.getElementById('no-contacts-message');
-        const addContactBtn = document.getElementById('add-contact-btn');
-        const addContactModal = document.getElementById('add-contact-modal');
-        const closeModal = document.getElementById('close-modal');
-        const newContactInput = document.getElementById('new-contact-input');
-        const confirmAddContact = document.getElementById('confirm-add-contact');
+        const noConversationsMessage = document.getElementById('no-conversations-message');
+        const conversationsPanel = document.getElementById('conversations-panel');
+        const noConversationMessage = document.getElementById('no-conversation-message');
+        const conversationTitle = document.getElementById('conversation-title');
+        
+        // New conversation elements
+        const newConversationBtn = document.getElementById('new-conversation-btn');
+        const newConversationModal = document.getElementById('new-conversation-modal');
+        const closeConversationModal = document.getElementById('close-conversation-modal');
+        const confirmNewConversation = document.getElementById('confirm-new-conversation');
+        const conversationTitleInput = document.getElementById('conversation-title-input');
+        
+        // Track current selections
+        let currentRecipient = null;
+        let currentConversationId = null;
+        
+        // Hide panels initially
+        conversationsPanel.style.display = 'none';
         
         // Socket.io connection
         const socket = io();
         let isConnected = false;
-        let currentRecipient = null;
         
         // Connect to server
         socket.on('connect', () => {
@@ -458,9 +501,9 @@
                 // Auto-select first contact if none is selected
                 setCurrentRecipient(contacts[0]);
             } else if (!currentRecipient) {
-                noRecipientMessage.style.display = 'block';
+                noConversationMessage.style.display = 'block';
             } else {
-                noRecipientMessage.style.display = 'none';
+                noConversationMessage.style.display = 'none';
             }
         });
         
@@ -469,7 +512,12 @@
             if (recipient === currentRecipient) return;
             
             currentRecipient = recipient;
+            currentConversationId = null; // Reset conversation when changing recipient
             console.log('Set current recipient:', currentRecipient);
+            
+            // Reset UI elements
+            conversationTitle.textContent = '';
+            chatBox.innerHTML = '';
             
             // Tell the server about the change
             socket.emit('set_recipient', { recipient });
@@ -477,8 +525,11 @@
             // Update the UI to show the correct contact as selected
             updateSelectedContact();
             
-            // Hide the no-recipient message
-            noRecipientMessage.style.display = 'none';
+            // Show the conversation selector
+            noConversationMessage.style.display = 'block';
+            
+            // Hide the input area until a conversation is selected
+            document.querySelector('.input-area').style.display = 'none';
         }
         
         // Update which contact is highlighted in the list
@@ -497,109 +548,154 @@
             }
         }
         
-        // Load message history
-        socket.on('message_history', (messages) => {
-            console.log(`Received message history: ${messages.length} messages`);
+        // Socket.IO events for conversations
+        socket.on('conversation_list', (conversations) => {
+            // Show the conversations panel
+            conversationsPanel.style.display = 'flex';
             
-            // Clear the chat box
-            chatBox.innerHTML = '';
+            // Clear the list
+            conversationList.innerHTML = '';
             
-            // Add all messages in the order they were sorted on the server
-            messages.forEach(message => {
-                addMessageToChat(message);
-            });
-            
-            scrollToBottom();
-            statusDiv.textContent = `${messages.length} messages loaded`;
-            
-            // Hide the no-recipient message when we have a conversation
-            if (currentRecipient) {
-                noRecipientMessage.style.display = 'none';
+            // Check if we have any conversations
+            if (conversations.length === 0) {
+                noConversationsMessage.style.display = 'block';
             } else {
-                noRecipientMessage.style.display = 'block';
+                noConversationsMessage.style.display = 'none';
+                
+                // Add each conversation to the list
+                conversations.forEach(conv => {
+                    const li = document.createElement('li');
+                    li.className = 'conversation-item';
+                    li.setAttribute('data-id', conv.id);
+                    
+                    const titleElement = document.createElement('div');
+                    titleElement.className = 'conversation-item-title';
+                    titleElement.textContent = conv.title;
+                    
+                    const previewElement = document.createElement('div');
+                    previewElement.className = 'conversation-item-preview';
+                    previewElement.textContent = conv.preview || 'No messages yet';
+                    
+                    const detailsElement = document.createElement('div');
+                    detailsElement.className = 'conversation-item-details';
+                    const dateStr = new Date(conv.created_at).toLocaleDateString();
+                    detailsElement.textContent = `${dateStr} · ${conv.message_count} messages`;
+                    
+                    li.appendChild(titleElement);
+                    li.appendChild(previewElement);
+                    li.appendChild(detailsElement);
+                    
+                    // Add click handler to set as current conversation
+                    li.addEventListener('click', () => {
+                        setCurrentConversation(conv.id);
+                    });
+                    
+                    conversationList.appendChild(li);
+                });
+            }
+            
+            // Hide the no conversation message if we have selected a contact
+            if (currentRecipient) {
+                noConversationMessage.style.display = 'block';
             }
         });
         
-        // Handle message status updates
-        socket.on('message_status_update', (data) => {
-            console.log('Message status update:', data);
-            const messageElements = document.querySelectorAll(`.message[data-id="${data.id}"]`);
-            messageElements.forEach(el => {
-                // Remove all status classes first
-                el.classList.remove('status-sending', 'status-delivered', 'status-failed');
-                // Add the new status class
-                el.classList.add(`status-${data.status}`);
-                
-                // Update the status indicator element
-                let statusElement = el.querySelector('.message-status');
-                if (statusElement) {
-                    updateStatusIndicator(statusElement, data.status);
-                }
-            });
-        });
+        // Function to set the current conversation
+        function setCurrentConversation(conversationId) {
+            if (conversationId === currentConversationId && currentRecipient) return;
+            
+            currentConversationId = conversationId;
+            console.log('Set current conversation:', currentConversationId);
+            
+            // Tell the server about the change
+            socket.emit('set_conversation', { conversation_id: conversationId });
+            
+            // Update the UI to show the correct conversation as selected
+            updateSelectedConversation();
+            
+            // Hide the no-conversation message
+            noConversationMessage.style.display = 'none';
+            
+            // Show the input area
+            document.querySelector('.input-area').style.display = 'flex';
+        }
         
-        // Helper function to update status indicator content
-        function updateStatusIndicator(element, status) {
-            if (status === "sending") {
-                element.textContent = "•";  // Gray dot instead of checkmark
-                element.style.color = "#999";
-                element.title = "Sending...";
-            } else if (status === "delivered") {
-                element.textContent = "✓";  // Single checkmark (easier to understand)
-                element.style.color = "#4CAF50";
-                element.title = "Delivered";
-            } else if (status === "failed") {
-                element.textContent = "⚠️";
-                element.style.color = "#F44336";
-                element.title = "Failed to send";
-            } else if (status === "unknown") {
-                element.textContent = "?";
-                element.style.color = "#FFA500";  // Orange for unknown status
-                element.title = "Delivery status unknown";
-            } else {
-                // Default/unknown status
-                element.textContent = "";
+        // Update which conversation is highlighted in the list
+        function updateSelectedConversation() {
+            // Remove active class from all conversations
+            document.querySelectorAll('.conversation-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Add active class to current conversation
+            if (currentConversationId) {
+                const conversationItem = document.querySelector(`.conversation-item[data-id="${currentConversationId}"]`);
+                if (conversationItem) {
+                    conversationItem.classList.add('active');
+                    
+                    // Update the conversation title in the header
+                    const titleElement = conversationItem.querySelector('.conversation-item-title');
+                    if (titleElement) {
+                        conversationTitle.textContent = titleElement.textContent;
+                    }
+                }
             }
         }
         
-        // Update status
-        socket.on('status', (data) => {
-            statusDiv.textContent = data.message;
-            setTimeout(() => {
-                statusDiv.textContent = '';
-            }, 3000);
+        // New conversation button
+        newConversationBtn.addEventListener('click', () => {
+            if (!currentRecipient) {
+                statusDiv.textContent = 'Select a contact first';
+                return;
+            }
+            
+            newConversationModal.style.display = 'block';
+            conversationTitleInput.focus();
         });
         
-        // Handle notification of unread message
-        socket.on('unread_message', (data) => {
-            console.log('Unread message from:', data.sender);
+        closeConversationModal.addEventListener('click', () => {
+            newConversationModal.style.display = 'none';
+        });
+        
+        window.addEventListener('click', (e) => {
+            if (e.target === newConversationModal) {
+                newConversationModal.style.display = 'none';
+            }
+        });
+        
+        confirmNewConversation.addEventListener('click', createNewConversation);
+        
+        conversationTitleInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                createNewConversation();
+            }
+        });
+        
+        function createNewConversation() {
+            const title = conversationTitleInput.value.trim() || 'New Conversation';
             
-            // Highlight the contact in the list or add it if not present
-            const contactItem = document.querySelector(`.contact-item[data-email="${data.sender}"]`);
-            if (contactItem) {
-                contactItem.style.fontWeight = 'bold';
+            if (currentRecipient) {
+                socket.emit('create_conversation', { title: title });
+                newConversationModal.style.display = 'none';
+                conversationTitleInput.value = '';
             } else {
-                // Request updated contact list
-                socket.emit('get_contacts');
+                statusDiv.textContent = 'Select a contact first';
             }
-            
-            // Notify the user if not the current conversation
-            if (data.sender !== currentRecipient) {
-                notifyNewMessage(data.sender);
-            }
-        });
+        }
         
-        // Send message
+        // Send message (update to check for current conversation)
         function sendMessage() {
             const message = messageInput.value.trim();
-            if (message && isConnected && currentRecipient) {
+            if (message && isConnected && currentRecipient && currentConversationId) {
                 socket.emit('send_message', { message });
                 messageInput.value = '';
                 statusDiv.textContent = 'Sending...';
             } else if (!isConnected) {
                 statusDiv.textContent = 'Cannot send: disconnected';
             } else if (!currentRecipient) {
-                statusDiv.textContent = 'Select a recipient first';
+                statusDiv.textContent = 'Select a contact first';
+            } else if (!currentConversationId) {
+                statusDiv.textContent = 'Select or create a conversation first';
             }
         }
         
@@ -622,123 +718,13 @@
         });
         
         // Add Contact functionality
+        const addContactBtn = document.getElementById('add-contact-btn');
         addContactBtn.addEventListener('click', () => {
-            addContactModal.style.display = 'block';
-            newContactInput.focus();
+            newConversationModal.style.display = 'block';
+            conversationTitleInput.focus();
         });
         
-        closeModal.addEventListener('click', () => {
-            addContactModal.style.display = 'none';
-        });
-        
-        window.addEventListener('click', (e) => {
-            if (e.target === addContactModal) {
-                addContactModal.style.display = 'none';
-            }
-        });
-        
-        confirmAddContact.addEventListener('click', addNewContact);
-        
-        newContactInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addNewContact();
-            }
-        });
-        
-        function addNewContact() {
-            const contact = newContactInput.value.trim();
-            if (contact) {
-                socket.emit('add_contact', { contact });
-                addContactModal.style.display = 'none';
-                newContactInput.value = '';
-            }
-        }
-        
-        function addMessageToChat(message) {
-            // Check if this message already exists in the chat
-            const existingMsg = document.querySelector(`.message[data-id="${message.id}"]`);
-            if (existingMsg) {
-                // If it's a status update, just update the existing message
-                if (message.status) {
-                    existingMsg.classList.remove('status-sending', 'status-delivered', 'status-failed', 'status-unknown');
-                    existingMsg.classList.add(`status-${message.status}`);
-                    
-                    let statusElement = existingMsg.querySelector('.message-status');
-                    if (statusElement) {
-                        updateStatusIndicator(statusElement, message.status);
-                    }
-                }
-                return;
-            }
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${message.is_self ? 'self' : 'other'}`;
-            if (message.id) {
-                messageDiv.setAttribute('data-id', message.id);
-                if (message.status) {
-                    messageDiv.classList.add(`status-${message.status}`);
-                }
-            }
-            
-            const senderDiv = document.createElement('div');
-            senderDiv.className = 'message-sender';
-            senderDiv.textContent = message.sender;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.textContent = message.content;
-            
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            timeDiv.textContent = message.time;
-            
-            // Add status indicator for self messages
-            if (message.is_self) {
-                const statusElement = document.createElement('span');
-                statusElement.className = 'message-status';
-                
-                // Set initial status indicator
-                updateStatusIndicator(statusElement, message.status);
-                
-                timeDiv.appendChild(statusElement);
-            }
-            
-            messageDiv.appendChild(senderDiv);
-            messageDiv.appendChild(contentDiv);
-            messageDiv.appendChild(timeDiv);
-            
-            chatBox.appendChild(messageDiv);
-            
-            // Also add a div to clear the float
-            const clearDiv = document.createElement('div');
-            clearDiv.style.clear = 'both';
-            chatBox.appendChild(clearDiv);
-        }
-        
-        function scrollToBottom() {
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-        
-        function notifyNewMessage(sender) {
-            // You could add sound or browser notifications here
-            // For now, just flash the title
-            let originalTitle = document.title;
-            let interval = setInterval(() => {
-                document.title = document.title === "New Message!" ? originalTitle : "New Message!";
-            }, 1000);
-            
-            // Stop flashing after 5 seconds
-            setTimeout(() => {
-                clearInterval(interval);
-                document.title = originalTitle;
-            }, 5000);
-        }
-        
-        // Implement heartbeat to keep connection alive
-        setInterval(() => {
-            if (isConnected) {
-                socket.emit('heartbeat');
-            }
-        }, 30000); // Send heartbeat every 30 seconds
+        // ...existing event handlers...
     </script>
 </body>
 </html>
