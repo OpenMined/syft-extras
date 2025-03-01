@@ -306,7 +306,16 @@ def send_message(recipient: str, content: str, message_id: str = None, timestamp
             socketio.emit('status', {"message": "Message delivered"})
             logger.debug(f"Message delivered: {chat_response.status}")
         except Exception as e:
-            # Update status to failed
+            # Update status to failed in memory
+            for msg in conversations[recipient]:
+                if msg.get("id") == message_id:
+                    msg["status"] = "failed"
+                    break
+                    
+            # Save the failure status to disk
+            chat_storage.save_conversations(conversations)
+            
+            # Update status to failed in UI
             socketio.emit('message_status_update', {
                 "id": message_id,
                 "status": "failed"
@@ -598,87 +607,6 @@ def create_html_template():
             margin-left: 5px;
             font-size: 0.8em;
         }
-        
-        .status-sending::after {
-            content: "✓";
-            color: #999;
-        }
-        
-        .status-delivered::after {
-            content: "✓✓";
-            color: #4CAF50;
-        }
-        
-        .status-failed::after {
-            content: "⚠️";
-            color: #F44336;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
-        }
-        
-        .modal-content {
-            background-color: #fefefe;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 300px;
-            border-radius: 5px;
-        }
-        
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        
-        .close {
-            color: #aaa;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        
-        .modal-body {
-            margin-bottom: 15px;
-        }
-        
-        .modal-footer {
-            text-align: right;
-        }
-        
-        .modal-input {
-            width: 100%;
-            padding: 8px;
-            box-sizing: border-box;
-            margin-bottom: 10px;
-        }
-        
-        .modal-button {
-            padding: 8px 15px;
-            background: #4a69bd;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .no-recipient-message {
-            text-align: center;
-            color: #666;
-            margin-top: 30px;
-            display: none;
-        }
     </style>
 </head>
 <body>
@@ -892,7 +820,95 @@ def create_html_template():
             }
         });
         
-        // Handle message status updates
+        function addMessageToChat(message) {
+            // Check if this message already exists in the chat
+            const existingMsg = document.querySelector(`.message[data-id="${message.id}"]`);
+            if (existingMsg) {
+                // If it's a status update, just update the existing message
+                if (message.status) {
+                    existingMsg.classList.remove('status-sending', 'status-delivered', 'status-failed');
+                    existingMsg.classList.add(`status-${message.status}`);
+                    
+                    // Update the status indicator element
+                    let statusElement = existingMsg.querySelector('.message-status');
+                    if (statusElement) {
+                        updateStatusIndicator(statusElement, message.status);
+                    }
+                }
+                return;
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${message.is_self ? 'self' : 'other'}`;
+            if (message.id) {
+                messageDiv.setAttribute('data-id', message.id);
+                
+                // Apply status class if status is present
+                if (message.status) {
+                    messageDiv.classList.add(`status-${message.status}`);
+                }
+            }
+            
+            // Store timestamp as attribute for potential client-side sorting
+            if (message.timestamp) {
+                messageDiv.setAttribute('data-timestamp', message.timestamp);
+            }
+            
+            const senderDiv = document.createElement('div');
+            senderDiv.className = 'message-sender';
+            senderDiv.textContent = message.sender;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.textContent = message.content;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = message.time;
+            
+            // Add status indicator for self messages
+            if (message.is_self) {
+                const statusElement = document.createElement('span');
+                statusElement.className = 'message-status';
+                
+                // Set initial status indicator based on message status
+                updateStatusIndicator(statusElement, message.status);
+                
+                timeDiv.appendChild(statusElement);
+            }
+            
+            messageDiv.appendChild(senderDiv);
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(timeDiv);
+            
+            chatBox.appendChild(messageDiv);
+            
+            // Also add a div to clear the float
+            const clearDiv = document.createElement('div');
+            clearDiv.style.clear = 'both';
+            chatBox.appendChild(clearDiv);
+        }
+        
+        // Helper function to update status indicator content
+        function updateStatusIndicator(element, status) {
+            if (status === "sending") {
+                element.textContent = "✓";
+                element.style.color = "#999";
+            } else if (status === "delivered") {
+                element.textContent = "✓✓";
+                element.style.color = "#4CAF50";
+            } else if (status === "failed") {
+                element.textContent = "⚠️";
+                element.style.color = "#F44336";
+            } else if (status === "unknown") {
+                element.textContent = "?";
+                element.style.color = "#FFA500";  // Orange for unknown status
+            } else {
+                // Default/unknown status
+                element.textContent = "";
+            }
+        }
+        
+        // Handle message status updates from the server
         socket.on('message_status_update', (data) => {
             console.log('Message status update:', data);
             const messageElements = document.querySelectorAll(`.message[data-id="${data.id}"]`);
@@ -904,19 +920,9 @@ def create_html_template():
                 
                 // Update the status indicator element
                 let statusElement = el.querySelector('.message-status');
-                if (!statusElement) {
-                    statusElement = document.createElement('span');
-                    statusElement.className = 'message-status';
-                    el.querySelector('.message-time').appendChild(statusElement);
+                if (statusElement) {
+                    updateStatusIndicator(statusElement, data.status);
                 }
-                
-                // Update text for status
-                let statusText = "";
-                if (data.status === "sending") statusText = "✓";
-                else if (data.status === "delivered") statusText = "✓✓";
-                else if (data.status === "failed") statusText = "⚠️";
-                
-                statusElement.textContent = statusText;
             });
         });
         
@@ -1012,65 +1018,6 @@ def create_html_template():
             }
         }
         
-        function addMessageToChat(message) {
-            // Check if this message already exists in the chat
-            const existingMsg = document.querySelector(`.message[data-id="${message.id}"]`);
-            if (existingMsg) {
-                // If it's a status update, just update the existing message
-                if (message.status) {
-                    existingMsg.classList.remove('status-sending', 'status-delivered', 'status-failed');
-                    existingMsg.classList.add(`status-${message.status}`);
-                }
-                return;
-            }
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${message.is_self ? 'self' : 'other'}`;
-            if (message.id) {
-                messageDiv.setAttribute('data-id', message.id);
-                if (message.status) {
-                    messageDiv.classList.add(`status-${message.status}`);
-                }
-            }
-            
-            const senderDiv = document.createElement('div');
-            senderDiv.className = 'message-sender';
-            senderDiv.textContent = message.sender;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.textContent = message.content;
-            
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            timeDiv.textContent = message.time;
-            
-            // Add status indicator for self messages
-            if (message.is_self) {
-                const statusElement = document.createElement('span');
-                statusElement.className = 'message-status';
-                
-                // Set initial status indicator
-                let statusText = "";
-                if (message.status === "sending") statusText = "✓";
-                else if (message.status === "delivered") statusText = "✓✓";
-                else if (message.status === "failed") statusText = "⚠️";
-                
-                statusElement.textContent = statusText;
-                timeDiv.appendChild(statusElement);
-            }
-            
-            messageDiv.appendChild(senderDiv);
-            messageDiv.appendChild(contentDiv);
-            messageDiv.appendChild(timeDiv);
-            
-            chatBox.appendChild(messageDiv);
-            
-            // Also add a div to clear the float
-            const clearDiv = document.createElement('div');
-            clearDiv.style.clear = 'both';
-            chatBox.appendChild(clearDiv);
-        }
-        
         function scrollToBottom() {
             chatBox.scrollTop = chatBox.scrollHeight;
         }
@@ -1107,6 +1054,175 @@ def create_html_template():
     return template_path
 
 
+def check_pending_messages():
+    """Check and update the status of any pending messages after a restart."""
+    logger.info("Checking pending messages after restart...")
+    
+    # Get the logged-in client
+    client = client_info["client"]
+    if not client:
+        logger.error("Cannot check pending messages: not logged in")
+        return
+    
+    pending_count = 0
+    
+    # Iterate through all conversations
+    for recipient, messages in conversations.items():
+        # Find messages in "sending" state
+        for msg in messages:
+            if msg.get("is_self", False) and msg.get("status") == "sending":
+                pending_count += 1
+                
+                # Check if this message was actually delivered
+                msg_content = msg.get("content", "")
+                msg_id = msg.get("id", "")
+                timestamp_str = msg.get("timestamp", "")
+                
+                try:
+                    # Try to parse the timestamp
+                    if timestamp_str:
+                        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    else:
+                        timestamp = None
+                    
+                    # Create a thread to verify this message
+                    threading.Thread(
+                        target=verify_message_delivery,
+                        args=(recipient, msg_content, msg_id, timestamp)
+                    ).start()
+                except Exception as e:
+                    logger.error(f"Error checking message {msg_id}: {e}")
+                    
+                    # Mark as unknown status since we couldn't verify
+                    msg["status"] = "unknown"
+                    
+                    # Update UI if this is the current recipient
+                    if recipient == client_info["recipient"]:
+                        socketio.emit('message_status_update', {
+                            "id": msg_id,
+                            "status": "unknown"
+                        })
+    
+    if pending_count > 0:
+        logger.info(f"Found {pending_count} pending messages to verify")
+    else:
+        logger.info("No pending messages found")
+    
+    # Save any status changes to disk
+    chat_storage.save_conversations(conversations)
+
+
+def verify_message_delivery(recipient, content, message_id, timestamp=None):
+    """Attempt to verify if a message was delivered after restart."""
+    client = client_info["client"]
+    if not client:
+        return
+    
+    # Create a verification message
+    if timestamp is None:
+        timestamp = datetime.now(timezone.utc)
+    
+    verification_msg = ChatMessage(
+        content=f"__verify__{message_id}__",  # Special format for verification
+        sender=client.email,
+        ts=timestamp
+    )
+    
+    try:
+        # Send verification request to the recipient
+        future = rpc.send(
+            url=f"syft://{recipient}/api_data/automail/rpc/verify",
+            body=verification_msg,
+            expiry="5m",
+            cache=False,
+        )
+        
+        # Wait for response with a shorter timeout
+        response = future.wait(timeout=30)
+        
+        if response.status_code == 200:
+            # Message was delivered - update status
+            for msg in conversations[recipient]:
+                if msg.get("id") == message_id:
+                    msg["status"] = "delivered"
+                    break
+            
+            # Save to disk
+            chat_storage.save_conversations(conversations)
+            
+            # Update UI if this is the current recipient
+            if recipient == client_info["recipient"]:
+                socketio.emit('message_status_update', {
+                    "id": message_id,
+                    "status": "delivered"
+                })
+                
+            logger.debug(f"Verified message delivery for {message_id}")
+        else:
+            # Message delivery couldn't be verified - mark as unknown
+            for msg in conversations[recipient]:
+                if msg.get("id") == message_id:
+                    msg["status"] = "unknown"
+                    break
+            
+            # Save to disk
+            chat_storage.save_conversations(conversations)
+            
+            # Update UI
+            if recipient == client_info["recipient"]:
+                socketio.emit('message_status_update', {
+                    "id": message_id,
+                    "status": "unknown"
+                })
+    except Exception as e:
+        logger.error(f"Error verifying message {message_id}: {e}")
+        
+        # Mark as unknown instead of failed since we can't be sure
+        for msg in conversations[recipient]:
+            if msg.get("id") == message_id:
+                msg["status"] = "unknown"
+                break
+        
+        # Save to disk
+        chat_storage.save_conversations(conversations)
+        
+        # Update UI
+        if recipient == client_info["recipient"]:
+            socketio.emit('message_status_update', {
+                "id": message_id,
+                "status": "unknown"
+            })
+
+
+# Add a verification endpoint to check if messages were received
+@box.on_request("/verify")
+def handle_verification(message: ChatMessage, ctx: Request) -> ChatResponse:
+    """Handle verification requests for message delivery."""
+    # Extract the message ID from the verification message
+    content = message.content
+    if content.startswith("__verify__") and content.endswith("__"):
+        message_id = content.replace("__verify__", "").replace("__", "")
+        
+        # Check if we have this message in any conversation
+        sender = message.sender
+        for recipient, messages in conversations.items():
+            if recipient == sender:
+                for msg in messages:
+                    if not msg.get("is_self", True) and msg.get("id") == message_id:
+                        # We found the message - it was delivered
+                        return ChatResponse(
+                            status="verified",
+                            ts=datetime.now(timezone.utc),
+                            message_id=message_id
+                        )
+    
+    # Message not found or invalid verification request
+    return ChatResponse(
+        status="not_found",
+        ts=datetime.now(timezone.utc)
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Peer-to-peer chat client")
     parser.add_argument("recipient", help="Recipient's email address", nargs='?')
@@ -1130,6 +1246,9 @@ def main():
     # Start the RPC server in the background
     start_server()
     time.sleep(1)  # Give the server a moment to start
+    
+    # Check for pending messages from previous sessions
+    check_pending_messages()
     
     # Start the Flask server
     print(f"Starting web server on http://localhost:{args.port}")

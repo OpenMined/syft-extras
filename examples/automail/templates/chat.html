@@ -178,87 +178,6 @@
             margin-left: 5px;
             font-size: 0.8em;
         }
-        
-        .status-sending::after {
-            content: "✓";
-            color: #999;
-        }
-        
-        .status-delivered::after {
-            content: "✓✓";
-            color: #4CAF50;
-        }
-        
-        .status-failed::after {
-            content: "⚠️";
-            color: #F44336;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
-        }
-        
-        .modal-content {
-            background-color: #fefefe;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 300px;
-            border-radius: 5px;
-        }
-        
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        
-        .close {
-            color: #aaa;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        
-        .modal-body {
-            margin-bottom: 15px;
-        }
-        
-        .modal-footer {
-            text-align: right;
-        }
-        
-        .modal-input {
-            width: 100%;
-            padding: 8px;
-            box-sizing: border-box;
-            margin-bottom: 10px;
-        }
-        
-        .modal-button {
-            padding: 8px 15px;
-            background: #4a69bd;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .no-recipient-message {
-            text-align: center;
-            color: #666;
-            margin-top: 30px;
-            display: none;
-        }
     </style>
 </head>
 <body>
@@ -472,7 +391,95 @@
             }
         });
         
-        // Handle message status updates
+        function addMessageToChat(message) {
+            // Check if this message already exists in the chat
+            const existingMsg = document.querySelector(`.message[data-id="${message.id}"]`);
+            if (existingMsg) {
+                // If it's a status update, just update the existing message
+                if (message.status) {
+                    existingMsg.classList.remove('status-sending', 'status-delivered', 'status-failed');
+                    existingMsg.classList.add(`status-${message.status}`);
+                    
+                    // Update the status indicator element
+                    let statusElement = existingMsg.querySelector('.message-status');
+                    if (statusElement) {
+                        updateStatusIndicator(statusElement, message.status);
+                    }
+                }
+                return;
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${message.is_self ? 'self' : 'other'}`;
+            if (message.id) {
+                messageDiv.setAttribute('data-id', message.id);
+                
+                // Apply status class if status is present
+                if (message.status) {
+                    messageDiv.classList.add(`status-${message.status}`);
+                }
+            }
+            
+            // Store timestamp as attribute for potential client-side sorting
+            if (message.timestamp) {
+                messageDiv.setAttribute('data-timestamp', message.timestamp);
+            }
+            
+            const senderDiv = document.createElement('div');
+            senderDiv.className = 'message-sender';
+            senderDiv.textContent = message.sender;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.textContent = message.content;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = message.time;
+            
+            // Add status indicator for self messages
+            if (message.is_self) {
+                const statusElement = document.createElement('span');
+                statusElement.className = 'message-status';
+                
+                // Set initial status indicator based on message status
+                updateStatusIndicator(statusElement, message.status);
+                
+                timeDiv.appendChild(statusElement);
+            }
+            
+            messageDiv.appendChild(senderDiv);
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(timeDiv);
+            
+            chatBox.appendChild(messageDiv);
+            
+            // Also add a div to clear the float
+            const clearDiv = document.createElement('div');
+            clearDiv.style.clear = 'both';
+            chatBox.appendChild(clearDiv);
+        }
+        
+        // Helper function to update status indicator content
+        function updateStatusIndicator(element, status) {
+            if (status === "sending") {
+                element.textContent = "✓";
+                element.style.color = "#999";
+            } else if (status === "delivered") {
+                element.textContent = "✓✓";
+                element.style.color = "#4CAF50";
+            } else if (status === "failed") {
+                element.textContent = "⚠️";
+                element.style.color = "#F44336";
+            } else if (status === "unknown") {
+                element.textContent = "?";
+                element.style.color = "#FFA500";  // Orange for unknown status
+            } else {
+                // Default/unknown status
+                element.textContent = "";
+            }
+        }
+        
+        // Handle message status updates from the server
         socket.on('message_status_update', (data) => {
             console.log('Message status update:', data);
             const messageElements = document.querySelectorAll(`.message[data-id="${data.id}"]`);
@@ -484,19 +491,9 @@
                 
                 // Update the status indicator element
                 let statusElement = el.querySelector('.message-status');
-                if (!statusElement) {
-                    statusElement = document.createElement('span');
-                    statusElement.className = 'message-status';
-                    el.querySelector('.message-time').appendChild(statusElement);
+                if (statusElement) {
+                    updateStatusIndicator(statusElement, data.status);
                 }
-                
-                // Update text for status
-                let statusText = "";
-                if (data.status === "sending") statusText = "✓";
-                else if (data.status === "delivered") statusText = "✓✓";
-                else if (data.status === "failed") statusText = "⚠️";
-                
-                statusElement.textContent = statusText;
             });
         });
         
@@ -590,65 +587,6 @@
                 addContactModal.style.display = 'none';
                 newContactInput.value = '';
             }
-        }
-        
-        function addMessageToChat(message) {
-            // Check if this message already exists in the chat
-            const existingMsg = document.querySelector(`.message[data-id="${message.id}"]`);
-            if (existingMsg) {
-                // If it's a status update, just update the existing message
-                if (message.status) {
-                    existingMsg.classList.remove('status-sending', 'status-delivered', 'status-failed');
-                    existingMsg.classList.add(`status-${message.status}`);
-                }
-                return;
-            }
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${message.is_self ? 'self' : 'other'}`;
-            if (message.id) {
-                messageDiv.setAttribute('data-id', message.id);
-                if (message.status) {
-                    messageDiv.classList.add(`status-${message.status}`);
-                }
-            }
-            
-            const senderDiv = document.createElement('div');
-            senderDiv.className = 'message-sender';
-            senderDiv.textContent = message.sender;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.textContent = message.content;
-            
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            timeDiv.textContent = message.time;
-            
-            // Add status indicator for self messages
-            if (message.is_self) {
-                const statusElement = document.createElement('span');
-                statusElement.className = 'message-status';
-                
-                // Set initial status indicator
-                let statusText = "";
-                if (message.status === "sending") statusText = "✓";
-                else if (message.status === "delivered") statusText = "✓✓";
-                else if (message.status === "failed") statusText = "⚠️";
-                
-                statusElement.textContent = statusText;
-                timeDiv.appendChild(statusElement);
-            }
-            
-            messageDiv.appendChild(senderDiv);
-            messageDiv.appendChild(contentDiv);
-            messageDiv.appendChild(timeDiv);
-            
-            chatBox.appendChild(messageDiv);
-            
-            // Also add a div to clear the float
-            const clearDiv = document.createElement('div');
-            clearDiv.style.clear = 'both';
-            chatBox.appendChild(clearDiv);
         }
         
         function scrollToBottom() {
