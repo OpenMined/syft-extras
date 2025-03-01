@@ -193,6 +193,19 @@ def handle_send_message(data):
     threading.Thread(target=send_message, args=(recipient, content)).start()
 
 
+@socketio.on('heartbeat')
+def handle_heartbeat():
+    """Handle heartbeat messages to keep the connection alive."""
+    return {'status': 'ok'}
+
+
+@socketio.on('get_messages')
+def handle_get_messages():
+    """Send message history to the client on request."""
+    socketio.emit('message_history', message_history)
+    return {'status': 'sent'}
+
+
 def ensure_template_dir():
     """Create templates directory if it doesn't exist."""
     template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
@@ -300,6 +313,37 @@ def create_html_template():
             padding: 8px;
             margin-right: 5px;
         }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 15px;
+            background-color: #f3f3f3;
+        }
+        .connection-status {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .connected {
+            background-color: #4CAF50;
+        }
+        .disconnected {
+            background-color: #F44336;
+        }
+        .reconnecting {
+            background-color: #FFC107;
+        }
+        .refresh-button {
+            background: #4a69bd;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -314,6 +358,14 @@ def create_html_template():
             <button id="set-recipient">Set Recipient</button>
         </div>
         
+        <div class="controls">
+            <div>
+                <span class="connection-status" id="connection-indicator"></span>
+                <span id="connection-text">Connecting...</span>
+            </div>
+            <button class="refresh-button" id="refresh-button">Refresh Messages</button>
+        </div>
+        
         <div class="chat-box" id="chat-box"></div>
         
         <div class="status" id="status"></div>
@@ -325,7 +377,13 @@ def create_html_template():
     </div>
 
     <script>
-        const socket = io();
+        const socket = io({
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
+        });
         const chatBox = document.getElementById('chat-box');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
@@ -334,10 +392,64 @@ def create_html_template():
         const setRecipientButton = document.getElementById('set-recipient');
         const userInfoDiv = document.getElementById('user-info');
         const setupArea = document.getElementById('setup-area');
+        const refreshButton = document.getElementById('refresh-button');
+        const connectionIndicator = document.getElementById('connection-indicator');
+        const connectionText = document.getElementById('connection-text');
         
-        // Connect to the server
+        // Connection status tracking
+        let isConnected = false;
+        
+        // Connection event handlers
         socket.on('connect', () => {
+            console.log('Socket connected');
+            isConnected = true;
+            connectionIndicator.className = 'connection-status connected';
+            connectionText.textContent = 'Connected';
             statusDiv.textContent = 'Connected to server';
+            
+            // Request latest messages after connection
+            requestMessages();
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('Socket disconnected');
+            isConnected = false;
+            connectionIndicator.className = 'connection-status disconnected';
+            connectionText.textContent = 'Disconnected';
+            statusDiv.textContent = 'Disconnected from server';
+        });
+        
+        socket.on('reconnecting', (attemptNumber) => {
+            console.log(`Reconnection attempt: ${attemptNumber}`);
+            connectionIndicator.className = 'connection-status reconnecting';
+            connectionText.textContent = `Reconnecting (${attemptNumber})...`;
+            statusDiv.textContent = 'Attempting to reconnect...';
+        });
+        
+        socket.on('reconnect_failed', () => {
+            console.log('Failed to reconnect');
+            connectionIndicator.className = 'connection-status disconnected';
+            connectionText.textContent = 'Reconnection failed';
+            statusDiv.textContent = 'Failed to reconnect. Please refresh the page.';
+        });
+        
+        socket.on('error', (error) => {
+            console.error('Socket error:', error);
+            statusDiv.textContent = 'Connection error';
+        });
+        
+        // Function to request message history
+        function requestMessages() {
+            if (isConnected) {
+                console.log('Requesting message history');
+                socket.emit('get_messages');
+            }
+        }
+        
+        // Manual refresh button
+        refreshButton.addEventListener('click', () => {
+            requestMessages();
+            statusDiv.textContent = 'Refreshing messages...';
         });
         
         // Display user info
@@ -350,17 +462,33 @@ def create_html_template():
         
         // Load message history
         socket.on('message_history', (messages) => {
+            console.log(`Received message history: ${messages.length} messages`);
             chatBox.innerHTML = '';
             messages.forEach(message => {
                 addMessageToChat(message);
             });
             scrollToBottom();
+            statusDiv.textContent = `Loaded ${messages.length} messages`;
         });
         
         // Receive new messages
         socket.on('new_message', (message) => {
+            console.log('Received new message:', message);
+            
+            // If this is a message confirmation update
+            if (message.id && message.confirmed && !message.content) {
+                const messageElements = document.querySelectorAll(`.message[data-id="${message.id}"]`);
+                messageElements.forEach(el => {
+                    el.classList.add('confirmed');
+                });
+                return;
+            }
+            
             addMessageToChat(message);
             scrollToBottom();
+            
+            // Play sound or flash title for notification
+            notifyNewMessage();
         });
         
         // Update status
@@ -384,9 +512,12 @@ def create_html_template():
         // Send message
         function sendMessage() {
             const message = messageInput.value.trim();
-            if (message) {
+            if (message && isConnected) {
                 socket.emit('send_message', { message });
                 messageInput.value = '';
+                statusDiv.textContent = 'Sending...';
+            } else if (!isConnected) {
+                statusDiv.textContent = 'Cannot send: disconnected';
             }
         }
         
@@ -401,6 +532,12 @@ def create_html_template():
         function addMessageToChat(message) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${message.is_self ? 'self' : 'other'}`;
+            if (message.id) {
+                messageDiv.setAttribute('data-id', message.id);
+                if (message.confirmed) {
+                    messageDiv.classList.add('confirmed');
+                }
+            }
             
             const senderDiv = document.createElement('div');
             senderDiv.className = 'message-sender';
@@ -428,6 +565,33 @@ def create_html_template():
         function scrollToBottom() {
             chatBox.scrollTop = chatBox.scrollHeight;
         }
+        
+        function notifyNewMessage() {
+            // You could add sound or browser notifications here
+            // For example:
+            // if (Notification.permission === "granted") {
+            //     new Notification("New Message");
+            // }
+            
+            // For now, just flash the title
+            let originalTitle = document.title;
+            let interval = setInterval(() => {
+                document.title = document.title === "New Message!" ? originalTitle : "New Message!";
+            }, 1000);
+            
+            // Stop flashing after 5 seconds
+            setTimeout(() => {
+                clearInterval(interval);
+                document.title = originalTitle;
+            }, 5000);
+        }
+        
+        // Implement heartbeat to keep connection alive
+        setInterval(() => {
+            if (isConnected) {
+                socket.emit('heartbeat');
+            }
+        }, 30000); // Send heartbeat every 30 seconds
     </script>
 </body>
 </html>
