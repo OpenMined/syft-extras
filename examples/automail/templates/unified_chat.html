@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoMail Chat</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background-color: #f5f7fb;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow: hidden;
+        }
+        .chat-container {
+            flex: 1;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            padding: 15px 20px;
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .message {
+            max-width: 70%;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            border-radius: 18px;
+            position: relative;
+            word-wrap: break-word;
+        }
+        .message.sent {
+            align-self: flex-end;
+            background-color: #3498db;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .message.received {
+            align-self: flex-start;
+            background-color: #e9e9eb;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+        .message.ai-generated {
+            background-color: #e1f5fe;
+            border-left: 3px solid #03a9f4;
+        }
+        .message.edited {
+            border-left: 3px solid #ff9800;
+        }
+        .ai-badge, .edited-badge {
+            position: absolute;
+            top: -10px;
+            right: 10px;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+        .ai-badge {
+            background-color: #e1f5fe;
+            color: #0288d1;
+        }
+        .edited-badge {
+            background-color: #fff3e0;
+            color: #e65100;
+        }
+        .timestamp {
+            font-size: 11px;
+            margin-top: 5px;
+            opacity: 0.7;
+        }
+        .chat-input {
+            display: flex;
+            padding: 15px;
+            background-color: #f8f9fa;
+        }
+        .chat-input input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            margin-right: 10px;
+            font-size: 15px;
+        }
+        .chat-input button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 0 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+        .chat-input button:hover {
+            background-color: #2980b9;
+        }
+        .user-list {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+        .user-list li {
+            padding: 10px 15px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .user-list li:hover {
+            background-color: #34495e;
+        }
+        .user-list li.active {
+            background-color: #3498db;
+        }
+        .user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .user-header h2 {
+            margin: 0;
+        }
+        .user-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .user-status.online {
+            background-color: #2ecc71;
+        }
+        .user-status.offline {
+            background-color: #95a5a6;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background-color: #2ecc71;
+            color: white;
+            border-radius: 5px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 1000;
+            animation: fadeInOut 5s;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        .add-contact {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        .add-contact input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #34495e;
+            border-radius: 4px 0 0 4px;
+            background-color: #2c3e50;
+            color: white;
+        }
+        .add-contact button {
+            padding: 8px 12px;
+            background-color: #3498db;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            color: white;
+            cursor: pointer;
+        }
+        .add-contact button:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="user-header">
+            <h2>AutoMail</h2>
+        </div>
+        <div>
+            <p>Logged in as: <strong>{{ username }}</strong></p>
+        </div>
+        <h3>Contacts</h3>
+        <div class="add-contact">
+            <input type="text" id="contactInput" placeholder="Add contact...">
+            <button id="addContactBtn">Add</button>
+        </div>
+        <ul class="user-list" id="userList">
+            <!-- User list will be populated here -->
+        </ul>
+    </div>
+    
+    <div class="main">
+        <div class="chat-container" id="chatContainer">
+            <div class="chat-header" id="chatHeader">
+                Select a contact to start chatting
+            </div>
+            <div class="messages" id="messages">
+                <!-- Messages will be displayed here -->
+            </div>
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="Type a message..." disabled>
+                <button id="sendButton" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="notification" id="notification">
+        A message has been edited by the recipient
+    </div>
+    
+    <script>
+        // Global variables
+        const username = "{{ username }}";
+        let currentContact = null;
+        let socket = io();
+        let messageIds = [];
+        let manualContacts = new Set(); // To store manually added contacts
+        
+        // DOM elements
+        const userList = document.getElementById('userList');
+        const chatHeader = document.getElementById('chatHeader');
+        const messages = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const notification = document.getElementById('notification');
+        const contactInput = document.getElementById('contactInput');
+        const addContactBtn = document.getElementById('addContactBtn');
+        
+        // Initialize Socket.IO connection
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            // Join the chat with username
+            socket.emit('join', { username: username });
+        });
+        
+        // Handle user list updates
+        socket.on('user_list', (data) => {
+            userList.innerHTML = '';
+            
+            // First add manually added contacts
+            manualContacts.forEach(contact => {
+                addContactToList(contact);
+            });
+            
+            // Then add online users who aren't already in the list
+            data.users.forEach(user => {
+                if (!manualContacts.has(user) && user !== username) {
+                    addContactToList(user);
+                }
+            });
+        });
+        
+        // Add a contact to the visual list
+        function addContactToList(contactName) {
+            const li = document.createElement('li');
+            li.textContent = contactName;
+            li.onclick = () => selectContact(contactName);
+            if (contactName === currentContact) {
+                li.classList.add('active');
+            }
+            userList.appendChild(li);
+        }
+        
+        // Add a new contact manually
+        function addContact() {
+            const contact = contactInput.value.trim();
+            if (contact) {
+                manualContacts.add(contact);
+                addContactToList(contact);
+                contactInput.value = '';
+                
+                // If this is the first contact, select it
+                if (!currentContact) {
+                    selectContact(contact);
+                }
+            }
+        }
+        
+        // Initialize contact addition button
+        addContactBtn.addEventListener('click', addContact);
+        contactInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addContact();
+            }
+        });
+        
+        // Handle incoming messages
+        socket.on('message', (data) => {
+            const { sender, message, timestamp, ai_generated, message_id } = data;
+            
+            // Track message IDs for update checking
+            if (message_id) {
+                messageIds.push(message_id);
+            }
+            
+            // If this is from the current contact OR if this is a message to yourself
+            if (sender === currentContact || (sender === username && currentContact === username)) {
+                addMessage(message, timestamp, false, ai_generated, message_id);
+                // Scroll to bottom
+                messages.scrollTop = messages.scrollHeight;
+            }
+        });
+        
+        // Handle message updates
+        socket.on('message_update', (data) => {
+            const { message_id, new_text, timestamp, sender } = data;
+            
+            // Update the message if it's in our view
+            const messageDiv = document.querySelector(`.message[data-id="${message_id}"]`);
+            if (messageDiv) {
+                // Keep the timestamp
+                const oldTimestamp = messageDiv.querySelector('.timestamp').textContent;
+                
+                messageDiv.innerHTML = `
+                    ${new_text}
+                    <span class="edited-badge">Edited</span>
+                    <div class="timestamp">${oldTimestamp}</div>
+                `;
+                
+                // Add edited class
+                messageDiv.classList.add('edited');
+                
+                // Show notification
+                showNotification();
+            }
+        });
+        
+        // Handle message updates from monitor
+        socket.on('message_updates', (data) => {
+            const { updates } = data;
+            
+            for (const [messageId, newText] of Object.entries(updates)) {
+                const messageDiv = document.querySelector(`.message[data-id="${messageId}"]`);
+                if (messageDiv) {
+                    // Keep the timestamp
+                    const oldTimestamp = messageDiv.querySelector('.timestamp').textContent;
+                    
+                    messageDiv.innerHTML = `
+                        ${newText}
+                        <span class="edited-badge">Edited</span>
+                        <div class="timestamp">${oldTimestamp}</div>
+                    `;
+                    
+                    // Add edited class
+                    messageDiv.classList.add('edited');
+                    
+                    // Show notification
+                    showNotification();
+                }
+            }
+        });
+        
+        // Select a contact to chat with
+        function selectContact(contact) {
+            currentContact = contact;
+            
+            // Clear messages
+            messages.innerHTML = '';
+            messageIds = [];
+            
+            // Update UI
+            chatHeader.textContent = contact;
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            
+            // Update active state in contact list
+            document.querySelectorAll('#userList li').forEach(li => {
+                li.classList.remove('active');
+                if (li.textContent === contact) {
+                    li.classList.add('active');
+                }
+            });
+            
+            // TODO: Load previous messages
+        }
+        
+        // Add a message to the chat
+        function addMessage(text, timestamp, isSent, isAI = false, messageId = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+            
+            // Add AI indicator if applicable
+            if (isAI) {
+                messageDiv.classList.add('ai-generated');
+            }
+            
+            // Store message ID for updates
+            if (messageId) {
+                messageDiv.dataset.id = messageId;
+            }
+            
+            // Add badges
+            let badge = '';
+            if (isAI) {
+                badge = '<span class="ai-badge">AI</span>';
+            }
+            
+            messageDiv.innerHTML = `
+                ${text}
+                ${badge}
+                <div class="timestamp">${timestamp}</div>
+            `;
+            
+            messages.appendChild(messageDiv);
+        }
+        
+        // Send a message
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || !currentContact) return;
+            
+            // Add message to chat
+            const timestamp = new Date().toLocaleTimeString();
+            addMessage(message, timestamp, true);
+            
+            // Send via Socket.IO
+            socket.emit('message', {
+                sender: username,
+                recipient: currentContact,
+                message: message,
+                selfChat: currentContact === username // Flag for self-chat
+            });
+            
+            // Clear input
+            messageInput.value = '';
+            
+            // Scroll to bottom
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        // Check for updates to messages
+        function checkForUpdates() {
+            if (messageIds.length > 0) {
+                socket.emit('check_updates', { message_ids: messageIds });
+            }
+        }
+        
+        // Show notification when a message is updated
+        function showNotification() {
+            notification.style.display = 'block';
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Set up event listeners
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        sendButton.addEventListener('click', sendMessage);
+        
+        // Start periodic update checks
+        setInterval(checkForUpdates, 5000);
+    </script>
+</body>
+</html> 

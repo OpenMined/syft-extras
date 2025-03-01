@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AutoMail Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        .sidebar {
+            width: 250px;
+            border-right: 1px solid #ccc;
+            padding-right: 20px;
+        }
+        .main-content {
+            flex-grow: 1;
+            max-width: 800px;
+        }
+        .chat-container {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 20px;
+        }
+        .message-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 5px;
+            position: relative;
+        }
+        .sent {
+            background-color: #e3f2fd;
+            margin-left: 20%;
+        }
+        .received {
+            background-color: #f5f5f5;
+            margin-right: 20%;
+        }
+        .edited {
+            border-left: 3px solid #FF9800;
+        }
+        .edited-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 0.7em;
+            padding: 2px 5px;
+            background-color: #FFF3E0;
+            color: #E65100;
+            border-radius: 10px;
+        }
+        .timestamp {
+            font-size: 0.8em;
+            color: #666;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        input, button {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        input {
+            flex-grow: 1;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .chat-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .chat-list li {
+            padding: 10px;
+            margin: 5px 0;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .chat-list li:hover {
+            background-color: #f0f0f0;
+        }
+        .chat-list li.active {
+            background-color: #e3f2fd;
+        }
+        .new-chat {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .current-user {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 16px;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            animation: fadeIn 0.3s, fadeOut 0.3s 3s;
+            animation-fill-mode: forwards;
+            display: none;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="current-user">
+            Logged in as:<br>{{ my_email }}
+        </div>
+        <button class="new-chat" onclick="startNewChat()">New Chat</button>
+        <ul class="chat-list" id="chatList">
+            <!-- Chat list will be populated here -->
+        </ul>
+    </div>
+    
+    <div class="main-content">
+        <h1>AutoMail Chat</h1>
+        <div class="chat-container">
+            <div class="message-container" id="messages">
+                <!-- Messages will be added here -->
+            </div>
+            <div class="input-container">
+                <input type="text" id="message" placeholder="Type your message..." disabled>
+                <button onclick="sendMessage()" id="sendButton" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification">
+        A response has been updated by the recipient
+    </div>
+
+    <script>
+        const messageInput = document.getElementById('message');
+        const sendButton = document.getElementById('sendButton');
+        const messagesContainer = document.getElementById('messages');
+        const chatList = document.getElementById('chatList');
+        
+        // Store conversations
+        let conversations = {};
+        let currentRecipient = null;
+        
+        // Store message IDs to check for updates
+        let messageIds = [];
+
+        function startNewChat() {
+            const email = prompt("Enter recipient's email:");
+            if (email && email.trim()) {
+                switchToChat(email.trim());
+            }
+        }
+
+        function switchToChat(email) {
+            // Initialize conversation if it doesn't exist
+            if (!conversations[email]) {
+                conversations[email] = [];
+                addToContactList(email);
+            }
+
+            currentRecipient = email;
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+
+            // Update UI
+            updateChatList();
+            displayConversation(email);
+        }
+
+        function addToContactList(email) {
+            const li = document.createElement('li');
+            li.textContent = email;
+            li.onclick = () => switchToChat(email);
+            chatList.appendChild(li);
+        }
+
+        function updateChatList() {
+            // Update active state
+            document.querySelectorAll('.chat-list li').forEach(li => {
+                li.className = li.textContent === currentRecipient ? 'active' : '';
+            });
+        }
+
+        function displayConversation(email) {
+            messagesContainer.innerHTML = '';
+            messageIds = []; // Reset message IDs when switching conversations
+            
+            conversations[email].forEach(msg => {
+                addMessage(msg.text, msg.timestamp, msg.isSent, msg.msgId, msg.isEdited, false);
+                
+                // Store message IDs for responses
+                if (!msg.isSent && msg.msgId) {
+                    messageIds.push(msg.msgId);
+                }
+            });
+        }
+
+        // Allow sending with Enter key
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !messageInput.disabled) {
+                sendMessage();
+            }
+        });
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || !currentRecipient) return;
+
+            // Add sent message to chat
+            const timestamp = new Date().toLocaleTimeString();
+            addMessage(message, timestamp, true);
+            messageInput.value = '';
+
+            try {
+                const response = await fetch('/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        recipient: currentRecipient,
+                        message: message
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    const msgId = result.msg_id || null;
+                    addMessage(result.message, result.timestamp, false, msgId);
+                    
+                    // Store message ID for update checking
+                    if (msgId) {
+                        messageIds.push(msgId);
+                    }
+                } else {
+                    addMessage(`Error: ${result.message}`, result.timestamp, false);
+                }
+            } catch (error) {
+                addMessage('Failed to send message', new Date().toLocaleTimeString(), false);
+            }
+        }
+
+        function addMessage(text, timestamp, isSent, msgId = null, isEdited = false, save = true) {
+            const messageDiv = document.createElement('div');
+            let messageClass = `message ${isSent ? 'sent' : 'received'}`;
+            if (isEdited) {
+                messageClass += ' edited';
+            }
+            
+            messageDiv.className = messageClass;
+            messageDiv.dataset.id = msgId || '';
+            
+            let editedBadge = '';
+            if (isEdited) {
+                editedBadge = '<span class="edited-badge">Edited</span>';
+            }
+            
+            messageDiv.innerHTML = `
+                ${text}
+                ${editedBadge}
+                <div class="timestamp">${timestamp}</div>
+            `;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            // Save to conversation history
+            if (save && currentRecipient) {
+                conversations[currentRecipient].push({
+                    text,
+                    timestamp,
+                    isSent,
+                    msgId,
+                    isEdited
+                });
+            }
+        }
+        
+        async function checkForUpdates() {
+            if (messageIds.length === 0) return;
+            
+            try {
+                const response = await fetch('/get_updates', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message_ids: messageIds
+                    })
+                });
+                
+                const result = await response.json();
+                
+                // Track if we found any updates
+                let updatesFound = false;
+                
+                if (result.updates && Object.keys(result.updates).length > 0) {
+                    // Process updates
+                    for (const [msgId, newText] of Object.entries(result.updates)) {
+                        updatesFound = true;
+                        updateMessage(msgId, newText);
+                    }
+                }
+                
+                // Also check the message log directly in case the endpoint doesn't work
+                const logResponse = await fetch('/messages');
+                const messages = await logResponse.json();
+                
+                // Check for any updated messages in the log
+                for (const msg of messages) {
+                    if (messageIds.includes(msg.id) && msg.ai_generated === false) {
+                        // This message was human-edited
+                        updatesFound = true;
+                        updateMessage(msg.id, msg.response);
+                    }
+                }
+                
+                // Show notification if updates were found
+                if (updatesFound) {
+                    showNotification();
+                }
+            } catch (error) {
+                console.error('Error checking for updates:', error);
+            }
+        }
+        
+        function updateMessage(msgId, newText) {
+            // Update DOM
+            const messageDiv = document.querySelector(`.message[data-id="${msgId}"]`);
+            if (messageDiv) {
+                // Keep the timestamp
+                const timestamp = messageDiv.querySelector('.timestamp').textContent;
+                
+                // Update with edited content
+                let messageClass = messageDiv.className;
+                if (!messageClass.includes('edited')) {
+                    messageClass += ' edited';
+                }
+                
+                messageDiv.className = messageClass;
+                messageDiv.innerHTML = `
+                    ${newText}
+                    <span class="edited-badge">Edited</span>
+                    <div class="timestamp">${timestamp}</div>
+                `;
+                
+                // Update conversation storage
+                if (currentRecipient) {
+                    for (const msg of conversations[currentRecipient]) {
+                        if (msg.msgId === msgId) {
+                            msg.text = newText;
+                            msg.isEdited = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        function showNotification() {
+            const notification = document.getElementById('notification');
+            notification.style.display = 'block';
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 5000);
+        }
+
+        // Initialize with current user
+        switchToChat('{{ my_email }}');
+        
+        // Periodically check for updates
+        setInterval(checkForUpdates, 3000);
+    </script>
+</body>
+</html> 

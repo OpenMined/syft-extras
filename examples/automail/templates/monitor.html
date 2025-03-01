@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AutoMail Server Monitor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .conversation-container {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            height: 600px;
+            overflow-y: auto;
+        }
+        .conversation-item {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+            position: relative;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 0.8em;
+            margin-bottom: 5px;
+        }
+        .user-email {
+            color: #2196F3;
+            font-weight: bold;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+        }
+        .response {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 4px;
+            position: relative;
+        }
+        .ai-response {
+            border-left: 4px solid #2196F3;
+        }
+        .human-edited {
+            border-left: 4px solid #FF9800;
+        }
+        .edit-buttons {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            display: none;
+        }
+        .response:hover .edit-buttons {
+            display: block;
+        }
+        .edit-btn, .save-btn, .cancel-btn {
+            padding: 3px 8px;
+            margin-left: 5px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+        .edit-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+        .save-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .cancel-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        .edit-area {
+            width: 100%;
+            min-height: 80px;
+            margin-top: 5px;
+            box-sizing: border-box;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .status {
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            margin-left: 10px;
+        }
+        .ai-badge {
+            background-color: #E3F2FD;
+            color: #0D47A1;
+        }
+        .human-badge {
+            background-color: #FFF3E0;
+            color: #E65100;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AutoMail Server Monitor</h1>
+        <p>Monitoring AI chat responses in real-time</p>
+        <div id="status" class="status">Server running...</div>
+    </div>
+    
+    <div class="conversation-container" id="conversations">
+        <!-- Conversations will be added here -->
+    </div>
+
+    <script>
+        const conversationsContainer = document.getElementById('conversations');
+        const statusDiv = document.getElementById('status');
+        let messages = [];
+        let currentlyEditing = null;
+        
+        async function pollMessages() {
+            try {
+                const response = await fetch('/messages');
+                const newMessages = await response.json();
+                
+                // Update only if we have new messages or changes
+                if (JSON.stringify(newMessages) !== JSON.stringify(messages)) {
+                    messages = newMessages;
+                    displayMessages();
+                }
+                
+                statusDiv.textContent = `Last update: ${new Date().toLocaleTimeString()}`;
+            } catch (error) {
+                statusDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        function displayMessages() {
+            // Don't update if we're currently editing a message
+            if (currentlyEditing !== null) return;
+            
+            conversationsContainer.innerHTML = '';
+            
+            messages.forEach(msg => {
+                const conversationDiv = document.createElement('div');
+                conversationDiv.className = 'conversation-item';
+                conversationDiv.dataset.id = msg.id || '';
+                
+                const responseClass = msg.ai_generated === false ? 'response human-edited' : 'response ai-response';
+                const badge = msg.ai_generated === false ? 
+                    '<span class="badge human-badge">Human edited</span>' : 
+                    '<span class="badge ai-badge">AI generated</span>';
+                
+                conversationDiv.innerHTML = `
+                    <div class="timestamp">${msg.timestamp}</div>
+                    <div class="user-email">${msg.from}</div>
+                    <div class="message">
+                        <strong>Message:</strong><br>${msg.message}
+                    </div>
+                    <div class="${responseClass}">
+                        <strong>Response:${badge}</strong><br>${msg.response}
+                        <div class="edit-buttons">
+                            <button class="edit-btn" onclick="editResponse('${msg.id}')">Edit Response</button>
+                        </div>
+                    </div>
+                `;
+                conversationsContainer.insertBefore(conversationDiv, conversationsContainer.firstChild);
+            });
+        }
+        
+        function editResponse(messageId) {
+            currentlyEditing = messageId;
+            
+            // Find the message
+            const messageData = messages.find(m => m.id === messageId);
+            if (!messageData) return;
+            
+            // Find the DOM element
+            const messageDiv = document.querySelector(`.conversation-item[data-id="${messageId}"]`);
+            const responseDiv = messageDiv.querySelector('.response');
+            
+            // Save original content
+            const originalContent = responseDiv.innerHTML;
+            
+            // Replace with edit interface
+            responseDiv.innerHTML = `
+                <strong>Edit Response:</strong><br>
+                <textarea class="edit-area" id="edit-${messageId}">${messageData.response}</textarea>
+                <div class="edit-buttons">
+                    <button class="cancel-btn" onclick="cancelEdit('${messageId}', '${encodeURIComponent(originalContent)}')">Cancel</button>
+                    <button class="save-btn" onclick="saveEdit('${messageId}')">Save Changes</button>
+                </div>
+            `;
+        }
+        
+        function cancelEdit(messageId, originalContent) {
+            const messageDiv = document.querySelector(`.conversation-item[data-id="${messageId}"]`);
+            const responseDiv = messageDiv.querySelector('.response');
+            
+            // Restore original content
+            responseDiv.innerHTML = decodeURIComponent(originalContent);
+            
+            currentlyEditing = null;
+        }
+        
+        async function saveEdit(messageId) {
+            const editArea = document.getElementById(`edit-${messageId}`);
+            const newResponse = editArea.value;
+            
+            try {
+                const response = await fetch('/update_response', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message_id: messageId,
+                        response: newResponse
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Update local data
+                    const messageData = messages.find(m => m.id === messageId);
+                    if (messageData) {
+                        messageData.response = newResponse;
+                        messageData.ai_generated = false;
+                    }
+                    
+                    statusDiv.textContent = 'Response updated successfully';
+                } else {
+                    statusDiv.textContent = `Error: ${result.error || 'Failed to update response'}`;
+                }
+            } catch (error) {
+                statusDiv.textContent = `Error: ${error.message}`;
+            }
+            
+            currentlyEditing = null;
+            displayMessages();
+        }
+
+        // Poll for new messages every second
+        setInterval(pollMessages, 1000);
+        
+        // Initial fetch
+        pollMessages();
+    </script>
+</body>
+</html> 
