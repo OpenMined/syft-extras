@@ -29,6 +29,7 @@ class ChatMessage:
 class ChatResponse(BaseModel):
     status: str = Field(description="Status of message delivery")
     ts: datetime = Field(description="Timestamp of the response")
+    message_id: str = Field(default="", description="ID of the message being acknowledged")
 
 
 # Set up the event listener
@@ -53,6 +54,9 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
             ts=datetime.now(timezone.utc),
         )
     
+    # Generate a message ID to use in response
+    message_id = f"{int(time.time())}-{hash(message.content) % 10000}"
+    
     # Handle timestamp formatting - ensure we have a datetime object
     if isinstance(message.ts, datetime):
         timestamp = message.ts
@@ -69,20 +73,24 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
     
     # Format the message for the UI
     msg_data = {
+        "id": message_id,
         "sender": sender,
         "time": time_str,
         "content": message.content,
         "is_self": False,
         "timestamp": timestamp.isoformat(),  # Store ISO format for sorting
-        "ts_obj": timestamp  # Store the actual datetime for sorting
+        "ts_obj": timestamp,  # Store the actual datetime for sorting
+        "status": "received"  # Mark as received immediately
     }
     
     # Add to history, sort, and update UI
     add_message_to_history(msg_data)
     
+    # Send a response with the message ID for tracking
     return ChatResponse(
         status="received",
         ts=datetime.now(timezone.utc),
+        message_id=message_id
     )
 
 
@@ -129,7 +137,7 @@ def handle_send_message(data):
         "time": timestamp.strftime('%H:%M:%S'),
         "content": content,
         "is_self": True,
-        "confirmed": False,
+        "status": "sending",  # Initial status
         "timestamp": timestamp.isoformat(),  # Store ISO format for sorting
         "ts_obj": timestamp  # Store the actual datetime for sorting
     }
@@ -158,7 +166,11 @@ def send_message(recipient: str, content: str, message_id: str = None, timestamp
     if message_id is None:
         message_id = f"{int(time.time())}-{hash(content) % 10000}"
     
-    # Note: We don't need to add to history here since it's already added in handle_send_message
+    # Update the UI to show "sending" status (one checkmark)
+    socketio.emit('message_status_update', {
+        "id": message_id,
+        "status": "sending"
+    })
     
     # Send in background thread to keep UI responsive
     def send_and_confirm():
@@ -175,21 +187,27 @@ def send_message(recipient: str, content: str, message_id: str = None, timestamp
             response.raise_for_status()
             chat_response = response.model(ChatResponse)
             
-            # Update message as confirmed
+            # Update message as delivered (server received)
             for msg in message_history:
                 if msg.get("id") == message_id:
-                    msg["confirmed"] = True
+                    msg["status"] = "delivered"
                     break
             
-            # Send confirmation to UI
-            socketio.emit('message_confirmed', {
+            # Send confirmation to UI (two checkmarks)
+            socketio.emit('message_status_update', {
                 "id": message_id,
-                "confirmed": True
+                "status": "delivered",
+                "remote_id": chat_response.message_id  # Store ID assigned by recipient
             })
             
             socketio.emit('status', {"message": "Message delivered"})
             logger.debug(f"Message delivered: {chat_response.status}")
         except Exception as e:
+            # Update status to failed
+            socketio.emit('message_status_update', {
+                "id": message_id,
+                "status": "failed"
+            })
             socketio.emit('status', {"message": f"Delivery status unknown: {str(e)}"})
             logger.error(f"Error sending message: {e}")
     
@@ -402,6 +420,26 @@ def create_html_template():
             cursor: pointer;
             font-size: 12px;
         }
+        .message-status {
+            display: inline-block;
+            margin-left: 5px;
+            font-size: 0.8em;
+        }
+        
+        .status-sending::after {
+            content: "✓";
+            color: #999;
+        }
+        
+        .status-delivered::after {
+            content: "✓✓";
+            color: #4CAF50;
+        }
+        
+        .status-failed::after {
+            content: "⚠️";
+            color: #F44336;
+        }
     </style>
 </head>
 <body>
@@ -534,12 +572,31 @@ def create_html_template():
             statusDiv.textContent = `${messages.length} messages loaded`;
         });
         
-        // Handle confirmed messages
-        socket.on('message_confirmed', (data) => {
-            console.log('Message confirmed:', data);
+        // Handle message status updates
+        socket.on('message_status_update', (data) => {
+            console.log('Message status update:', data);
             const messageElements = document.querySelectorAll(`.message[data-id="${data.id}"]`);
             messageElements.forEach(el => {
-                el.classList.add('confirmed');
+                // Remove all status classes first
+                el.classList.remove('status-sending', 'status-delivered', 'status-failed');
+                // Add the new status class
+                el.classList.add(`status-${data.status}`);
+                
+                // Update the status indicator element
+                let statusElement = el.querySelector('.message-status');
+                if (!statusElement) {
+                    statusElement = document.createElement('span');
+                    statusElement.className = 'message-status';
+                    el.querySelector('.message-time').appendChild(statusElement);
+                }
+                
+                // Update text for status
+                let statusText = "";
+                if (data.status === "sending") statusText = "✓";
+                else if (data.status === "delivered") statusText = "✓✓";
+                else if (data.status === "failed") statusText = "⚠️";
+                
+                statusElement.textContent = statusText;
             });
         });
         
@@ -585,9 +642,10 @@ def create_html_template():
             // Check if this message already exists in the chat
             const existingMsg = document.querySelector(`.message[data-id="${message.id}"]`);
             if (existingMsg) {
-                // If it's a confirmation update, just update the existing message
-                if (message.confirmed) {
-                    existingMsg.classList.add('confirmed');
+                // If it's a status update, just update the existing message
+                if (message.status) {
+                    existingMsg.classList.remove('status-sending', 'status-delivered', 'status-failed');
+                    existingMsg.classList.add(`status-${message.status}`);
                 }
                 return;
             }
@@ -596,8 +654,8 @@ def create_html_template():
             messageDiv.className = `message ${message.is_self ? 'self' : 'other'}`;
             if (message.id) {
                 messageDiv.setAttribute('data-id', message.id);
-                if (message.confirmed) {
-                    messageDiv.classList.add('confirmed');
+                if (message.status) {
+                    messageDiv.classList.add(`status-${message.status}`);
                 }
             }
             
@@ -616,6 +674,21 @@ def create_html_template():
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
             timeDiv.textContent = message.time;
+            
+            // Add status indicator for self messages
+            if (message.is_self) {
+                const statusElement = document.createElement('span');
+                statusElement.className = 'message-status';
+                
+                // Set initial status indicator
+                let statusText = "";
+                if (message.status === "sending") statusText = "✓";
+                else if (message.status === "delivered") statusText = "✓✓";
+                else if (message.status === "failed") statusText = "⚠️";
+                
+                statusElement.textContent = statusText;
+                timeDiv.appendChild(statusElement);
+            }
             
             messageDiv.appendChild(senderDiv);
             messageDiv.appendChild(contentDiv);

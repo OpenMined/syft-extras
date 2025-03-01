@@ -123,6 +123,26 @@
             cursor: pointer;
             font-size: 12px;
         }
+        .message-status {
+            display: inline-block;
+            margin-left: 5px;
+            font-size: 0.8em;
+        }
+        
+        .status-sending::after {
+            content: "✓";
+            color: #999;
+        }
+        
+        .status-delivered::after {
+            content: "✓✓";
+            color: #4CAF50;
+        }
+        
+        .status-failed::after {
+            content: "⚠️";
+            color: #F44336;
+        }
     </style>
 </head>
 <body>
@@ -255,12 +275,31 @@
             statusDiv.textContent = `${messages.length} messages loaded`;
         });
         
-        // Handle confirmed messages
-        socket.on('message_confirmed', (data) => {
-            console.log('Message confirmed:', data);
+        // Handle message status updates
+        socket.on('message_status_update', (data) => {
+            console.log('Message status update:', data);
             const messageElements = document.querySelectorAll(`.message[data-id="${data.id}"]`);
             messageElements.forEach(el => {
-                el.classList.add('confirmed');
+                // Remove all status classes first
+                el.classList.remove('status-sending', 'status-delivered', 'status-failed');
+                // Add the new status class
+                el.classList.add(`status-${data.status}`);
+                
+                // Update the status indicator element
+                let statusElement = el.querySelector('.message-status');
+                if (!statusElement) {
+                    statusElement = document.createElement('span');
+                    statusElement.className = 'message-status';
+                    el.querySelector('.message-time').appendChild(statusElement);
+                }
+                
+                // Update text for status
+                let statusText = "";
+                if (data.status === "sending") statusText = "✓";
+                else if (data.status === "delivered") statusText = "✓✓";
+                else if (data.status === "failed") statusText = "⚠️";
+                
+                statusElement.textContent = statusText;
             });
         });
         
@@ -306,9 +345,10 @@
             // Check if this message already exists in the chat
             const existingMsg = document.querySelector(`.message[data-id="${message.id}"]`);
             if (existingMsg) {
-                // If it's a confirmation update, just update the existing message
-                if (message.confirmed) {
-                    existingMsg.classList.add('confirmed');
+                // If it's a status update, just update the existing message
+                if (message.status) {
+                    existingMsg.classList.remove('status-sending', 'status-delivered', 'status-failed');
+                    existingMsg.classList.add(`status-${message.status}`);
                 }
                 return;
             }
@@ -317,8 +357,8 @@
             messageDiv.className = `message ${message.is_self ? 'self' : 'other'}`;
             if (message.id) {
                 messageDiv.setAttribute('data-id', message.id);
-                if (message.confirmed) {
-                    messageDiv.classList.add('confirmed');
+                if (message.status) {
+                    messageDiv.classList.add(`status-${message.status}`);
                 }
             }
             
@@ -337,6 +377,21 @@
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
             timeDiv.textContent = message.time;
+            
+            // Add status indicator for self messages
+            if (message.is_self) {
+                const statusElement = document.createElement('span');
+                statusElement.className = 'message-status';
+                
+                // Set initial status indicator
+                let statusText = "";
+                if (message.status === "sending") statusText = "✓";
+                else if (message.status === "delivered") statusText = "✓✓";
+                else if (message.status === "failed") statusText = "⚠️";
+                
+                statusElement.textContent = statusText;
+                timeDiv.appendChild(statusElement);
+            }
             
             messageDiv.appendChild(senderDiv);
             messageDiv.appendChild(contentDiv);
