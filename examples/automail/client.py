@@ -7,6 +7,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Dict, List, Optional
 
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
@@ -39,7 +40,9 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Store client and recipient information
 client_info = {"client": None, "recipient": None}
-message_history = []
+
+# Change from a single message_history to per-recipient conversations
+conversations = {}  # Dictionary to store conversations by recipient
 
 
 @box.on_request("/message")
@@ -83,8 +86,17 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
         "status": "received"  # Mark as received immediately
     }
     
-    # Add to history, sort, and update UI
-    add_message_to_history(msg_data)
+    # Add to the conversation with this sender
+    add_message_to_conversation(sender, msg_data)
+    
+    # Update the UI if we're currently chatting with this sender
+    if client_info["recipient"] == sender:
+        socketio.emit('message_history', get_serializable_messages(sender))
+    else:
+        # Notify about unread message from another contact
+        socketio.emit('unread_message', {
+            "sender": sender
+        })
     
     # Send a response with the message ID for tracking
     return ChatResponse(
@@ -94,17 +106,35 @@ def handle_message(message: ChatMessage, ctx: Request) -> ChatResponse:
     )
 
 
-def add_message_to_history(msg_data):
-    """Add a message to history and ensure chronological ordering."""
-    # Add the message to history
-    message_history.append(msg_data)
+def add_message_to_conversation(recipient, msg_data):
+    """Add a message to a specific conversation."""
+    # Initialize the conversation if it doesn't exist
+    if recipient not in conversations:
+        conversations[recipient] = []
+    
+    # Add the message to the conversation
+    conversations[recipient].append(msg_data)
     
     # Sort messages by timestamp
-    message_history.sort(key=lambda x: x.get("ts_obj", datetime.fromtimestamp(0, tz=timezone.utc)))
+    conversations[recipient].sort(key=lambda x: x.get("ts_obj", datetime.fromtimestamp(0, tz=timezone.utc)))
     
-    # Create a JSON-serializable copy of the message history
+    # Update UI only if this is the current recipient
+    if recipient == client_info["recipient"]:
+        socketio.emit('message_history', get_serializable_messages(recipient))
+
+
+def get_serializable_messages(recipient=None):
+    """Create a JSON-serializable copy of the message history for a recipient."""
+    # Use the current recipient if none specified
+    if recipient is None:
+        recipient = client_info["recipient"]
+    
+    if not recipient or recipient not in conversations:
+        return []
+    
+    # Create a serializable copy of the conversation
     serializable_history = []
-    for msg in message_history:
+    for msg in conversations[recipient]:
         # Create a copy to avoid modifying the original
         serializable_msg = msg.copy()
         # Remove the datetime object that can't be JSON serialized
@@ -112,8 +142,7 @@ def add_message_to_history(msg_data):
             del serializable_msg["ts_obj"]
         serializable_history.append(serializable_msg)
     
-    # Emit the serializable copy of the history
-    socketio.emit('message_history', serializable_history)
+    return serializable_history
 
 
 @socketio.on('send_message')
@@ -142,8 +171,8 @@ def handle_send_message(data):
         "ts_obj": timestamp  # Store the actual datetime for sorting
     }
     
-    # Add to history with proper ordering
-    add_message_to_history(msg_data)
+    # Add to the conversation with this recipient
+    add_message_to_conversation(recipient, msg_data)
     
     # Then start the background sending process
     threading.Thread(target=send_message, args=(recipient, content, message_id, timestamp)).start()
@@ -188,7 +217,7 @@ def send_message(recipient: str, content: str, message_id: str = None, timestamp
             chat_response = response.model(ChatResponse)
             
             # Update message as delivered (server received)
-            for msg in message_history:
+            for msg in conversations[recipient]:
                 if msg.get("id") == message_id:
                     msg["status"] = "delivered"
                     break
@@ -234,31 +263,23 @@ def index():
     return render_template('chat.html')
 
 
-# Create a serializable version of the message history for sending to clients
-def get_serializable_messages():
-    """Create a JSON-serializable copy of the message history."""
-    serializable_history = []
-    for msg in message_history:
-        # Create a copy to avoid modifying the original
-        serializable_msg = msg.copy()
-        # Remove the datetime object that can't be JSON serialized
-        if "ts_obj" in serializable_msg:
-            del serializable_msg["ts_obj"]
-        serializable_history.append(serializable_msg)
-    return serializable_history
-
-
 @socketio.on('connect')
 def handle_connect(auth=None):
     """Handle client connection - with proper argument handling."""
-    # Send the serializable message history to newly connected clients
-    socketio.emit('message_history', get_serializable_messages())
+    # Send list of contacts to the client
+    contacts = list(conversations.keys())
+    socketio.emit('contact_list', contacts)
     
-    if client_info["client"] and client_info["recipient"]:
+    # Send current user info
+    if client_info["client"]:
         socketio.emit('user_info', {
             "client": client_info["client"].email,
             "recipient": client_info["recipient"]
         })
+    
+    # Send conversation history if there is a current recipient
+    if client_info["recipient"]:
+        socketio.emit('message_history', get_serializable_messages())
 
 
 @socketio.on('set_recipient')
@@ -267,6 +288,7 @@ def handle_set_recipient(data):
     if recipient:
         client_info["recipient"] = recipient
         socketio.emit('status', {"message": f"Now chatting with {recipient}"})
+        socketio.emit('message_history', get_serializable_messages(recipient))
 
 
 @socketio.on('heartbeat')
@@ -280,6 +302,31 @@ def handle_get_messages():
     """Send message history to the client on request."""
     socketio.emit('message_history', get_serializable_messages())
     return {'status': 'sent'}
+
+
+@socketio.on('get_contacts')
+def handle_get_contacts():
+    """Send the list of contacts to the client."""
+    contacts = list(conversations.keys())
+    socketio.emit('contact_list', contacts)
+
+
+@socketio.on('add_contact')
+def handle_add_contact(data):
+    """Add a new contact."""
+    new_contact = data.get('contact')
+    if new_contact and '@' in new_contact:
+        # Initialize an empty conversation if it doesn't exist
+        if new_contact not in conversations:
+            conversations[new_contact] = []
+        
+        # Send updated contacts list
+        socketio.emit('contact_list', list(conversations.keys()))
+        
+        # Switch to this contact
+        client_info["recipient"] = new_contact
+        socketio.emit('status', {"message": f"Added contact: {new_contact}"})
+        socketio.emit('message_history', get_serializable_messages(new_contact))
 
 
 def ensure_template_dir():
@@ -311,25 +358,79 @@ def create_html_template():
             background-color: #f5f5f5;
         }
         .container {
-            max-width: 800px;
+            max-width: 1000px;
             margin: 20px auto;
             background: white;
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
         }
         .header {
             background: #4a69bd;
             color: white;
             padding: 15px;
             text-align: center;
+            flex: 0 0 auto;
+        }
+        .main-area {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .contacts-panel {
+            width: 250px;
+            background-color: #f0f0f0;
+            overflow-y: auto;
+            border-right: 1px solid #ddd;
+            flex: 0 0 auto;
+        }
+        .contacts-header {
+            padding: 10px;
+            background-color: #e6e6e6;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .add-contact-btn {
+            background: #4a69bd;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .contact-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .contact-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+        }
+        .contact-item:hover {
+            background-color: #e9e9e9;
+        }
+        .contact-item.active {
+            background-color: #d4e4fc;
+            font-weight: bold;
+        }
+        .chat-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         .chat-box {
-            height: 400px;
+            flex: 1;
             overflow-y: auto;
             padding: 15px;
             background-color: #f9f9f9;
-            border-bottom: 1px solid #ddd;
         }
         .message {
             margin-bottom: 10px;
@@ -360,6 +461,8 @@ def create_html_template():
         .input-area {
             padding: 15px;
             display: flex;
+            background-color: #f9f9f9;
+            border-top: 1px solid #ddd;
         }
         .message-input {
             flex: 1;
@@ -380,20 +483,14 @@ def create_html_template():
             text-align: center;
             padding: 10px;
             color: #666;
-        }
-        .setup-area {
-            padding: 15px;
-            border-bottom: 1px solid #ddd;
-        }
-        .setup-area input, .setup-area button {
-            padding: 8px;
-            margin-right: 5px;
+            border-top: 1px solid #ddd;
         }
         .controls {
             display: flex;
             justify-content: space-between;
             padding: 5px 15px;
             background-color: #f3f3f3;
+            border-bottom: 1px solid #ddd;
         }
         .connection-status {
             display: inline-block;
@@ -440,6 +537,72 @@ def create_html_template():
             content: "⚠️";
             color: #F44336;
         }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px;
+            border-radius: 5px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .modal-body {
+            margin-bottom: 15px;
+        }
+        
+        .modal-footer {
+            text-align: right;
+        }
+        
+        .modal-input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+        
+        .modal-button {
+            padding: 8px 15px;
+            background: #4a69bd;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .no-recipient-message {
+            text-align: center;
+            color: #666;
+            margin-top: 30px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -447,11 +610,6 @@ def create_html_template():
         <div class="header">
             <h2>Syft Chat</h2>
             <div id="user-info"></div>
-        </div>
-        
-        <div class="setup-area" id="setup-area">
-            <input type="text" id="recipient-input" placeholder="Recipient's email">
-            <button id="set-recipient">Set Recipient</button>
         </div>
         
         <div class="controls">
@@ -462,13 +620,48 @@ def create_html_template():
             <button class="refresh-button" id="refresh-button">Refresh Messages</button>
         </div>
         
-        <div class="chat-box" id="chat-box"></div>
-        
-        <div class="status" id="status"></div>
-        
-        <div class="input-area">
-            <input type="text" class="message-input" id="message-input" placeholder="Type your message...">
-            <button class="send-button" id="send-button">Send</button>
+        <div class="main-area">
+            <div class="contacts-panel">
+                <div class="contacts-header">
+                    <h3>Contacts</h3>
+                    <button class="add-contact-btn" id="add-contact-btn">+</button>
+                </div>
+                <ul class="contact-list" id="contact-list">
+                    <!-- Contacts will be populated here -->
+                </ul>
+            </div>
+            
+            <div class="chat-panel">
+                <div class="chat-box" id="chat-box"></div>
+                
+                <div class="no-recipient-message" id="no-recipient-message">
+                    <p>Select a contact to start chatting</p>
+                    <p>or add a new contact with the + button</p>
+                </div>
+                
+                <div class="status" id="status"></div>
+                
+                <div class="input-area">
+                    <input type="text" class="message-input" id="message-input" placeholder="Type your message...">
+                    <button class="send-button" id="send-button">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add Contact Modal -->
+    <div id="add-contact-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Contact</h3>
+                <span class="close" id="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="new-contact-input" class="modal-input" placeholder="Contact's email">
+            </div>
+            <div class="modal-footer">
+                <button id="confirm-add-contact" class="modal-button">Add</button>
+            </div>
         </div>
     </div>
 
@@ -484,13 +677,20 @@ def create_html_template():
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const statusDiv = document.getElementById('status');
-        const recipientInput = document.getElementById('recipient-input');
-        const setRecipientButton = document.getElementById('set-recipient');
         const userInfoDiv = document.getElementById('user-info');
-        const setupArea = document.getElementById('setup-area');
         const refreshButton = document.getElementById('refresh-button');
         const connectionIndicator = document.getElementById('connection-indicator');
         const connectionText = document.getElementById('connection-text');
+        const contactList = document.getElementById('contact-list');
+        const addContactBtn = document.getElementById('add-contact-btn');
+        const addContactModal = document.getElementById('add-contact-modal');
+        const closeModal = document.getElementById('close-modal');
+        const newContactInput = document.getElementById('new-contact-input');
+        const confirmAddContact = document.getElementById('confirm-add-contact');
+        const noRecipientMessage = document.getElementById('no-recipient-message');
+        
+        // Track the current recipient
+        let currentRecipient = null;
         
         // Connection status tracking
         let isConnected = false;
@@ -503,8 +703,8 @@ def create_html_template():
             connectionText.textContent = 'Connected';
             statusDiv.textContent = 'Connected to server';
             
-            // Request latest messages after connection
-            requestMessages();
+            // Request the contacts list
+            socket.emit('get_contacts');
         });
         
         socket.on('disconnect', () => {
@@ -522,39 +722,76 @@ def create_html_template():
             statusDiv.textContent = 'Attempting to reconnect...';
         });
         
-        socket.on('reconnect_failed', () => {
-            console.log('Failed to reconnect');
-            connectionIndicator.className = 'connection-status disconnected';
-            connectionText.textContent = 'Reconnection failed';
-            statusDiv.textContent = 'Failed to reconnect. Please refresh the page.';
-        });
-        
-        socket.on('error', (error) => {
-            console.error('Socket error:', error);
-            statusDiv.textContent = 'Connection error';
-        });
-        
-        // Function to request message history
-        function requestMessages() {
-            if (isConnected) {
-                console.log('Requesting message history');
-                socket.emit('get_messages');
-            }
-        }
-        
-        // Manual refresh button
-        refreshButton.addEventListener('click', () => {
-            requestMessages();
-            statusDiv.textContent = 'Refreshing messages...';
-        });
-        
         // Display user info
         socket.on('user_info', (data) => {
-            userInfoDiv.textContent = `Logged in as: ${data.client} | Chatting with: ${data.recipient}`;
+            userInfoDiv.textContent = `Logged in as: ${data.client}`;
             if (data.recipient) {
-                setupArea.style.display = 'none';
+                setCurrentRecipient(data.recipient);
             }
         });
+        
+        // Handle contact list
+        socket.on('contact_list', (contacts) => {
+            console.log('Received contacts:', contacts);
+            
+            // Clear the contact list
+            contactList.innerHTML = '';
+            
+            // Add contacts to the list
+            contacts.forEach(contact => {
+                const li = document.createElement('li');
+                li.className = 'contact-item';
+                li.setAttribute('data-email', contact);
+                li.textContent = contact;
+                
+                li.addEventListener('click', () => {
+                    setCurrentRecipient(contact);
+                });
+                
+                contactList.appendChild(li);
+            });
+            
+            // Highlight current recipient if set
+            if (currentRecipient) {
+                updateSelectedContact();
+            } else if (contacts.length === 0) {
+                // Show message if no contacts
+                noRecipientMessage.style.display = 'block';
+            }
+        });
+        
+        // Function to set the current recipient
+        function setCurrentRecipient(recipient) {
+            if (!recipient || recipient === currentRecipient) return;
+            
+            currentRecipient = recipient;
+            console.log('Set current recipient:', currentRecipient);
+            
+            // Tell the server about the change
+            socket.emit('set_recipient', { recipient });
+            
+            // Update the UI to show the correct contact as selected
+            updateSelectedContact();
+            
+            // Hide the no-recipient message
+            noRecipientMessage.style.display = 'none';
+        }
+        
+        // Update which contact is highlighted in the list
+        function updateSelectedContact() {
+            // Remove active class from all contacts
+            document.querySelectorAll('.contact-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Add active class to current recipient
+            if (currentRecipient) {
+                const contactItem = document.querySelector(`.contact-item[data-email="${currentRecipient}"]`);
+                if (contactItem) {
+                    contactItem.classList.add('active');
+                }
+            }
+        }
         
         // Load message history
         socket.on('message_history', (messages) => {
@@ -570,6 +807,13 @@ def create_html_template():
             
             scrollToBottom();
             statusDiv.textContent = `${messages.length} messages loaded`;
+            
+            // Hide the no-recipient message when we have a conversation
+            if (currentRecipient) {
+                noRecipientMessage.style.display = 'none';
+            } else {
+                noRecipientMessage.style.display = 'block';
+            }
         });
         
         // Handle message status updates
@@ -608,25 +852,36 @@ def create_html_template():
             }, 3000);
         });
         
-        // Set recipient
-        setRecipientButton.addEventListener('click', () => {
-            const recipient = recipientInput.value.trim();
-            if (recipient) {
-                socket.emit('set_recipient', { recipient });
-                userInfoDiv.textContent = `Chatting with: ${recipient}`;
-                setupArea.style.display = 'none';
+        // Handle notification of unread message
+        socket.on('unread_message', (data) => {
+            console.log('Unread message from:', data.sender);
+            
+            // Highlight the contact in the list or add it if not present
+            const contactItem = document.querySelector(`.contact-item[data-email="${data.sender}"]`);
+            if (contactItem) {
+                contactItem.style.fontWeight = 'bold';
+            } else {
+                // Request updated contact list
+                socket.emit('get_contacts');
+            }
+            
+            // Notify the user if not the current conversation
+            if (data.sender !== currentRecipient) {
+                notifyNewMessage(data.sender);
             }
         });
         
         // Send message
         function sendMessage() {
             const message = messageInput.value.trim();
-            if (message && isConnected) {
+            if (message && isConnected && currentRecipient) {
                 socket.emit('send_message', { message });
                 messageInput.value = '';
                 statusDiv.textContent = 'Sending...';
             } else if (!isConnected) {
                 statusDiv.textContent = 'Cannot send: disconnected';
+            } else if (!currentRecipient) {
+                statusDiv.textContent = 'Select a recipient first';
             }
         }
         
@@ -637,6 +892,49 @@ def create_html_template():
                 sendMessage();
             }
         });
+        
+        // Manual refresh button
+        refreshButton.addEventListener('click', () => {
+            if (currentRecipient) {
+                socket.emit('get_messages', { recipient: currentRecipient });
+                statusDiv.textContent = 'Refreshing messages...';
+            } else {
+                statusDiv.textContent = 'No conversation selected';
+            }
+        });
+        
+        // Add Contact functionality
+        addContactBtn.addEventListener('click', () => {
+            addContactModal.style.display = 'block';
+            newContactInput.focus();
+        });
+        
+        closeModal.addEventListener('click', () => {
+            addContactModal.style.display = 'none';
+        });
+        
+        window.addEventListener('click', (e) => {
+            if (e.target === addContactModal) {
+                addContactModal.style.display = 'none';
+            }
+        });
+        
+        confirmAddContact.addEventListener('click', addNewContact);
+        
+        newContactInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addNewContact();
+            }
+        });
+        
+        function addNewContact() {
+            const contact = newContactInput.value.trim();
+            if (contact) {
+                socket.emit('add_contact', { contact });
+                addContactModal.style.display = 'none';
+                newContactInput.value = '';
+            }
+        }
         
         function addMessageToChat(message) {
             // Check if this message already exists in the chat
@@ -657,11 +955,6 @@ def create_html_template():
                 if (message.status) {
                     messageDiv.classList.add(`status-${message.status}`);
                 }
-            }
-            
-            // Store timestamp as attribute for potential client-side sorting
-            if (message.timestamp) {
-                messageDiv.setAttribute('data-timestamp', message.timestamp);
             }
             
             const senderDiv = document.createElement('div');
@@ -706,13 +999,8 @@ def create_html_template():
             chatBox.scrollTop = chatBox.scrollHeight;
         }
         
-        function notifyNewMessage() {
+        function notifyNewMessage(sender) {
             // You could add sound or browser notifications here
-            // For example:
-            // if (Notification.permission === "granted") {
-            //     new Notification("New Message");
-            // }
-            
             // For now, just flash the title
             let originalTitle = document.title;
             let interval = setInterval(() => {
