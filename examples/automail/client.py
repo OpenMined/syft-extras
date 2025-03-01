@@ -473,7 +473,7 @@ def create_html_template():
             border-right: 1px solid #ddd;
             flex: 0 0 auto;
             display: flex;
-            flex-direction: column;
+            flex-direction: column; /* Make it a column layout */
         }
         .contacts-header {
             padding: 10px;
@@ -482,26 +482,37 @@ def create_html_template():
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex: 0 0 auto; /* Don't grow or shrink */
         }
-        .contacts-header h3 {
-            margin: 0;
-            font-size: 16px;
+        .contact-list-container {
+            flex: 1;
+            overflow-y: auto; /* Allow this to scroll */
+        }
+        .add-contact-container {
+            padding: 10px;
+            border-top: 1px solid #ddd;
+            background-color: #e6e6e6;
+            flex: 0 0 auto; /* Don't grow or shrink */
         }
         .add-contact-btn {
             background: #4a69bd;
             color: white;
             border: none;
             border-radius: 4px;
-            padding: 5px 10px;
+            padding: 8px 10px;
             cursor: pointer;
-            font-size: 14px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .add-contact-btn:hover {
+            background: #3a59ad;
         }
         .contact-list {
             list-style: none;
             padding: 0;
             margin: 0;
-            overflow-y: auto;
-            flex: 1;
         }
         .contact-item {
             padding: 10px 15px;
@@ -515,15 +526,6 @@ def create_html_template():
             background-color: #d4e4fc;
             font-weight: bold;
         }
-        .contact-item .unread-badge {
-            background-color: #4a69bd;
-            color: white;
-            border-radius: 50%;
-            padding: 2px 6px;
-            font-size: 0.7em;
-            margin-left: 5px;
-            display: none;
-        }
         .chat-panel {
             flex: 1;
             display: flex;
@@ -535,6 +537,16 @@ def create_html_template():
             overflow-y: auto;
             padding: 15px;
             background-color: #f9f9f9;
+        }
+        .no-recipient {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #888;
+            text-align: center;
+            padding: 20px;
         }
         .message {
             margin-bottom: 10px;
@@ -648,67 +660,41 @@ def create_html_template():
             border-radius: 5px;
         }
         
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        
-        .modal-header h3 {
-            margin: 0;
-            color: #4a69bd;
-        }
-        
         .close {
             color: #aaa;
+            float: right;
             font-size: 28px;
             font-weight: bold;
             cursor: pointer;
         }
         
-        .close:hover {
-            color: #555;
-        }
-        
-        .modal-body {
-            margin-bottom: 15px;
-        }
-        
-        .modal-footer {
-            text-align: right;
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
         }
         
         .modal-input {
             width: 100%;
-            padding: 8px;
-            box-sizing: border-box;
-            margin-bottom: 10px;
+            padding: 10px;
+            margin: 10px 0;
             border: 1px solid #ddd;
             border-radius: 4px;
         }
         
         .modal-button {
-            padding: 8px 15px;
-            background: #4a69bd;
+            background-color: #4a69bd;
             color: white;
+            padding: 10px 15px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
         }
         
-        .no-recipient-message {
-            text-align: center;
-            color: #666;
-            margin-top: 30px;
-            padding: 20px;
-        }
-        
-        .no-contacts-message {
-            text-align: center;
-            color: #666;
-            padding: 20px;
-            font-style: italic;
+        .modal-button:hover {
+            background-color: #3a59ad;
         }
     </style>
 </head>
@@ -716,216 +702,146 @@ def create_html_template():
     <div class="container">
         <div class="header">
             <h2>Syft Chat</h2>
-            <div id="user-info"></div>
         </div>
-        
         <div class="main-area">
-            <!-- Contacts Panel -->
             <div class="contacts-panel">
                 <div class="contacts-header">
                     <h3>Contacts</h3>
-                    <button class="add-contact-btn" id="add-contact-btn">+ Add</button>
                 </div>
-                <ul class="contact-list" id="contact-list">
-                    <!-- Contacts will be added here -->
-                </ul>
-                <div class="no-contacts-message" id="no-contacts-message">
-                    No contacts yet.<br>Click "Add" to start a conversation.
+                <div class="contact-list-container">
+                    <ul class="contact-list" id="contactList">
+                        <!-- Contacts will be added here dynamically -->
+                    </ul>
+                </div>
+                <div class="add-contact-container">
+                    <button class="add-contact-btn" id="addContactBtn">+ Add Contact</button>
                 </div>
             </div>
-            
-            <!-- Chat Panel -->
             <div class="chat-panel">
                 <div class="controls">
                     <div>
-                        <span class="connection-status" id="connection-status"></span>
-                        <span id="connection-text">Connecting...</span>
+                        <span class="connection-status" id="connectionStatus"></span>
+                        <span id="userInfo">Not connected</span>
                     </div>
-                    <button class="refresh-button" id="refresh-button">Refresh</button>
+                    <button class="refresh-button" id="refreshButton">Refresh</button>
                 </div>
-                
-                <div class="chat-box" id="chat-box">
-                    <!-- Messages will be added here -->
+                <div class="chat-box" id="chatBox">
+                    <div class="no-recipient" id="noRecipientMessage">
+                        <h3>Select a contact to start chatting</h3>
+                        <p>Or add a new contact using the button on the left</p>
+                    </div>
+                    <!-- Messages will be added here dynamically -->
                 </div>
-                
-                <div class="no-recipient-message" id="no-recipient-message">
-                    Select a contact to start chatting or add a new contact using the + button.
-                </div>
-                
                 <div class="input-area">
-                    <input type="text" class="message-input" id="message-input" placeholder="Type your message...">
-                    <button class="send-button" id="send-button">Send</button>
+                    <input type="text" class="message-input" id="messageInput" placeholder="Type a message...">
+                    <button class="send-button" id="sendButton">Send</button>
                 </div>
-                
                 <div class="status" id="status"></div>
             </div>
         </div>
     </div>
     
     <!-- Add Contact Modal -->
-    <div id="add-contact-modal" class="modal">
+    <div id="addContactModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add New Contact</h3>
-                <span class="close" id="close-modal">&times;</span>
-            </div>
-            <div class="modal-body">
-                <input type="email" id="new-contact-input" class="modal-input" placeholder="Enter email address">
-            </div>
-            <div class="modal-footer">
-                <button id="confirm-add-contact" class="modal-button">Add Contact</button>
-            </div>
+            <span class="close" id="closeModal">&times;</span>
+            <h3>Add New Contact</h3>
+            <input type="text" id="newContactInput" class="modal-input" placeholder="Enter email address">
+            <button id="confirmAddContact" class="modal-button">Add</button>
         </div>
     </div>
-    
+
     <script>
         // DOM Elements
-        const chatBox = document.getElementById('chat-box');
-        const messageInput = document.getElementById('message-input');
-        const sendButton = document.getElementById('send-button');
+        const chatBox = document.getElementById('chatBox');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
         const statusDiv = document.getElementById('status');
-        const connectionStatus = document.getElementById('connection-status');
-        const connectionText = document.getElementById('connection-text');
-        const refreshButton = document.getElementById('refresh-button');
-        const userInfoDiv = document.getElementById('user-info');
-        const contactList = document.getElementById('contact-list');
-        const noRecipientMessage = document.getElementById('no-recipient-message');
-        const noContactsMessage = document.getElementById('no-contacts-message');
-        const addContactBtn = document.getElementById('add-contact-btn');
-        const addContactModal = document.getElementById('add-contact-modal');
-        const closeModal = document.getElementById('close-modal');
-        const newContactInput = document.getElementById('new-contact-input');
-        const confirmAddContact = document.getElementById('confirm-add-contact');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const userInfoDiv = document.getElementById('userInfo');
+        const contactList = document.getElementById('contactList');
+        const addContactBtn = document.getElementById('addContactBtn');
+        const addContactModal = document.getElementById('addContactModal');
+        const newContactInput = document.getElementById('newContactInput');
+        const closeModal = document.getElementById('closeModal');
+        const confirmAddContact = document.getElementById('confirmAddContact');
+        const refreshButton = document.getElementById('refreshButton');
+        const noRecipientMessage = document.getElementById('noRecipientMessage');
         
-        // Socket.io connection
-        const socket = io();
+        // Variables to track state
         let isConnected = false;
         let currentRecipient = null;
+        let unreadCounts = {};
         
-        // Connect to server
+        // Connect to the Socket.IO server
+        const socket = io();
+        
+        // Connection status
         socket.on('connect', () => {
             isConnected = true;
             connectionStatus.classList.add('connected');
             connectionStatus.classList.remove('disconnected', 'reconnecting');
-            connectionText.textContent = 'Connected';
-            
-            // Request info on connection
-            requestMessages();
+            statusDiv.textContent = 'Connected';
         });
         
-        // Handle disconnection
         socket.on('disconnect', () => {
             isConnected = false;
             connectionStatus.classList.add('disconnected');
             connectionStatus.classList.remove('connected', 'reconnecting');
-            connectionText.textContent = 'Disconnected';
+            statusDiv.textContent = 'Disconnected';
         });
         
-        // Handle reconnecting
         socket.on('reconnecting', () => {
             connectionStatus.classList.add('reconnecting');
             connectionStatus.classList.remove('connected', 'disconnected');
-            connectionText.textContent = 'Reconnecting...';
+            statusDiv.textContent = 'Reconnecting...';
         });
         
-        function requestMessages() {
-            if (isConnected) {
-                console.log('Requesting message history');
-                socket.emit('get_messages');
-                socket.emit('get_contacts');
-            }
-        }
-        
-        // Display user info
+        // Receive user info
         socket.on('user_info', (data) => {
+            console.log('User info:', data);
             userInfoDiv.textContent = `Logged in as: ${data.client}`;
+            
             if (data.recipient) {
                 currentRecipient = data.recipient;
-                updateSelectedContact();
+                noRecipientMessage.style.display = 'none';
+            } else {
+                noRecipientMessage.style.display = 'flex';
             }
         });
         
-        // Handle contact list
+        // Load contact list
         socket.on('contact_list', (contacts) => {
-            console.log('Received contacts:', contacts);
-            
-            // Clear the contact list
+            console.log('Contacts:', contacts);
             contactList.innerHTML = '';
             
-            // Check if we have any contacts
-            if (contacts.length === 0) {
-                noContactsMessage.style.display = 'block';
-            } else {
-                noContactsMessage.style.display = 'none';
+            contacts.forEach(contact => {
+                const li = document.createElement('li');
+                li.className = 'contact-item';
+                li.textContent = contact;
+                li.setAttribute('data-email', contact);
                 
-                // Add each contact to the list
-                contacts.forEach(contact => {
-                    const li = document.createElement('li');
-                    li.className = 'contact-item';
-                    li.textContent = contact;
-                    li.setAttribute('data-email', contact);
-                    
-                    // Add click handler to set as current recipient
-                    li.addEventListener('click', () => {
-                        setCurrentRecipient(contact);
-                    });
-                    
-                    // Add a badge for unread messages (initially hidden)
-                    const badge = document.createElement('span');
-                    badge.className = 'unread-badge';
-                    badge.style.display = 'none';
-                    li.appendChild(badge);
-                    
-                    contactList.appendChild(li);
+                if (contact === currentRecipient) {
+                    li.classList.add('active');
+                }
+                
+                li.addEventListener('click', () => {
+                    setCurrentRecipient(contact);
                 });
-            }
-            
-            // Update selected contact
-            updateSelectedContact();
-            
-            // Show/hide no recipient message
-            if (!currentRecipient && contacts.length > 0) {
-                // Auto-select first contact if none is selected
-                setCurrentRecipient(contacts[0]);
-            } else if (!currentRecipient) {
-                noRecipientMessage.style.display = 'block';
-            } else {
-                noRecipientMessage.style.display = 'none';
-            }
-        });
-        
-        // Function to set the current recipient
-        function setCurrentRecipient(recipient) {
-            if (recipient === currentRecipient) return;
-            
-            currentRecipient = recipient;
-            console.log('Set current recipient:', currentRecipient);
-            
-            // Tell the server about the change
-            socket.emit('set_recipient', { recipient });
-            
-            // Update the UI to show the correct contact as selected
-            updateSelectedContact();
-            
-            // Hide the no-recipient message
-            noRecipientMessage.style.display = 'none';
-        }
-        
-        // Update which contact is highlighted in the list
-        function updateSelectedContact() {
-            // Remove active class from all contacts
-            document.querySelectorAll('.contact-item').forEach(item => {
-                item.classList.remove('active');
+                
+                contactList.appendChild(li);
             });
             
-            // Add active class to current recipient
-            if (currentRecipient) {
-                const contactItem = document.querySelector(`.contact-item[data-email="${currentRecipient}"]`);
-                if (contactItem) {
-                    contactItem.classList.add('active');
-                }
+            if (contacts.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'contact-item no-contacts';
+                li.textContent = 'No contacts yet';
+                li.style.cursor = 'default';
+                li.style.fontStyle = 'italic';
+                li.style.color = '#888';
+                contactList.appendChild(li);
             }
-        }
+        });
         
         // Load message history
         socket.on('message_history', (messages) => {
@@ -946,7 +862,7 @@ def create_html_template():
             if (currentRecipient) {
                 noRecipientMessage.style.display = 'none';
             } else {
-                noRecipientMessage.style.display = 'block';
+                noRecipientMessage.style.display = 'flex';
             }
         });
         
@@ -956,7 +872,7 @@ def create_html_template():
             const messageElements = document.querySelectorAll(`.message[data-id="${data.id}"]`);
             messageElements.forEach(el => {
                 // Remove all status classes first
-                el.classList.remove('status-sending', 'status-delivered', 'status-failed');
+                el.classList.remove('status-sending', 'status-delivered', 'status-failed', 'status-unknown');
                 // Add the new status class
                 el.classList.add(`status-${data.status}`);
                 
@@ -966,38 +882,6 @@ def create_html_template():
                     updateStatusIndicator(statusElement, data.status);
                 }
             });
-        });
-        
-        // Helper function to update status indicator content
-        function updateStatusIndicator(element, status) {
-            if (status === "sending") {
-                element.textContent = "•";  // Gray dot instead of checkmark
-                element.style.color = "#999";
-                element.title = "Sending...";
-            } else if (status === "delivered") {
-                element.textContent = "✓";  // Single checkmark (easier to understand)
-                element.style.color = "#4CAF50";
-                element.title = "Delivered";
-            } else if (status === "failed") {
-                element.textContent = "⚠️";
-                element.style.color = "#F44336";
-                element.title = "Failed to send";
-            } else if (status === "unknown") {
-                element.textContent = "?";
-                element.style.color = "#FFA500";  // Orange for unknown status
-                element.title = "Delivery status unknown";
-            } else {
-                // Default/unknown status
-                element.textContent = "";
-            }
-        }
-        
-        // Update status
-        socket.on('status', (data) => {
-            statusDiv.textContent = data.message;
-            setTimeout(() => {
-                statusDiv.textContent = '';
-            }, 3000);
         });
         
         // Handle notification of unread message
@@ -1018,6 +902,42 @@ def create_html_template():
                 notifyNewMessage(data.sender);
             }
         });
+        
+        // Update status
+        socket.on('status', (data) => {
+            statusDiv.textContent = data.message;
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 3000);
+        });
+        
+        // Function to set the current recipient
+        function setCurrentRecipient(recipient) {
+            if (recipient === currentRecipient) return;
+            
+            currentRecipient = recipient;
+            console.log('Set current recipient:', currentRecipient);
+            
+            // Tell the server about the change
+            socket.emit('set_recipient', { recipient });
+            
+            // Update the UI to show the correct contact as selected
+            document.querySelectorAll('.contact-item').forEach(item => {
+                item.classList.remove('active');
+                item.style.fontWeight = 'normal'; // Reset any unread styling
+            });
+            
+            const contactItem = document.querySelector(`.contact-item[data-email="${recipient}"]`);
+            if (contactItem) {
+                contactItem.classList.add('active');
+            }
+            
+            // Hide the no-recipient message
+            noRecipientMessage.style.display = 'none';
+            
+            // Request the message history for this recipient
+            socket.emit('get_messages');
+        }
         
         // Send message
         function sendMessage() {
@@ -1043,15 +963,16 @@ def create_html_template():
         
         // Manual refresh button
         refreshButton.addEventListener('click', () => {
+            socket.emit('get_contacts');
             if (currentRecipient) {
                 socket.emit('get_messages');
-                statusDiv.textContent = 'Refreshing messages...';
+                statusDiv.textContent = 'Refreshing...';
             } else {
                 statusDiv.textContent = 'No conversation selected';
             }
         });
         
-        // Add Contact functionality
+        // Add Contact Modal functionality
         addContactBtn.addEventListener('click', () => {
             addContactModal.style.display = 'block';
             newContactInput.focus();
@@ -1084,6 +1005,30 @@ def create_html_template():
             }
         }
         
+        // Handle adding messages to the chat
+        function updateStatusIndicator(element, status) {
+            if (status === "sending") {
+                element.textContent = "•";  // Gray dot instead of checkmark
+                element.style.color = "#999";
+                element.title = "Sending...";
+            } else if (status === "delivered") {
+                element.textContent = "✓";  // Single checkmark (easier to understand)
+                element.style.color = "#4CAF50";
+                element.title = "Delivered";
+            } else if (status === "failed") {
+                element.textContent = "⚠️";
+                element.style.color = "#F44336";
+                element.title = "Failed to send";
+            } else if (status === "unknown") {
+                element.textContent = "?";
+                element.style.color = "#FFA500";  // Orange for unknown status
+                element.title = "Delivery status unknown";
+            } else {
+                // Default/unknown status
+                element.textContent = "";
+            }
+        }
+        
         function addMessageToChat(message) {
             // Check if this message already exists in the chat
             const existingMsg = document.querySelector(`.message[data-id="${message.id}"]`);
@@ -1093,7 +1038,8 @@ def create_html_template():
                     existingMsg.classList.remove('status-sending', 'status-delivered', 'status-failed', 'status-unknown');
                     existingMsg.classList.add(`status-${message.status}`);
                     
-                    let statusElement = existingMsg.querySelector('.message-status');
+                    // Update the status indicator
+                    const statusElement = existingMsg.querySelector('.message-status');
                     if (statusElement) {
                         updateStatusIndicator(statusElement, message.status);
                     }
@@ -1126,7 +1072,7 @@ def create_html_template():
                 const statusElement = document.createElement('span');
                 statusElement.className = 'message-status';
                 
-                // Set initial status indicator
+                // Set status indicator using the utility function
                 updateStatusIndicator(statusElement, message.status);
                 
                 timeDiv.appendChild(statusElement);
@@ -1194,8 +1140,18 @@ def check_pending_messages():
     
     # Iterate through all conversations
     for recipient, messages in conversations.items():
+        # Make sure messages is a list
+        if not isinstance(messages, list):
+            logger.error(f"Invalid message format for {recipient}: expected list, got {type(messages)}")
+            continue
+            
         # Find messages in "sending" or "unknown" state
         for msg in messages:
+            # Check that msg is a dictionary before trying to access attributes
+            if not isinstance(msg, dict):
+                logger.error(f"Invalid message format for {recipient}: expected dict, got {type(msg)}")
+                continue
+                
             if msg.get("is_self", False) and msg.get("status") in ["sending", "unknown"]:
                 pending_count += 1
                 
