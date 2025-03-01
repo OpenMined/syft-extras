@@ -176,7 +176,7 @@
         .message-status {
             display: inline-block;
             margin-left: 5px;
-            font-size: 0.8em;
+            font-size: 1em;
         }
     </style>
 </head>
@@ -462,17 +462,21 @@
         // Helper function to update status indicator content
         function updateStatusIndicator(element, status) {
             if (status === "sending") {
-                element.textContent = "✓";
+                element.textContent = "•";  // Gray dot instead of checkmark
                 element.style.color = "#999";
+                element.title = "Sending...";
             } else if (status === "delivered") {
-                element.textContent = "✓✓";
+                element.textContent = "✓";  // Single checkmark (easier to understand)
                 element.style.color = "#4CAF50";
+                element.title = "Delivered";
             } else if (status === "failed") {
                 element.textContent = "⚠️";
                 element.style.color = "#F44336";
+                element.title = "Failed to send";
             } else if (status === "unknown") {
                 element.textContent = "?";
                 element.style.color = "#FFA500";  // Orange for unknown status
+                element.title = "Delivery status unknown";
             } else {
                 // Default/unknown status
                 element.textContent = "";

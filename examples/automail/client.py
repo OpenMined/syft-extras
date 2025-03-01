@@ -606,7 +606,7 @@ def create_html_template():
         .message-status {
             display: inline-block;
             margin-left: 5px;
-            font-size: 0.8em;
+            font-size: 1em;
         }
     </style>
 </head>
@@ -892,17 +892,21 @@ def create_html_template():
         // Helper function to update status indicator content
         function updateStatusIndicator(element, status) {
             if (status === "sending") {
-                element.textContent = "✓";
+                element.textContent = "•";  // Gray dot instead of checkmark
                 element.style.color = "#999";
+                element.title = "Sending...";
             } else if (status === "delivered") {
-                element.textContent = "✓✓";
+                element.textContent = "✓";  // Single checkmark (easier to understand)
                 element.style.color = "#4CAF50";
+                element.title = "Delivered";
             } else if (status === "failed") {
                 element.textContent = "⚠️";
                 element.style.color = "#F44336";
+                element.title = "Failed to send";
             } else if (status === "unknown") {
                 element.textContent = "?";
                 element.style.color = "#FFA500";  // Orange for unknown status
+                element.title = "Delivery status unknown";
             } else {
                 // Default/unknown status
                 element.textContent = "";
@@ -1088,21 +1092,11 @@ def check_pending_messages():
                     
                     logger.info(f"Verifying message to {recipient}: {msg_id}")
                     
-                    # For unknown status messages, we could also try to resend them
-                    if msg.get("status") == "unknown" and msg.get("content"):
-                        logger.info(f"Attempting to resend message with unknown status: {msg_id}")
-                        
-                        # Start a thread to resend the message
-                        threading.Thread(
-                            target=resend_message,
-                            args=(recipient, msg.get("content"), msg_id, timestamp)
-                        ).start()
-                    else:
-                        # For sending status, just verify delivery as before
-                        threading.Thread(
-                            target=verify_message_delivery,
-                            args=(recipient, msg_content, msg_id, timestamp)
-                        ).start()
+                    # Only verify delivery - never resend to avoid duplicates
+                    threading.Thread(
+                        target=verify_message_delivery,
+                        args=(recipient, msg.get("content"), msg_id, timestamp)
+                    ).start()
                 except Exception as e:
                     logger.error(f"Error checking message {msg_id}: {e}")
                     
@@ -1118,79 +1112,12 @@ def check_pending_messages():
                             })
     
     if pending_count > 0:
-        logger.info(f"Found {pending_count} pending messages to verify/resend")
+        logger.info(f"Found {pending_count} pending messages to verify")
     else:
         logger.info("No pending messages found")
     
     # Save any status changes to disk
     chat_storage.save_conversations(conversations)
-
-
-def resend_message(recipient, content, message_id, timestamp=None):
-    """Attempt to resend a message with unknown delivery status."""
-    logger.info(f"Resending message {message_id} to {recipient}")
-    
-    # Update UI to show we're retrying
-    socketio.emit('message_status_update', {
-        "id": message_id,
-        "status": "sending"
-    })
-    
-    # Update status in memory
-    for msg in conversations[recipient]:
-        if msg.get("id") == message_id:
-            msg["status"] = "sending"
-            break
-    
-    # Save the updated status to disk
-    chat_storage.save_conversations(conversations)
-    
-    # Actually resend the message
-    client = client_info["client"]
-    if not client:
-        return
-    
-    # Create the message with the correct timestamp
-    if timestamp is None:
-        timestamp = datetime.now(timezone.utc)
-        
-    message = ChatMessage(content=content, sender=client.email, ts=timestamp)
-    
-    try:
-        # Send the message again
-        future = rpc.send(
-            url=f"syft://{recipient}/api_data/automail/rpc/message",
-            body=message,
-            expiry="10m",
-            cache=False,
-        )
-        
-        # Use a longer timeout for slow networks
-        response = future.wait(timeout=180)
-        response.raise_for_status()
-        chat_response = response.model(ChatResponse)
-        
-        # Update message as delivered
-        for msg in conversations[recipient]:
-            if msg.get("id") == message_id:
-                msg["status"] = "delivered"
-                break
-        
-        # Save the updated status to disk
-        chat_storage.save_conversations(conversations)
-        
-        # Update UI
-        socketio.emit('message_status_update', {
-            "id": message_id,
-            "status": "delivered"
-        })
-        
-        logger.info(f"Successfully resent message {message_id}")
-    except Exception as e:
-        logger.error(f"Error resending message {message_id}: {e}")
-        
-        # If resending fails, fall back to verification
-        verify_message_delivery(recipient, content, message_id, timestamp)
 
 
 def verify_message_delivery(recipient, content, message_id, timestamp=None):
