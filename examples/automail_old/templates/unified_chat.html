@@ -178,6 +178,18 @@
             z-index: 1000;
             animation: fadeInOut 5s;
         }
+        .typing-indicator {
+            background-color: #f1f0f0;
+            padding: 8px 12px;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 20px;
+            height: 10px;
+            margin-right: 3px;
+            background: linear-gradient(to bottom, #999, #999);
+            animation: typingDots 1.5s infinite;
+        }
         @keyframes fadeInOut {
             0% { opacity: 0; }
             10% { opacity: 1; }
@@ -206,6 +218,14 @@
         }
         .add-contact button:hover {
             background-color: #2980b9;
+        }
+        .message.system {
+            align-self: center;
+            background-color: #f8d7da;
+            color: #721c24;
+            border-radius: 10px;
+            font-size: 0.9em;
+            max-width: 90%;
         }
     </style>
 </head>
@@ -324,11 +344,21 @@
         
         // Handle incoming messages
         socket.on('message', (data) => {
-            const { sender, message, timestamp, ai_generated, message_id } = data;
+            const { sender, message, timestamp, ai_generated, message_id, system_message } = data;
             
             // Track message IDs for update checking
             if (message_id) {
                 messageIds.push(message_id);
+            }
+            
+            // Handle system messages
+            if (system_message) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message system';
+                messageDiv.innerHTML = `${message}`;
+                messages.appendChild(messageDiv);
+                messages.scrollTop = messages.scrollHeight;
+                return;
             }
             
             // If this is from the current contact OR if this is a message to yourself
@@ -403,8 +433,50 @@
             generateAIResponse(sender, message, message_id);
         });
         
+        // Send a message
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || !currentContact) return;
+            
+            // Add message to chat immediately (for the sender)
+            const timestamp = new Date().toLocaleTimeString();
+            addMessage(message, timestamp, true);
+            
+            // Log the sending attempt
+            console.log(`Sending message to ${currentContact}: ${message}`);
+            
+            // Send via Socket.IO
+            socket.emit('message', {
+                sender: username,
+                recipient: currentContact,
+                message: message
+            }, (response) => {
+                // This is the acknowledgment callback
+                if (response && response.status === 'sent') {
+                    console.log('Message sent successfully');
+                } else {
+                    console.error('Error sending message:', response);
+                }
+            });
+            
+            // Clear input
+            messageInput.value = '';
+            
+            // Scroll to bottom
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
         // Function to generate AI response locally
         function generateAIResponse(sender, message, originalMessageId) {
+            console.log(`Generating AI response to: ${message}`);
+            
+            // Show a "typing" indicator
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message received typing-indicator';
+            typingDiv.innerHTML = '<span>...</span>';
+            messages.appendChild(typingDiv);
+            messages.scrollTop = messages.scrollHeight;
+            
             // Make a request to local Ollama instance
             fetch('/generate_ai_response', {
                 method: 'POST',
@@ -418,18 +490,45 @@
                     recipient: username  // This client is generating the response
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
+                // Remove typing indicator
+                messages.removeChild(typingDiv);
+                
+                console.log(`AI response generated: ${data.response}`);
+                
                 // Send the AI-generated response back through the server
                 socket.emit('ai_response', {
                     original_sender: sender,
                     responder: username,
                     message: data.response,
                     original_message_id: originalMessageId
+                }, (ackResponse) => {
+                    if (!ackResponse || !ackResponse.status === 'sent') {
+                        console.error('Error sending AI response:', ackResponse);
+                    }
                 });
             })
             .catch(error => {
+                // Remove typing indicator
+                if (typingDiv.parentNode) {
+                    messages.removeChild(typingDiv);
+                }
+                
                 console.error('Error generating AI response:', error);
+                
+                // Send an error response
+                socket.emit('ai_response', {
+                    original_sender: sender,
+                    responder: username,
+                    message: "Sorry, I couldn't generate a response at this time.",
+                    original_message_id: originalMessageId
+                });
             });
         }
         
@@ -485,30 +584,6 @@
             `;
             
             messages.appendChild(messageDiv);
-        }
-        
-        // Send a message
-        function sendMessage() {
-            const message = messageInput.value.trim();
-            if (!message || !currentContact) return;
-            
-            // Add message to chat
-            const timestamp = new Date().toLocaleTimeString();
-            addMessage(message, timestamp, true);
-            
-            // Send via Socket.IO
-            socket.emit('message', {
-                sender: username,
-                recipient: currentContact,
-                message: message,
-                selfChat: currentContact === username // Flag for self-chat
-            });
-            
-            // Clear input
-            messageInput.value = '';
-            
-            // Scroll to bottom
-            messages.scrollTop = messages.scrollHeight;
         }
         
         // Check for updates to messages

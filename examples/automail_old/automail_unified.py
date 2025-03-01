@@ -329,8 +329,14 @@ def generate_ai_response():
     
     # Use conversation history for context if available
     conversation_id = f"{sender}_{recipient}"
+    logger.info(f"Generating AI response for message from {sender} to {recipient}")
     
     try:
+        # Check if Ollama is available
+        if not OLLAMA_MODEL:
+            logger.warning("Ollama not available, using fallback response")
+            return jsonify({"response": "I'm unable to generate a personalized response at this time."})
+            
         # Call local Ollama API
         response = requests.post(
             f"{OLLAMA_API_BASE}/chat",
@@ -338,18 +344,25 @@ def generate_ai_response():
                 "model": OLLAMA_MODEL,
                 "messages": [{"role": "user", "content": message}],
                 "stream": False
-            }
+            },
+            timeout=10  # Set a timeout to prevent hanging indefinitely
         )
         
         if response.status_code == 200:
             ai_response = response.json()
             if "message" in ai_response and "content" in ai_response["message"]:
                 response_text = ai_response["message"]["content"]
+                logger.info(f"Generated AI response: {response_text[:30]}...")
             else:
+                logger.warning("Malformed response from Ollama")
                 response_text = "I couldn't generate a proper response. Could you try again?"
         else:
+            logger.error(f"Error from Ollama API: {response.status_code}")
             response_text = "Sorry, there was an error generating a response."
     
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error connecting to Ollama: {e}")
+        response_text = "Sorry, I'm having trouble connecting to my reasoning engine right now."
     except Exception as e:
         logger.error(f"Error getting AI response: {e}")
         response_text = "Sorry, I'm having technical difficulties right now."
@@ -410,7 +423,9 @@ def handle_message(data):
     message = data.get('message')
     
     if not sender or not recipient or not message:
-        return
+        return {'status': 'error', 'message': 'Missing required fields'}
+    
+    logger.info(f"Message from {sender} to {recipient}: {message[:30]}...")
     
     timestamp = datetime.now().strftime("%H:%M:%S")
     message_id = log_message(sender, recipient, message)
@@ -425,6 +440,7 @@ def handle_message(data):
     
     # If recipient is online, send the message for them to respond
     if recipient in user_sessions:
+        logger.info(f"Recipient {recipient} is online, sending for response")
         socketio.emit('message_needs_response', {
             'sender': sender,
             'message': message,
@@ -432,9 +448,18 @@ def handle_message(data):
             'message_id': message_id
         }, room=user_sessions[recipient])
     else:
-        # Recipient is offline, we can't get a response from their client
-        # We could either queue the message or use a fallback AI service
-        pass
+        # Recipient is offline, inform the sender
+        logger.warning(f"Recipient {recipient} is offline, informing sender")
+        if sender in user_sessions:
+            socketio.emit('message', {
+                'sender': 'System',
+                'message': f"{recipient} is offline. Your message will be delivered when they come online.",
+                'timestamp': timestamp,
+                'system_message': True
+            }, room=user_sessions[sender])
+    
+    # Return acknowledgment
+    return {'status': 'sent', 'message_id': message_id}
 
 
 @socketio.on('ai_response')
@@ -446,7 +471,9 @@ def handle_ai_response(data):
     original_message_id = data.get('original_message_id')
     
     if not original_sender or not responder or not message:
-        return
+        return {'status': 'error', 'message': 'Missing required fields'}
+    
+    logger.info(f"AI response from {responder} to {original_sender}: {message[:30]}...")
     
     timestamp = datetime.now().strftime("%H:%M:%S")
     message_id = str(uuid.uuid4())
@@ -472,6 +499,12 @@ def handle_ai_response(data):
             'ai_generated': True,
             'message_id': message_id
         }, room=user_sessions[original_sender])
+        logger.info(f"Sent AI response to {original_sender}")
+    else:
+        logger.warning(f"Original sender {original_sender} is offline, message not delivered")
+    
+    # Return acknowledgment
+    return {'status': 'sent', 'message_id': message_id}
 
 
 @socketio.on('human_response')
