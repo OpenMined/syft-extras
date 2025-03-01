@@ -68,7 +68,7 @@ def send_message(recipient: str, content: str) -> None:
         )
         
         # Wait for the response
-        response = future.wait(timeout=30)
+        response = future.wait(timeout=120)
         response.raise_for_status()
         chat_response = response.model(ChatResponse)
         
