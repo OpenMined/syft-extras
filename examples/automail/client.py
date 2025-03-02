@@ -680,9 +680,7 @@ class ChatClient:
 
 # Flask web application
 def create_flask_app(chat_client):
-    app = Flask(__name__, template_folder='templates')
-    app.static_folder = 'templates'
-    app.static_url_path = '/static'
+    app = Flask(__name__)
     app.secret_key = os.urandom(24)  # For session management
     CORS(app)  # Enable CORS for all routes
     
