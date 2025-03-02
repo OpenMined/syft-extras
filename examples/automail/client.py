@@ -185,6 +185,7 @@ Recent conversation:
             
             # Include file information if present
             selected_files = msg.get("selected_files", [])
+            print("Selected files: ", selected_files)
             if selected_files:
                 file_info = "\n[Referenced files: "
                 file_names = []
