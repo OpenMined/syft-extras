@@ -1138,39 +1138,54 @@
         }
 
         .user-item {
+            min-height: 48px;
             padding: 12px 16px;
-            cursor: pointer;
-            transition: background-color var(--transition-speed);
-            border-radius: 4px;
-            margin: 2px 8px;
             display: flex;
-            align-items: center;
-            gap: 10px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            cursor: pointer; /* Add pointer cursor to indicate clickability */
+            transition: background-color 0.2s; /* Smooth transition for hover effect */
         }
 
         .user-item:hover {
-            background-color: var(--bg-accent);
+            background-color: var(--bg-tertiary); /* Subtle background change on hover */
         }
 
-        .user-item.self {
-            background-color: rgba(114, 137, 218, 0.15);
+        .user-item .user-row {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            justify-content: space-between;
         }
 
-        .user-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background-color: var(--accent-color);
-            color: white;
+        .user-item .user-info-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0; /* Prevents flexbox items from overflowing */
+        }
+
+        .user-item .user-icon {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%; /* Make icons circular */
+            background-color: var(--bg-accent); /* Use a more harmonious color from the theme */
+            color: var(--text-primary); /* Better text color */
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
+            font-weight: 600;
             font-size: 14px;
         }
 
-        .user-details {
+        .user-item .user-name-container {
+            display: flex;
+            flex-direction: column;
             flex: 1;
+            min-width: 0; /* Allows text truncation to work */
         }
 
         .user-name {
@@ -1185,6 +1200,7 @@
         .user-status {
             font-size: 12px;
             color: var(--text-secondary);
+            white-space: nowrap;
         }
 
         .no-users {
@@ -1708,7 +1724,399 @@
         }
 
         .message .message-content {
-            white-space: pre-wrap;
+            white-space: nowrap;
+        }
+
+        /* Trust toggle styling */
+        .trust-toggle-container {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .trust-toggle-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .trust-toggle {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 18px;
+        }
+
+        .trust-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .trust-toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .3s;
+            border-radius: 18px;
+        }
+
+        .trust-toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        .trust-toggle input:checked + .trust-toggle-slider {
+            background-color: var(--success-color);
+        }
+
+        .trust-toggle input:checked + .trust-toggle-slider:before {
+            transform: translateX(18px);
+        }
+
+        /* Selected files container styling - more refined and compact */
+        .selected-files-container {
+            width: 100%;
+            padding-left: 46px; /* Align with user name */
+            margin-top: -2px; /* Tighten up spacing */
+            font-size: 12px; /* Smaller font size */
+        }
+
+        /* Style the header for selected files */
+        .selected-files-header {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        /* Improve the selected files list */
+        .selected-files-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0 0 5px 0;
+            max-height: 80px; /* Limit height */
+            overflow-y: auto;
+            border-left: 2px solid var(--border-color);
+        }
+
+        /* Style the individual file items */
+        .selected-file-item {
+            padding: 3px 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+
+        .selected-file-item i {
+            color: var(--text-secondary);
+            font-size: 10px;
+            width: 12px;
+            text-align: center;
+        }
+
+        .selected-file-item span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-secondary);
+        }
+
+        /* User item spacing improvements */
+        .user-item {
+            min-height: 48px;
+            padding: 10px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px; /* Reduced gap */
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-bottom: 1px solid var(--border-color); /* Add subtle borders */
+            margin-bottom: 1px;
+        }
+
+        .user-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Refine trust toggle size */
+        .trust-toggle {
+            position: relative;
+            display: inline-block;
+            width: 32px; /* Slightly smaller */
+            height: 16px; /* Slightly smaller */
+        }
+
+        .trust-toggle-slider:before {
+            height: 12px; /* Adjust for smaller toggle */
+            width: 12px; /* Adjust for smaller toggle */
+        }
+
+        .trust-toggle input:checked + .trust-toggle-slider:before {
+            transform: translateX(16px); /* Adjust for smaller toggle */
+        }
+
+        /* Custom color palette for user icons that matches the theme */
+        .user-icon.color-1 { background-color: rgba(114, 137, 218, 0.3); color: var(--accent-color); }
+        .user-icon.color-2 { background-color: rgba(67, 181, 129, 0.3); color: var(--success-color); }
+        .user-icon.color-3 { background-color: rgba(240, 71, 71, 0.3); color: var(--danger-color); }
+        .user-icon.color-4 { background-color: rgba(250, 166, 26, 0.3); color: #FAA61A; }
+        .user-icon.color-5 { background-color: rgba(94, 53, 177, 0.3); color: #5E35B1; }
+
+        /* File attachment styling in message bubbles */
+        .message-files-preview {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .message.self .message-files-preview {
+            border-top-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .message.other .message-files-preview {
+            border-top-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .file-attachments-header {
+            font-size: 11px;
+            font-weight: 500;
+            margin-bottom: 5px;
+            opacity: 0.8;
+        }
+
+        .file-attachment-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .file-attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            padding: 3px 0;
+        }
+
+        .file-attachment-icon {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 11px;
+            width: 16px;
+            text-align: center;
+        }
+
+        .message.other .file-attachment-icon {
+            color: var(--text-secondary);
+        }
+
+        .file-attachment-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 220px;
+        }
+
+        /* File attachment collapse/expand button */
+        .toggle-files-btn {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            margin-top: 5px;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .toggle-files-btn:hover {
+            opacity: 1;
+        }
+
+        .toggle-files-btn i {
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+
+        .toggle-files-btn.collapsed i {
+            transform: rotate(-90deg);
+        }
+
+        /* Integrated file list for AI messages */
+        .message.to-ai .message-content {
+            position: relative;
+        }
+
+        .message.to-ai .selected-files-dropdown {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+        }
+
+        .message.to-ai .selected-files-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .message.to-ai .selected-files-toggle i.fa-chevron-down {
+            transition: transform 0.2s;
+            font-size: 10px;
+        }
+
+        .message.to-ai .selected-files-toggle i.fa-chevron-down.open {
+            transform: rotate(180deg);
+        }
+
+        .message.to-ai .selected-files-content {
+            background-color: rgba(0, 0, 0, 0.1) !important;
+            border-radius: 6px;
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 0.3s;
+            margin-top: 5px;
+        }
+
+        .message.to-ai .selected-files-content.show {
+            max-height: 200px !important;
+            background-color: rgba(0, 0, 0, 0.1) !important;
+        }
+
+        .message.to-ai .selected-files-list-header {
+            padding: 6px 10px;
+            font-weight: 500;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.8);
+            background-color: rgba(0, 0, 0, 0.2) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .message.to-ai .message-files-list {
+            list-style-type: none;
+            padding: 5px 0;
+            margin: 0;
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
+        .message.to-ai .message-files-user {
+            padding: 4px 10px;
+            font-weight: 500;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.7);
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .message.to-ai .message-file-item {
+            padding: 3px 10px 3px 20px !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            background-color: transparent !important;
+            border: none !important;
+            font-size: 11px;
+        }
+
+        .message.to-ai .message-file-item i {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 10px;
+            width: 14px;
+            text-align: center;
+        }
+
+        .message.to-ai .message-file-item span {
+            color: rgba(255, 255, 255, 0.9);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Clean, minimal file display inside AI messages */
+        .message.to-ai .file-list-inline {
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+        }
+
+        .message.to-ai .file-list-header {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-bottom: 6px;
+        }
+
+        .message.to-ai .file-list-items {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .message.to-ai .file-list-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+        }
+
+        .message.to-ai .file-list-item i {
+            opacity: 0.7;
+            width: 12px;
+            text-align: center;
+        }
+
+        /* Clean file attachment styling */
+        .file-divider {
+            border: 0;
+            height: 1px;
+            background-color: rgba(255, 255, 255, 0.1);
+            margin: 15px 0 10px 0;
+        }
+        
+        .attached-files-header {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 10px;
+        }
+        
+        .attached-file-item {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .message.other .file-divider {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        
+        .message.other .attached-files-header {
+            color: rgba(0, 0, 0, 0.7);
+        }
+        
+        .message.other .attached-file-item {
+            color: rgba(0, 0, 0, 0.8);
         }
     </style>
 </head>
@@ -2118,7 +2526,24 @@
                             // Add to-ai class for messages directed to AI
                             messageEl.className = msg.to_ai ? 'message self to-ai' : 'message self';
                             messageEl.innerHTML = `
-                                <div class="message-content">${msg.content}</div>
+                                <div class="message-content">${msg.content}
+                                    ${msg.selected_files && msg.selected_files.length > 0 ? `
+                                    <div class="message-files-preview">
+                                        <div class="file-attachments-header">
+                                            <i class="fas fa-paperclip"></i> Attached Files (${msg.selected_files.length})
+                                        </div>
+                                        <div class="file-attachment-list">
+                                            ${msg.selected_files.map(file => `
+                                                <div class="file-attachment-item">
+                                                    <i class="fas ${getFileIconClass(file.path)} file-attachment-icon"></i>
+                                                    <span class="file-attachment-user">${file.user}</span>
+                                                    <span class="file-attachment-name">${file.path}</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    ` : ''}
+                                </div>
                                 <div class="message-meta">
                                     ${formatTimestamp(msg.timestamp)}
                                     ${getDeliveryStatusHtml(msg)}
@@ -2128,7 +2553,24 @@
                             // Add to-ai class for received messages directed to AI
                             messageEl.className = msg.to_ai ? 'message other to-ai' : 'message other';
                             messageEl.innerHTML = `
-                                <div class="message-content">${msg.content}</div>
+                                <div class="message-content">${msg.content}
+                                    ${msg.selected_files && msg.selected_files.length > 0 ? `
+                                    <div class="message-files-preview">
+                                        <div class="file-attachments-header">
+                                            <i class="fas fa-paperclip"></i> Attached Files (${msg.selected_files.length})
+                                        </div>
+                                        <div class="file-attachment-list">
+                                            ${msg.selected_files.map(file => `
+                                                <div class="file-attachment-item">
+                                                    <i class="fas ${getFileIconClass(file.path)} file-attachment-icon"></i>
+                                                    <span class="file-attachment-user">${file.user}</span>
+                                                    <span class="file-attachment-name">${file.path}</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    ` : ''}
+                                </div>
                                 <div class="message-meta">${msg.sender} • ${formatTimestamp(msg.timestamp)}</div>
                             `;
                         }
@@ -2148,38 +2590,38 @@
                             }
                         }
                         
-                        // Add file list for messages with selected files
-                        if (msg.selected_files && msg.selected_files.length > 0) {
-                            const fileListContainer = document.createElement('div');
-                            fileListContainer.className = 'message-file-list';
+                        // // Add file list for messages with selected files
+                        // if (msg.selected_files && msg.selected_files.length > 0) {
+                        //     const fileListContainer = document.createElement('div');
+                        //     fileListContainer.className = 'message-file-list';
                             
-                            // Create header for files
-                            const fileHeader = document.createElement('div');
-                            fileHeader.className = 'file-list-header';
-                            fileHeader.innerHTML = `<i class="fas fa-file"></i> Files (${msg.selected_files.length})`;
-                            fileListContainer.appendChild(fileHeader);
+                        //     // Create header for files
+                        //     const fileHeader = document.createElement('div');
+                        //     fileHeader.className = 'file-list-header';
+                        //     fileHeader.innerHTML = `<i class="fas fa-file"></i> Files (${msg.selected_files.length})`;
+                        //     fileListContainer.appendChild(fileHeader);
                             
-                            // Create file items
-                            const fileList = document.createElement('div');
-                            fileList.className = 'file-items';
+                        //     // Create file items
+                        //     const fileList = document.createElement('div');
+                        //     fileList.className = 'file-items';
                             
-                            msg.selected_files.forEach(file => {
-                                const fileItem = document.createElement('div');
-                                fileItem.className = 'file-item';
+                        //     msg.selected_files.forEach(file => {
+                        //         const fileItem = document.createElement('div');
+                        //         fileItem.className = 'file-item';
                                 
-                                // Show file path and user who shared it
-                                fileItem.innerHTML = `
-                                    <i class="fas ${getFileIconClass(file.path)}"></i>
-                                    <span class="file-path">${file.path}</span>
-                                    <span class="file-owner">${file.user}</span>
-                                `;
+                        //         // Show file path and user who shared it
+                        //         fileItem.innerHTML = `
+                        //             <i class="fas ${getFileIconClass(file.path)}"></i>
+                        //             <span class="file-path">${file.path}</span>
+                        //             <span class="file-owner">${file.user}</span>
+                        //         `;
                                 
-                                fileList.appendChild(fileItem);
-                            });
+                        //         fileList.appendChild(fileItem);
+                        //     });
                             
-                            fileListContainer.appendChild(fileList);
-                            chatMessages.appendChild(fileListContainer);
-                        }
+                        //     fileListContainer.appendChild(fileList);
+                        //     chatMessages.appendChild(fileListContainer);
+                        // }
                     });
                     
                     // Re-add temporary response groups that don't have real responses yet
@@ -3230,23 +3672,54 @@
                     users.forEach(user => {
                         const isSelf = user === '{{ user_email }}';
                         const initials = user.split('@')[0].substring(0, 2).toUpperCase();
+                        const colorClass = getUserColorClass(user);
                         
+                        // Create user item with improved layout
                         const userItem = document.createElement('div');
                         userItem.className = `user-item ${isSelf ? 'self' : ''}`;
                         userItem.dataset.email = user;
                         userItem.title = "Click to view files";
                         
                         userItem.innerHTML = `
-                            <div class="user-icon" style="background-color: ${getColorFromEmail(user)}">${initials}</div>
-                            <div class="user-details">
-                                <div class="user-name">${user}</div>
-                                <div class="user-status">${isSelf ? 'You' : 'Member'}</div>
+                            <div class="user-row">
+                                <div class="user-info-container">
+                                    <div class="user-icon ${colorClass}">${initials}</div>
+                                    <div class="user-name-container">
+                                        <div class="user-name">${user}</div>
+                                        <div class="user-status">${isSelf ? 'You' : 'Member'}</div>
+                                    </div>
+                                </div>
+                                <div class="trust-toggle-container">
+                                    <span class="trust-toggle-label">Trust</span>
+                                    <label class="trust-toggle">
+                                        <input type="checkbox" class="trust-toggle-input" ${isSelf ? 'checked disabled' : ''}>
+                                        <span class="trust-toggle-slider"></span>
+                                    </label>
+                                </div>
                             </div>
                         `;
                         
-                        // Add selected files container
+                        // Add event listener for trust toggle
+                        const trustToggleContainer = userItem.querySelector('.trust-toggle-container');
+                        if (trustToggleContainer) {
+                            // Stop propagation for the entire toggle container
+                            trustToggleContainer.addEventListener('click', function(e) {
+                                e.stopPropagation(); // Prevent event from bubbling up to the user item
+                            });
+                            
+                            const trustToggle = userItem.querySelector('.trust-toggle-input');
+                            if (trustToggle && !isSelf) {
+                                trustToggle.addEventListener('change', function(e) {
+                                    const isTrusted = this.checked;
+                                    console.log(`User ${user} trust set to: ${isTrusted}`);
+                                    // TODO: Implement saving trust settings to backend
+                                });
+                            }
+                        }
+                        
+                        // Create container for selected files
                         const selectedFilesContainer = document.createElement('div');
-                        selectedFilesContainer.className = 'user-selected-files';
+                        selectedFilesContainer.className = 'selected-files-container';
                         selectedFilesContainer.id = `user-files-${user.replace('@', '-').replace('.', '-')}`;
                         userItem.appendChild(selectedFilesContainer);
                         
@@ -4138,15 +4611,17 @@
             
             // Update the container
             if (files && files.length > 0) {
-                let html = '<div class="selected-files-header">Selected Files:</div>';
+                let html = '<div class="selected-files-header">Selected Files</div>'; // Removed colon for cleaner look
                 html += '<ul class="selected-files-list">';
                 
                 files.forEach(file => {
                     // Extract just the filename from the path
                     const fileName = file.split('/').pop();
+                    // Limit the filename length for display
+                    const displayName = fileName.length > 20 ? fileName.substring(0, 18) + '...' : fileName;
                     html += `<li class="selected-file-item">
                         <i class="fas ${getFileIconClass(fileName)}"></i>
-                        <span title="${file}">${fileName}</span>
+                        <span title="${file}">${displayName}</span>
                     </li>`;
                 });
                 
@@ -4192,9 +4667,65 @@
             // Format timestamp
             const timestamp = formatTimestamp(message.timestamp);
             
-            // Create message HTML
-            let messageHTML = `
-                <div class="message-content">${message.content}</div>
+            // Create message HTML for content and metadata
+            let messageHTML = `<div class="message-content">SENDING A:${message.content}`;
+            
+            // Add selected files inline with the message content if there are any
+            if (selectedFiles && selectedFiles.length > 0) {
+                // Group files by user
+                const filesByUser = {};
+                selectedFiles.forEach(file => {
+                    const user = file.user || 'Unknown';
+                    if (!filesByUser[user]) {
+                        filesByUser[user] = [];
+                    }
+                    filesByUser[user].push(file.path || file);
+                });
+                
+                messageHTML += `<div class="message-files-preview">
+                    <div class="file-attachments-header">Files included:</div>
+                    <div class="file-attachment-list">`;
+                
+                // Get total file count
+                const totalFiles = selectedFiles.length;
+                const initialDisplayCount = 3; // Show first 3 files
+                let fileCount = 0;
+                
+                // Add files organized by user
+                for (const user in filesByUser) {
+                    filesByUser[user].forEach(path => {
+                        fileCount++;
+                        // Only show first 3 files by default
+                        const displayStyle = fileCount > initialDisplayCount ? 'display: none;' : '';
+                        const fileName = path.split('/').pop();
+                        messageHTML += `
+                            <div class="file-attachment-item" style="${displayStyle}" data-file-index="${fileCount}">
+                                <div class="file-attachment-icon">
+                                    <i class="fas ${getFileIconClass(fileName)}"></i>
+                                </div>
+                                <div class="file-attachment-name" title="${path}">${fileName}</div>
+                            </div>
+                        `;
+                    });
+                }
+                
+                messageHTML += `</div>`;
+                
+                // Add toggle button if more than initialDisplayCount files
+                if (totalFiles > initialDisplayCount) {
+                    messageHTML += `
+                        <div class="toggle-files-btn collapsed" data-total="${totalFiles}" data-showing="${initialDisplayCount}">
+                            <i class="fas fa-chevron-down"></i>
+                            <span>Show ${totalFiles - initialDisplayCount} more files</span>
+                        </div>
+                    `;
+                }
+                
+                messageHTML += `</div>`;
+            }
+            
+            // Close message content div and add meta info
+            messageHTML += `</div>
                 <div class="message-meta">
                     <span>${message.sender === 'System' ? '' : (message.is_ai_response ? `${message.ai_sender}'s AI` : message.sender)}</span>
                     <span>${timestamp}</span>
@@ -4202,91 +4733,357 @@
                 </div>
             `;
             
-            // Add selected files dropdown if there are any
-            if (selectedFiles && selectedFiles.length > 0) {
-                messageHTML += `
-                    <div class="selected-files-dropdown">
-                        <div class="selected-files-toggle">
-                            <i class="fas fa-paperclip"></i> 
-                            ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} referenced
-                            <i class="fas fa-chevron-down"></i>
-                        </div>
-                        <div class="selected-files-content">
-                            <div class="selected-files-list-header">Referenced Files:</div>
-                            <ul class="message-files-list">
-            `;
-            
-                // Group files by user
-                const filesByUser = {};
-                selectedFiles.forEach(file => {
-                    if (!filesByUser[file.user]) {
-                        filesByUser[file.user] = [];
-                    }
-                    filesByUser[file.user].push(file.path);
-                });
-                
-                // Add each user's files
-                for (const user in filesByUser) {
-                    messageHTML += `<li class="message-files-user">${user}</li>`;
-                    filesByUser[user].forEach(path => {
-                        const fileName = path.split('/').pop();
-                        messageHTML += `
-                            <li class="message-file-item">
-                                <i class="fas ${getFileIconClass(fileName)}"></i>
-                                <span title="${path}">${fileName}</span>
-                            </li>
-                        `;
-                    });
-                }
-                
-                messageHTML += `
-                            </ul>
-                        </div>
-                    </div>
-                `;
-            }
-            
             messageElement.innerHTML = messageHTML;
             
-            // Replace the event listener for file dropdown toggle with this code
+            // Add event listener for toggle button
             setTimeout(() => {
-                const toggle = messageElement.querySelector('.selected-files-toggle');
-                const content = messageElement.querySelector('.selected-files-content');
-                
-                if (toggle && content) {
-                    console.log("Adding click handler to dropdown toggle");
-                    
-                    // First make sure the content has the right styles
-                    content.style.maxHeight = "0";
-                    content.style.overflow = "hidden";
-                    
-                    toggle.addEventListener('click', function() {
-                        console.log("Toggle clicked");
+                const toggleBtn = messageElement.querySelector('.toggle-files-btn');
+                if (toggleBtn) {
+                    toggleBtn.addEventListener('click', function() {
+                        const isCollapsed = this.classList.contains('collapsed');
+                        const totalFiles = parseInt(this.dataset.total, 10);
+                        const currentlyShowing = parseInt(this.dataset.showing, 10);
                         
-                        // Toggle the show class
-                        if (content.classList.contains('show')) {
-                            console.log("Hiding content");
-                            content.classList.remove('show');
-                            content.style.maxHeight = "0";
-                            toggle.querySelector('.fa-chevron-down').classList.remove('open');
+                        // Toggle visibility of additional files
+                        const fileItems = messageElement.querySelectorAll('.file-attachment-item');
+                        fileItems.forEach((item, index) => {
+                            if (index >= currentlyShowing) {
+                                item.style.display = isCollapsed ? 'flex' : 'none';
+                            }
+                        });
+                        
+                        // Update button text and state
+                        if (isCollapsed) {
+                            this.classList.remove('collapsed');
+                            this.querySelector('span').textContent = 'Show fewer files';
+                            this.dataset.showing = totalFiles;
                         } else {
-                            console.log("Showing content");
-                            content.classList.add('show');
-                            content.style.maxHeight = "500px";
-                            toggle.querySelector('.fa-chevron-down').classList.add('open');
+                            this.classList.add('collapsed');
+                            this.querySelector('span').textContent = `Show ${totalFiles - currentlyShowing} more files`;
+                            this.dataset.showing = currentlyShowing;
                         }
                     });
-                    
-                    // Add a visible indicator that this is clickable
-                    toggle.title = "Click to expand/collapse file list";
-                    toggle.style.cursor = "pointer";
-                } else {
-                    console.log("Could not find toggle or content elements", toggle, content);
                 }
             }, 0);
             
             return messageElement;
         }
+
+        // Function to get a consistent color class for a user based on their email
+        function getUserColorClass(email) {
+            // Simple hash function to get a consistent number for each email
+            let hash = 0;
+            for (let i = 0; i < email.length; i++) {
+                hash = ((hash << 5) - hash) + email.charCodeAt(i);
+                hash |= 0; // Convert to 32bit integer
+            }
+            
+            // Get a positive number and map to one of our color classes
+            const colorIndex = Math.abs(hash) % 5 + 1; // 1-5
+            return `color-${colorIndex}`;
+        }
+
+        // Update sendMessage function to format files directly in message content
+        function sendMessage(event, toAI = false) {
+            event.preventDefault();
+            
+            const messageInput = document.getElementById('message-input');
+            let messageContent = messageInput.value.trim();
+            
+            if (!messageContent || !currentConversationId) return;
+            
+            // Get selected files
+            const selectedFiles = [];
+            document.querySelectorAll('.filesystem-file-checkbox:checked').forEach(checkbox => {
+                const filePath = checkbox.dataset.path;
+                const userEmail = currentFilesystemUser;
+                if (filePath) {
+                    selectedFiles.push({
+                        user: userEmail,
+                        path: filePath
+                    });
+                }
+            });
+            
+            // DIRECTLY APPEND FILE INFORMATION TO MESSAGE TEXT FOR AI MESSAGES
+            if (toAI && selectedFiles.length > 0) {
+                messageContent += "\n\nFiles included:";
+                selectedFiles.forEach(file => {
+                    const fileName = file.path.split('/').pop();
+                    messageContent += `\n- ${fileName} (${file.path})`;
+                });
+            }
+            
+            // Update UI with the sent message immediately
+            const messageId = 'temp-' + Date.now();
+            const messageElement = document.createElement('div');
+            messageElement.id = `message-${messageId}`;
+            messageElement.className = `message self${toAI ? ' to-ai' : ''}`;
+            messageElement.innerHTML = `
+                <div class="message-content">SENDING B:${messageContent}</div>
+                <div class="message-meta">
+                    <span>{{ user_email }}</span>
+                    <span>${formatTimestamp(new Date())}</span>
+                    <span class="delivery-status">
+                        <i class="fas fa-clock status-pending"></i>
+                    </span>
+                </div>
+            `;
+            
+            const messagesContainer = document.getElementById('chat-messages');
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Clear input and reset file selections
+            messageInput.value = '';
+            
+            // Send to server
+            fetch(`/conversation/${currentConversationId}/send`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: messageContent,
+                    to_ai: toAI,
+                    selected_files: selectedFiles
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Success! Update the status
+                    const statusElement = messageElement.querySelector('.delivery-status');
+                    statusElement.innerHTML = '<i class="fas fa-check status-delivered"></i>';
+                    
+                    // Update the message ID to the real one if provided
+                    if (data.message_id) {
+                        messageElement.id = `message-${data.message_id}`;
+                    }
+                } else {
+                    // Failed to send!
+                    console.error("Failed to send message:", data);
+                    messageElement.querySelector('.delivery-status').innerHTML = 
+                        '<i class="fas fa-exclamation-triangle" style="color: var(--danger-color);"></i>';
+                }
+            })
+            .catch(error => {
+                console.error("Error sending message:", error);
+                messageElement.querySelector('.delivery-status').innerHTML = 
+                    '<i class="fas fa-exclamation-triangle" style="color: var(--danger-color);"></i>';
+            });
+        }
+
+        // Replace the existing event listener for the send-ai-btn
+        document.addEventListener('DOMContentLoaded', function() {
+            // Find the AI send button
+            const sendAiBtn = document.getElementById('send-ai-btn');
+            
+            if (sendAiBtn) {
+                // Remove existing event listeners (if any)
+                const newSendBtn = sendAiBtn.cloneNode(true);
+                sendAiBtn.parentNode.replaceChild(newSendBtn, sendAiBtn);
+                
+                // Add our new event listener
+                newSendBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Get the message input element
+                    const messageInput = document.getElementById('message-input');
+                    
+                    // Get selected files before sending
+                    const selectedFiles = [];
+                    document.querySelectorAll('.filesystem-file-checkbox:checked').forEach(checkbox => {
+                        const filePath = checkbox.dataset.path;
+                        const userEmail = currentFilesystemUser;
+                        if (filePath) {
+                            selectedFiles.push({
+                                user: userEmail,
+                                path: filePath
+                            });
+                        }
+                    });
+                    
+                    // If files are selected, directly modify the message input value
+                    if (selectedFiles.length > 0) {
+                        let fileText = "\n\n📎 Files included:";
+                        selectedFiles.forEach(file => {
+                            const fileName = file.path.split('/').pop();
+                            fileText += `\n📄 ${fileName} (from ${file.user})`;
+                        });
+                        
+                        // Add the file text to the input value
+                        messageInput.value = messageInput.value.trim() + fileText;
+                    }
+                    
+                    // Call sendMessage with the modified input
+                    sendMessage(e, true);
+                });
+            }
+        });
+
+        // Add this helper function for processing file lists consistently
+        function generateFileListText(files) {
+            if (!files || files.length === 0) return '';
+            
+            let fileText = "\n\n📎 Files included:";
+            files.forEach(file => {
+                const filePath = typeof file === 'string' ? file : file.path;
+                const user = file.user || currentFilesystemUser;
+                const fileName = filePath.split('/').pop();
+                fileText += `\n📄 ${fileName} (from ${user})`;
+            });
+            return fileText;
+        }
+
+        // Update the message loading function where you're showing "SENDING D:"
+        function loadMessages(conversationId) {
+            // ... existing code ...
+            
+            fetch(`/conversation/${conversationId}/messages`)
+                .then(response => response.json())
+                .then(data => {
+                    const messages = data.messages || [];
+                    console.log("Messages received:", messages);
+                    
+                    messages.forEach(msg => {
+                        // Skip messages that are already displayed
+                        if (document.getElementById(`message-${msg.id}`)) {
+                            return;
+                        }
+                        
+                        const messageEl = document.createElement('div');
+                        messageEl.id = `message-${msg.id}`;
+                        
+                        // Process message content to add files for AI messages
+                        let content = msg.content;
+                        
+                        // If this is a message to AI and has files but doesn't already mention them
+                        if (msg.to_ai && msg.selected_files && msg.selected_files.length > 0 && 
+                            !content.includes("Files included:")) {
+                            content += generateFileListText(msg.selected_files);
+                        }
+                        
+                        // Handle different message types
+                        if (msg.sender === 'System') {
+                            messageEl.className = 'message system';
+                            messageEl.innerHTML = `
+                                <div class="message-content">${content}</div>
+                                <div class="system-timestamp">${formatTimestamp(msg.timestamp)}</div>
+                            `;
+                        } else if (msg.is_self) {
+                            // Add to-ai class for messages directed to AI
+                            messageEl.className = msg.to_ai ? 'message self to-ai' : 'message self';
+                            messageEl.innerHTML = `
+                                <div class="message-content">${msg.content}
+                                    ${msg.selected_files && msg.selected_files.length > 0 ? `
+                                    <hr class="file-divider">
+                                    <div class="attached-files-header">
+                                        <i class="fas fa-paperclip"></i> Attached Files (${msg.selected_files.length})
+                                    </div>
+                                    ${msg.selected_files.map(file => `
+                                        <div class="attached-file-item">
+                                            <i class="fas fa-file-alt"></i> ${file.path}
+                                        </div>
+                                    `).join('')}
+                                    ` : ''}
+                                </div>
+                                <div class="message-meta">
+                                    ${formatTimestamp(msg.timestamp)}
+                                    ${getDeliveryStatusHtml(msg)}
+                                </div>
+                            `;
+                        } else {
+                            // Add to-ai class for received messages directed to AI
+                            messageEl.className = msg.to_ai ? 'message other to-ai' : 'message other';
+                            messageEl.innerHTML = `
+                                <div class="message-content">${msg.content}
+                                    ${msg.selected_files && msg.selected_files.length > 0 ? `
+                                    <hr class="file-divider">
+                                    <div class="attached-files-header">
+                                        <i class="fas fa-paperclip"></i> Attached Files (${msg.selected_files.length})
+                                    </div>
+                                    ${msg.selected_files.map(file => `
+                                        <div class="attached-file-item">
+                                            <i class="fas fa-file-alt"></i> ${file.path}
+                                        </div>
+                                    `).join('')}
+                                    ` : ''}
+                                </div>
+                                <div class="message-meta">${msg.sender} • ${formatTimestamp(msg.timestamp)}</div>
+                            `;
+                        }
+                        
+                        // ... rest of the function ...
+                    });
+                });
+        }
+
+        // Also update the sendMessage function to use the helper
+        function sendMessage(event, toAI = false) {
+            // ... existing code ...
+            
+            // Get selected files
+            const selectedFiles = [];
+            document.querySelectorAll('.filesystem-file-checkbox:checked').forEach(checkbox => {
+                const filePath = checkbox.dataset.path;
+                const userEmail = currentFilesystemUser;
+                if (filePath) {
+                    selectedFiles.push({
+                        user: userEmail,
+                        path: filePath
+                    });
+                }
+            });
+            
+            // Use the helper function to append file information
+            if (toAI && selectedFiles.length > 0) {
+                messageContent += generateFileListText(selectedFiles);
+            }
+            
+            // ... rest of the function ...
+        }
+
+        // Update the AI send button event listener to use the helper too
+        document.addEventListener('DOMContentLoaded', function() {
+            // Find the AI send button
+            const sendAiBtn = document.getElementById('send-ai-btn');
+            
+            if (sendAiBtn) {
+                // Remove existing event listeners (if any)
+                const newSendBtn = sendAiBtn.cloneNode(true);
+                sendAiBtn.parentNode.replaceChild(newSendBtn, sendAiBtn);
+                
+                // Add our new event listener
+                newSendBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Get the message input element
+                    const messageInput = document.getElementById('message-input');
+                    
+                    // Get selected files before sending
+                    const selectedFiles = [];
+                    document.querySelectorAll('.filesystem-file-checkbox:checked').forEach(checkbox => {
+                        const filePath = checkbox.dataset.path;
+                        const userEmail = currentFilesystemUser;
+                        if (filePath) {
+                            selectedFiles.push({
+                                user: userEmail,
+                                path: filePath
+                            });
+                        }
+                    });
+                    
+                    // If files are selected, directly modify the message input value
+                    if (selectedFiles.length > 0) {
+                        messageInput.value = messageInput.value.trim() + generateFileListText(selectedFiles);
+                    }
+                    
+                    // Call sendMessage with the modified input
+                    sendMessage(e, true);
+                });
+            }
+        });
     </script>
 </body>
 </html>
