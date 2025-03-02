@@ -206,7 +206,6 @@ Recent conversation:
         # Check if there are files to include in the latest message
         latest_msg = conversation_history[-1] if conversation_history else None
         if latest_msg:
-            # Debug the latest message structure
             print(f"\n--- Processing files from message: {latest_msg.get('message_id')} ---")
             selected_files = latest_msg.get("selected_files", [])
             print(f"Selected files: {json.dumps(selected_files, indent=2)}")
@@ -215,97 +214,67 @@ Recent conversation:
                 prompt += "Referenced file contents:\n\n"
                 files_included = 0
                 
-                # Debug client information if available
+                # Debug client information
                 if self.client:
                     print(f"Client email: {self.client.email}")
-                    print(f"Client workspace: {hasattr(self.client, 'workspace')}")
                     if hasattr(self.client, 'workspace'):
                         print(f"Datasites path: {self.client.workspace.datasites}")
-                        print(f"Directory exists: {os.path.exists(str(self.client.workspace.datasites))}")
-                else:
-                    print("No client object available!")
                 
                 for file_info in selected_files:
-                    # Debug file info structure
+
                     print(f"\nProcessing file: {json.dumps(file_info, indent=2) if isinstance(file_info, dict) else file_info}")
                     
-                    # Handle both dict and string format (backward compatibility)
+                    # Handle both dict and string format
                     if isinstance(file_info, dict):
                         file_path = file_info.get("path", "")
                         user_email = file_info.get("user", "")
                         print(f"Dict format - path: {file_path}, user: {user_email}")
+                        if user_email != self.client.email:
+                            continue # only include files from the current user
                     else:
-                        # If it's just a string path, use the sender as the user
                         file_path = file_info
                         user_email = sender
-                        print(f"String format - path: {file_path}, using sender as user: {user_email}")
+                        print(f"String format - path: {file_path}, user: {user_email}")
                     
-                    # Make sure we have both path and user
                     if not file_path:
                         print("Skipping file with empty path")
                         continue
                     
-                    # Try multiple approaches to locate the file
+                    # Prioritize the correct path approach (#6)
                     possible_paths = []
                     
-                    # 1. Direct path as provided
+                    # PRIORITY APPROACH: Simple datasite path without user email
+                    if self.client and hasattr(self.client, 'workspace') and hasattr(self.client.workspace, 'datasites'):
+                        # This is approach #6 from before - the correct one
+                        simple_path = self.client.workspace.datasites / file_path
+                        possible_paths.append(str(simple_path))
+                        print(f"PRIORITY PATH: Simple datasite path: {simple_path}")
+                    
+                    # Fallback approaches
+                    if self.client and hasattr(self.client, 'workspace') and hasattr(self.client.workspace, 'datasites'):
+                        if user_email:
+                            # Try with user email in path
+                            datasite_path = self.client.workspace.datasites / user_email / file_path
+                            possible_paths.append(str(datasite_path))
+                            print(f"Fallback 1: Workspace datasite path with user: {datasite_path}")
+                    
+                    # Direct path as provided
                     possible_paths.append(file_path)
-                    print(f"1. Direct path: {file_path}")
+                    print(f"Fallback 2: Direct path: {file_path}")
                     
-                    # 2. Using SyftBox/datasites path structure
+                    # Try home directory path
+                    home_path = os.path.expanduser(f"~/SyftBox/datasites/{file_path}")
+                    possible_paths.append(home_path)
+                    print(f"Fallback 3: Home SyftBox path without user: {home_path}")
+                    
                     if user_email:
-                        datasite_path = f"SyftBox/datasites/{user_email}/{file_path}"
-                        possible_paths.append(datasite_path)
-                        print(f"2. SyftBox path: {datasite_path}")
-                        
-                        # Also try with home directory
-                        home_path = os.path.expanduser(f"~/SyftBox/datasites/{user_email}/{file_path}")
-                        possible_paths.append(home_path)
-                        print(f"3. Home SyftBox path: {home_path}")
-                        
-                    # 4. Use the client's paths when available
-                    if self.client:
-                        try:
-                            print(f"Using client paths for {self.client.email}")
-                            
-                            # For user's own files
-                            if user_email == self.client.email:
-                                # Try using my_datasite property
-                                if hasattr(self.client, 'my_datasite'):
-                                    user_path = self.client.my_datasite / file_path
-                                    possible_paths.append(str(user_path))
-                                    print(f"4. User's own datasite path: {user_path}")
-                            
-                            # Try using workspace.datasites
-                            if hasattr(self.client, 'workspace') and hasattr(self.client.workspace, 'datasites'):
-                                datasite_path = self.client.workspace.datasites / user_email / file_path
-                                possible_paths.append(str(datasite_path))
-                                print(f"5. Workspace datasite path: {datasite_path}")
-                                
-                                # Also try with just the base datasite path + file path
-                                simple_path = self.client.workspace.datasites / file_path
-                                possible_paths.append(str(simple_path))
-                                print(f"6. Simple datasite path: {simple_path}")
-                            
-                            # If client has a config with data_dir
-                            if hasattr(self.client, 'config') and hasattr(self.client.config, 'data_dir'):
-                                data_dir_path = self.client.config.data_dir / "datasites" / user_email / file_path
-                                possible_paths.append(str(data_dir_path))
-                                print(f"7. Config data_dir path: {data_dir_path}")
-                        except Exception as e:
-                            print(f"Error resolving client paths: {e}")
+                        home_user_path = os.path.expanduser(f"~/SyftBox/datasites/{user_email}/{file_path}")
+                        possible_paths.append(home_user_path)
+                        print(f"Fallback 4: Home SyftBox path with user: {home_user_path}")
                     
-                    # 8. Try with absolute path from current directory
-                    abs_path = os.path.abspath(file_path)
-                    possible_paths.append(abs_path)
-                    print(f"8. Absolute path: {abs_path}")
+                    # Absolute path
+                    possible_paths.append(os.path.abspath(file_path))
                     
-                    # 9. Try current directory + file_path
-                    cwd_path = os.path.join(os.getcwd(), file_path)
-                    possible_paths.append(cwd_path)
-                    print(f"9. CWD path: {cwd_path}")
-                    
-                    # Log all paths we're going to try
                     print(f"Will try these paths in order:")
                     for i, path in enumerate(possible_paths):
                         print(f"  {i+1}. {path}")
@@ -348,10 +317,8 @@ Recent conversation:
                                     print(f"Path exists but is not a file: {try_path}")
                             else:
                                 print(f"Path does not exist: {try_path}")
-                        except PermissionError as pe:
-                            print(f"Permission error reading file {try_path}: {pe}")
                         except Exception as e:
-                            print(f"Unexpected error reading file {try_path}: {e}")
+                            print(f"Error reading file {try_path}: {e}")
                     
                     if not file_read:
                         print(f"FAILED: Could not find or read file: {file_path}")
