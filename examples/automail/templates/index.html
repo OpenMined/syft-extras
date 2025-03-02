@@ -188,6 +188,8 @@
             flex-direction: column;
             background-color: var(--bg-primary);
             position: relative;
+            height: 100%;  /* Ensure full height */
+            overflow: hidden;  /* Add this to prevent content overflow */
         }
         
         .chat-header {
@@ -200,6 +202,7 @@
             align-items: center;
             border-bottom: 1px solid var(--border-color);
             z-index: 10;
+            flex-shrink: 0;  /* Prevent header from shrinking */
         }
         
         .chat-header h2 {
@@ -220,6 +223,9 @@
             overflow-y: auto;
             background-color: var(--bg-primary);
             scroll-behavior: smooth;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;  /* Critical for allowing flex containers to scroll */
         }
         
         .chat-messages::-webkit-scrollbar {
@@ -325,6 +331,7 @@
             padding: 12px 16px;
             background-color: var(--bg-secondary);
             border-top: 1px solid var(--border-color);
+            flex-shrink: 0;  /* Prevent form from shrinking */
         }
         
         .message-input {
@@ -719,13 +726,380 @@
             50% { transform: scale(1.2); opacity: 1; }
             100% { transform: scale(0.8); opacity: 0.7; }
         }
+
+        /* AI response group styles - improved layout */
+        .ai-response-group {
+            max-width: 90%;
+            margin: 15px auto;
+            border-radius: 12px;
+            background-color: rgba(67, 181, 129, 0.1);
+            border: 1px solid rgba(67, 181, 129, 0.2);
+            overflow: hidden;
+            min-height: 220px; /* Default collapsed height */
+            transition: min-height 0.3s ease-out;
+        }
+
+        .ai-response-header {
+            padding: 16px 20px; /* Increased padding */
+            background-color: rgba(67, 181, 129, 0.15);
+            display: flex;
+            flex-direction: column; /* Stack elements vertically */
+            cursor: pointer; /* Explicitly show pointer cursor */
+            transition: background-color 0.2s;
+            position: relative; /* For hover effects */
+        }
+
+        .ai-response-header:hover {
+            background-color: rgba(67, 181, 129, 0.25);
+        }
+        
+        /* Remove the overlapping hover indicator */
+        .ai-response-header:hover::after {
+            display: none; /* Remove the overlapping indicator */
+        }
+        
+        /* Add subtle highlight to the entire header instead */
+        .ai-response-header:hover {
+            box-shadow: inset 0 0 0 2px rgba(67, 181, 129, 0.4);
+        }
+        
+        /* Make summary content have normal cursor for text selection */
+        .ai-summary-content {
+            cursor: auto; /* Default cursor behavior */
+            position: relative; /* For positioning the expand/collapse icon */
+        }
+        
+        /* Add subtle visual indicator that shows the expand/collapse action */
+        .ai-summary-text {
+            position: relative;
+            padding-right: 5px; /* Space for the subtle indicator */
+        }
+
+        .ai-response-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px; /* Add space between summary and content */
+        }
+
+        .ai-response-title {
+            font-weight: 600; /* Made slightly bolder */
+            font-size: 15px; /* Slightly larger */
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px; /* More space between icon and text */
+        }
+
+        .ai-response-title i {
+            color: #43b581;
+            font-size: 16px; /* Slightly larger icon */
+        }
+
+        .ai-response-count {
+            background-color: rgba(67, 181, 129, 0.3);
+            color: var(--text-primary);
+            padding: 4px 12px; /* More padding */
+            border-radius: 16px; /* More rounded */
+            font-size: 13px; /* Slightly larger */
+            font-weight: 500; /* Medium weight */
+            display: flex;
+            align-items: center;
+            gap: 6px; /* Space between text and icon */
+        }
+        
+        .ai-response-count i {
+            transition: transform 0.3s;
+        }
+        
+        .ai-response-count i.open {
+            transform: rotate(180deg);
+        }
+
+        .ai-response-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-out;
+        }
+
+        .ai-response-body.expanded {
+            max-height: 400px; /* Set a fixed maximum height */
+            overflow-y: auto;  /* Enable vertical scrolling */
+            min-height: 300px;
+        }
+
+        .ai-response-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(67, 181, 129, 0.2);
+        }
+
+        .ai-response-item:last-child {
+            border-bottom: none;
+        }
+
+        .ai-response-from {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .ai-response-content {
+            color: var(--text-primary);
+            white-space: pre-wrap;
+        }
+
+        /* AI summary content improvements */
+        .ai-summary-content {
+            padding: 15px 20px; /* More padding */
+            border-top: 1px solid rgba(67, 181, 129, 0.2);
+            white-space: pre-wrap;
+            color: var(--text-primary);
+            max-height: 200px;
+            min-height: 60px; /* Ensure minimum height */
+            overflow-y: auto; /* Allow vertical scrolling in summary */
+            scrollbar-width: thin;
+            scrollbar-color: rgba(67, 181, 129, 0.5) rgba(67, 181, 129, 0.1);
+            line-height: 1.6; /* Improved line spacing */
+            font-size: 14px; /* Standardized font size */
+        }
+        
+        .ai-summary-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .ai-summary-content::-webkit-scrollbar-thumb {
+            background-color: rgba(67, 181, 129, 0.5);
+            border-radius: 3px;
+        }
+        
+        .ai-summary-content::-webkit-scrollbar-track {
+            background-color: rgba(67, 181, 129, 0.1);
+            border-radius: 3px;
+        }
+
+        .ai-summary-loading {
+            color: var(--text-secondary);
+            font-style: italic;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px; /* Ensure minimum height when loading */
+        }
+
+        .ai-summary-error {
+            color: var(--text-muted);
+            font-style: italic;
+            min-height: 40px; /* Ensure minimum height for errors */
+        }
+
+        .ai-summary-text {
+            line-height: 1.5;
+            min-height: 60px; /* Ensure minimum height */
+        }
+
+        /* Conversations link styles */
+        .conversations-link {
+            color: var(--text-primary);
+            text-decoration: none;
+            cursor: pointer;
+            transition: color var(--transition-speed);
+        }
+
+        .conversations-link:hover {
+            color: var(--accent-color);
+        }
+
+        /* Message Styles Update */
+        .message.self {
+            align-items: flex-end;
+            margin-left: auto;
+        }
+        
+        .message.other {
+            align-items: flex-start;
+            margin-right: auto;
+        }
+        
+        .message.system {
+            align-items: center;
+            max-width: 90%;
+            margin: 10px auto;
+        }
+        
+        .message-content {
+            padding: 10px 15px;
+            border-radius: 18px;
+            position: relative;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            word-break: break-word;
+        }
+        
+        .message.self .message-content {
+            background-color: var(--message-self);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        /* New style for messages sent to AI */
+        .message.self.to-ai .message-content {
+            background-color: #43b581; /* Same green color as the AI button */
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.other .message-content {
+            background-color: var(--message-other);
+            color: var(--text-primary);
+            border-bottom-left-radius: 4px;
+        }
+        
+        /* New style for received messages intended for AI */
+        .message.other.to-ai .message-content {
+            background-color: #43b581; /* Same green color as the AI button */
+            color: white;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message.system .message-content {
+            background-color: var(--message-system);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-style: italic;
+            font-size: 13px;
+            text-align: center;
+        }
+        
+        /* Empty AI response group styles */
+        .ai-response-group.empty-group {
+            background-color: rgba(67, 181, 129, 0.05);
+            border: 1px dashed rgba(67, 181, 129, 0.2);
+        }
+        
+        .empty-group .ai-response-count {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .empty-group .fa-spin {
+            color: var(--accent-color);
+        }
+        
+        /* Placeholder response styling */
+        .placeholder-response {
+            opacity: 0.8;
+        }
+        
+        .placeholder-loading {
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .dot-loading {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            margin: 0 3px;
+            animation: dotPulse 1.5s infinite;
+        }
+        
+        .dot-loading:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .dot-loading:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes dotPulse {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.8); opacity: 0.5; }
+        }
+        
+        /* Placeholder response styling */
+        .placeholder-group {
+            background-color: rgba(67, 181, 129, 0.05);
+            border: 1px dashed rgba(67, 181, 129, 0.3);
+            margin: 10px 0;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+        
+        .typing-indicator {
+            padding: 15px;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+        }
+        
+        .typing-indicator span {
+            height: 10px;
+            width: 10px;
+            margin: 0 2px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            display: inline-block;
+            opacity: 0.4;
+        }
+        
+        .typing-indicator span:nth-of-type(1) {
+            animation: pulse 1s infinite ease-in-out;
+        }
+        
+        .typing-indicator span:nth-of-type(2) {
+            animation: pulse 1s infinite ease-in-out .2s;
+        }
+        
+        .typing-indicator span:nth-of-type(3) {
+            animation: pulse 1s infinite ease-in-out .4s;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.4; }
+            50% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.4; }
+        }
+        
+        .loading-animation {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent-color);
+        }
+        
+        .loading-animation i {
+            color: var(--accent-color);
+        }
+        
+        .placeholder-message {
+            padding: 10px;
+            background-color: rgba(67, 181, 129, 0.05);
+            border-radius: 8px;
+        }
+        
+        /* Update chat interface */
+        #chat-interface {
+            display: none; 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column;
+            height: 100%;  /* Ensure it takes full height */
+            overflow: hidden;  /* Contain the overflow */
+        }
     </style>
 </head>
 <body>
     <div class="app-container">
         <div class="sidebar">
             <div class="sidebar-header">
-                <h2>Conversations</h2>
+                <h2><a href="/" id="conversations-link" class="conversations-link">Conversations</a></h2>
                 <button id="new-chat-btn" class="new-chat-btn">
                     <i class="fas fa-plus"></i>
                     <span>New Chat</span>
@@ -938,6 +1312,63 @@
             messageInput.focus();
         }
         
+        // Keep track of expanded AI response groups
+        const expandedResponseGroups = {};
+        
+        // Track all scrollable elements
+        function saveAllScrollPositions() {
+            const scrollableElements = {};
+            
+            // Find all scrollable elements and save their position
+            document.querySelectorAll('.ai-summary-content, .ai-response-body.expanded').forEach(el => {
+                // Find containing response group to identify this element
+                const parentGroup = el.closest('.ai-response-group');
+                if (parentGroup && parentGroup.dataset.msgId) {
+                    const messageId = parentGroup.dataset.msgId;
+                    const isBody = el.classList.contains('ai-response-body');
+                    const key = isBody ? `body-${messageId}` : `summary-${messageId}`;
+                    
+                    scrollableElements[key] = {
+                        scrollTop: el.scrollTop,
+                        element: el,
+                        selector: isBody ? 
+                            `.ai-response-group[data-msg-id="${messageId}"] .ai-response-body` : 
+                            `.ai-response-group[data-msg-id="${messageId}"] .ai-summary-content`
+                    };
+                }
+            });
+            
+            return scrollableElements;
+        }
+        
+        function restoreAllScrollPositions(savedPositions) {
+            // Wait a moment for DOM to update
+            setTimeout(() => {
+                for (const key in savedPositions) {
+                    const saved = savedPositions[key];
+                    if (saved.scrollTop > 0) {
+                        const element = document.querySelector(saved.selector);
+                        if (element) {
+                            element.scrollTop = saved.scrollTop;
+                        }
+                    }
+                }
+            }, 100);
+        }
+        
+        // Enhance the refreshMessages function to use our scroll position tracking
+        const originalRefreshMessages = refreshMessages;
+        refreshMessages = function() {
+            // Save scroll positions of all scrollable elements
+            const savedScrollPositions = saveAllScrollPositions();
+            
+            // Call the original refresh
+            originalRefreshMessages();
+            
+            // Restore all scroll positions
+            restoreAllScrollPositions(savedScrollPositions);
+        };
+        
         // Refresh messages for current conversation
         function refreshMessages() {
             if (!currentConversationId) return;
@@ -945,9 +1376,60 @@
             fetch(`/conversation/${currentConversationId}/messages`)
                 .then(response => response.json())
                 .then(data => {
+                    // Remember scroll position before refresh
+                    const scrollPos = chatMessages.scrollTop;
+                    const isAtBottom = chatMessages.scrollHeight - chatMessages.clientHeight <= chatMessages.scrollTop + 50;
+                    
+                    // Save all existing AI response groups for potential reuse
+                    const existingResponseGroups = {};
+                    document.querySelectorAll('.ai-response-group[data-msg-id]').forEach(el => {
+                        const msgId = el.dataset.msgId;
+                        if (msgId && !msgId.startsWith('temp-')) { // Only save real response groups
+                            // Save expansion state and content
+                            existingResponseGroups[msgId] = {
+                                element: el,
+                                expanded: el.querySelector('.ai-response-body.expanded') !== null,
+                                summaryContent: el.querySelector('.ai-summary-content')?.innerHTML || ''
+                            };
+                        }
+                    });
+                    
+                    // Store all existing temp elements before clearing the chat
+                    const tempElements = [];
+                    document.querySelectorAll('.ai-response-group[data-msg-id^="temp-"]').forEach(el => {
+                        tempElements.push({
+                            element: el.cloneNode(true),
+                            id: el.dataset.msgId,
+                            messageContent: el.previousElementSibling?.querySelector('.message-content')?.textContent || ''
+                        });
+                    });
+                    
                     chatMessages.innerHTML = '';
                     
+                    // Group AI responses by the message they are replying to
+                    const aiResponseGroups = {};
+                    const messagesToRender = [];
+                    const messageIds = new Set(); // Track all real message IDs
+                    
                     data.messages.forEach(msg => {
+                        if (msg.message_id) {
+                            messageIds.add(msg.message_id);
+                        }
+                        
+                        if (msg.is_ai_response && msg.reply_to_message_id) {
+                            // This is an AI response to a specific message
+                            if (!aiResponseGroups[msg.reply_to_message_id]) {
+                                aiResponseGroups[msg.reply_to_message_id] = [];
+                            }
+                            aiResponseGroups[msg.reply_to_message_id].push(msg);
+                        } else {
+                            // Regular message, add to render list
+                            messagesToRender.push(msg);
+                        }
+                    });
+                    
+                    // Render messages and AI response groups
+                    messagesToRender.forEach(msg => {
                         const messageEl = document.createElement('div');
                         if (msg.sender === 'System') {
                             messageEl.className = 'message system';
@@ -956,7 +1438,8 @@
                                 <div class="system-timestamp">${formatTimestamp(msg.timestamp)}</div>
                             `;
                         } else if (msg.is_self) {
-                            messageEl.className = 'message self';
+                            // Add to-ai class for messages directed to AI
+                            messageEl.className = msg.to_ai ? 'message self to-ai' : 'message self';
                             messageEl.innerHTML = `
                                 <div class="message-content">${msg.content}</div>
                                 <div class="message-meta">
@@ -965,21 +1448,281 @@
                                 </div>
                             `;
                         } else {
-                            messageEl.className = 'message other';
+                            // Add to-ai class for received messages directed to AI
+                            messageEl.className = msg.to_ai ? 'message other to-ai' : 'message other';
                             messageEl.innerHTML = `
                                 <div class="message-content">${msg.content}</div>
                                 <div class="message-meta">${msg.sender} • ${formatTimestamp(msg.timestamp)}</div>
                             `;
                         }
                         chatMessages.appendChild(messageEl);
+                        
+                        // Check if there are AI responses to this message
+                        if (aiResponseGroups[msg.message_id] && aiResponseGroups[msg.message_id].length > 0) {
+                            const responses = aiResponseGroups[msg.message_id];
+                            
+                            // Check if we already have this response group and can reuse it
+                            if (existingResponseGroups[msg.message_id]) {
+                                // Just reuse the existing response group element
+                                chatMessages.appendChild(existingResponseGroups[msg.message_id].element);
+                            } else {
+                                // Create a new response group
+                                renderAIResponseGroup(responses, msg.message_id);
+                            }
+                        }
                     });
                     
-                    // Scroll to bottom
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    // Re-add temporary response groups that don't have real responses yet
+                    tempElements.forEach(temp => {
+                        // Skip if we already have AI responses for this message ID
+                        // or if the message ID is now a real one
+                        if (temp.id && !temp.id.startsWith('temp-') && 
+                            aiResponseGroups[temp.id] && aiResponseGroups[temp.id].length > 0) {
+                            return;
+                        }
+                        
+                        // Find the message this temp group belongs to
+                        // We'll match based on content since the temp ID is likely different now
+                        let found = false;
+                        if (temp.messageContent) {
+                            document.querySelectorAll('.message.to-ai').forEach(msgEl => {
+                                const content = msgEl.querySelector('.message-content')?.textContent;
+                                if (content === temp.messageContent && !msgEl.nextElementSibling?.classList.contains('ai-response-group')) {
+                                    // Found matching message with no response group yet
+                                    chatMessages.insertBefore(temp.element, msgEl.nextSibling);
+                                    found = true;
+                                }
+                            });
+                        }
+                        
+                        // If we didn't find a matching message, just add it at the end
+                        if (!found && !document.querySelector(`.ai-response-group[data-msg-id="${temp.id}"]`)) {
+                            chatMessages.appendChild(temp.element);
+                        }
+                    });
+                    
+                    // Restore scroll position or scroll to bottom if needed
+                    if (isAtBottom) {
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    } else {
+                        chatMessages.scrollTop = scrollPos;
+                    }
+                    
+                    // Force scroll calculation after DOM has updated
+                    setTimeout(() => {
+                        if (isAtBottom) {
+                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                        }
+                    }, 100);
                 })
                 .catch(error => {
                     console.error('Error fetching messages:', error);
                 });
+        }
+        
+        // Restore and enhance the renderAIResponseGroup function
+        function renderAIResponseGroup(responses, messageId) {
+            if (!responses || responses.length === 0) return;
+            
+            // Save scroll position if replacing an existing element
+            let previousBodyScrollTop = 0;
+            let previousSummaryScrollTop = 0;
+            const existingGroup = document.querySelector(`.ai-response-group[data-msg-id="${messageId}"]`);
+            if (existingGroup) {
+                const bodyEl = existingGroup.querySelector('.ai-response-body');
+                const summaryEl = existingGroup.querySelector('.ai-summary-content');
+                if (bodyEl) previousBodyScrollTop = bodyEl.scrollTop;
+                if (summaryEl) previousSummaryScrollTop = summaryEl.scrollTop;
+            }
+            
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'ai-response-group';
+            groupDiv.dataset.msgId = messageId;
+            
+            // Sort responses by timestamp
+            responses.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
+            // Create the header
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'ai-response-header';
+            
+            // Create the summary section with improved layout
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = 'ai-response-summary';
+            summaryDiv.innerHTML = `
+                <div class="ai-response-title">
+                    <i class="fas fa-robot"></i> AI Response
+                </div>
+                <div class="ai-response-count">
+                    <span>${responses.length} ${responses.length > 1 ? 'answers' : 'answer'}</span>
+                    <i class="fas fa-chevron-down dropdown-icon"></i>
+                </div>
+            `;
+            
+            // Create a loading placeholder for the summary content
+            const summaryContent = document.createElement('div');
+            summaryContent.className = 'ai-summary-content';
+            summaryContent.innerHTML = '<div class="ai-summary-loading"><i class="fas fa-circle-notch fa-spin"></i> Generating summary...</div>';
+            
+            // Create the body with all responses
+            const bodyDiv = document.createElement('div');
+            bodyDiv.className = 'ai-response-body';
+            
+            // Check if this group was previously expanded
+            if (expandedResponseGroups[messageId]) {
+                bodyDiv.classList.add('expanded');
+                headerDiv.querySelector('.dropdown-icon')?.classList.add('open');
+                groupDiv.style.minHeight = '500px'; // Set taller height for expanded state
+            } else {
+                groupDiv.style.minHeight = '220px'; // Set default collapsed height
+            }
+            
+            let bodyContent = '';
+            responses.forEach(response => {
+                const aiOwner = response.ai_sender || 'Unknown';
+                bodyContent += `
+                    <div class="ai-response-item">
+                        <div class="ai-response-from">
+                            <span>${aiOwner}'s AI</span>
+                            <span>${formatTimestamp(response.timestamp)}</span>
+                        </div>
+                        <div class="ai-response-content">${response.content}</div>
+                    </div>
+                `;
+            });
+            
+            bodyDiv.innerHTML = bodyContent;
+            
+            // Fetch the summary
+            fetchAISummary(currentConversationId, messageId)
+                .then(summary => {
+                    if (summary) {
+                        summaryContent.innerHTML = `<div class="ai-summary-text">${summary}</div>`;
+                    } else if (responses.length === 1) {
+                        // For a single response, just show the content
+                        summaryContent.innerHTML = `<div class="ai-summary-text">${responses[0].content}</div>`;
+                    } else {
+                        summaryContent.innerHTML = '<div class="ai-summary-error">No summary available. Please expand to see individual responses.</div>';
+                    }
+                    
+                    // Restore scroll positions after content is loaded
+                    setTimeout(() => {
+                        if (previousSummaryScrollTop > 0) {
+                            summaryContent.scrollTop = previousSummaryScrollTop;
+                        }
+                    }, 50);
+                })
+                .catch(error => {
+                    console.error('Error fetching AI summary:', error);
+                    summaryContent.innerHTML = '<div class="ai-summary-error">Error loading summary. Please expand to see individual responses.</div>';
+                });
+            
+            // Move click handler to the header div instead of the summary div
+            headerDiv.addEventListener('click', function(event) {
+                // Prevent event from bubbling up
+                event.stopPropagation();
+                
+                // Always allow toggling the expanded state regardless of where clicked
+                // We'll handle text selection separately with mousedown/up events
+                
+                // Toggle expanded state
+                bodyDiv.classList.toggle('expanded');
+                this.querySelector('.dropdown-icon')?.classList.toggle('open');
+                
+                // Store expansion state
+                expandedResponseGroups[messageId] = bodyDiv.classList.contains('expanded');
+                
+                // Adjust the min-height of the entire group based on expansion state
+                if (bodyDiv.classList.contains('expanded')) {
+                    // Expanded: set taller min-height
+                    groupDiv.style.minHeight = '500px';
+                } else {
+                    // Collapsed: set shorter min-height
+                    groupDiv.style.minHeight = '220px';
+                }
+            });
+            
+            // For text selection, we'll use mousedown/mouseup events on the summary content
+            let isSelecting = false;
+            let selectStartX = 0;
+            let selectStartY = 0;
+            
+            summaryContent.addEventListener('mousedown', function(event) {
+                isSelecting = true;
+                selectStartX = event.clientX;
+                selectStartY = event.clientY;
+                // Don't stop propagation here to allow for default text selection
+            });
+            
+            summaryContent.addEventListener('mousemove', function(event) {
+                if (isSelecting) {
+                    // If user has moved a significant distance, they're probably selecting text
+                    const dx = Math.abs(event.clientX - selectStartX);
+                    const dy = Math.abs(event.clientY - selectStartY);
+                    if (dx > 5 || dy > 5) {
+                        event.stopPropagation();
+                    }
+                }
+            });
+            
+            document.addEventListener('mouseup', function() {
+                isSelecting = false;
+            });
+            
+            // Prevent clicks inside the dropdown from closing it
+            bodyDiv.addEventListener('click', function(event) {
+                event.stopPropagation();
+            });
+            
+            // Prevent clicks inside summary content from toggling (for text selection)
+            summaryContent.addEventListener('click', function(event) {
+                event.stopPropagation();
+            });
+            
+            // Build the complete component
+            headerDiv.appendChild(summaryDiv);
+            headerDiv.appendChild(summaryContent);
+            groupDiv.appendChild(headerDiv);
+            groupDiv.appendChild(bodyDiv);
+            
+            // Replace existing element if present, otherwise append
+            if (existingGroup) {
+                chatMessages.replaceChild(groupDiv, existingGroup);
+            } else {
+                chatMessages.appendChild(groupDiv);
+            }
+            
+            // Restore scroll position after rendering
+            setTimeout(() => {
+                if (previousBodyScrollTop > 0 && bodyDiv.classList.contains('expanded')) {
+                    bodyDiv.scrollTop = previousBodyScrollTop;
+                }
+            }, 100);
+        }
+
+        // Modify fetchAISummary to cache results
+        let aiSummaryCache = {};
+        
+        async function fetchAISummary(conversationId, messageId) {
+            // Check cache first
+            const cacheKey = `${conversationId}:${messageId}`;
+            if (aiSummaryCache[cacheKey]) {
+                return aiSummaryCache[cacheKey];
+            }
+            
+            try {
+                const response = await fetch(`/conversation/${conversationId}/ai_summary/${messageId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    // Cache the result
+                    aiSummaryCache[cacheKey] = data.summary;
+                    return data.summary;
+                }
+                return null;
+            } catch (error) {
+                console.error('Error fetching summary:', error);
+                return null;
+            }
         }
         
         // Send a message in the current conversation
@@ -1011,6 +1754,9 @@
             });
         }
         
+        // Store for keeping track of placeholder responses
+        const placeholderResponses = {};
+        
         // Send a message to AI in the current conversation
         function sendAIMessage() {
             if (!currentConversationId) return;
@@ -1025,7 +1771,7 @@
                 },
                 body: JSON.stringify({ 
                     message,
-                    to_ai: true  // Indicate this is meant for AI
+                    to_ai: true
                 }),
             })
             .then(response => response.json())
@@ -1044,6 +1790,183 @@
                 console.error('Error sending message to AI:', error);
                 alert('Error sending message to AI. Please try again.');
             });
+        }
+        
+        
+        // Start polling for real responses
+        function startPollingForRealResponses(clientMessageId) {
+            if (!placeholderResponses[clientMessageId]) return;
+            
+            const realMessageId = placeholderResponses[clientMessageId].realMessageId;
+            
+            // Set up a recurring check
+            const checkInterval = setInterval(() => {
+                if (!currentConversationId || 
+                    !placeholderResponses[clientMessageId] ||
+                    !document.querySelector(`.placeholder-group[data-client-id="${clientMessageId}"]`)) {
+                    // Stop polling if conversation changed or placeholder was removed
+                    clearInterval(checkInterval);
+                    return;
+                }
+                
+                // Check for real responses
+                fetch(`/conversation/${currentConversationId}/messages`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Look for real AI responses
+                        const aiResponses = [];
+                        let targetMessageId = realMessageId;
+                        
+                        // If we don't have a real message ID yet, try to find it
+                        if (!targetMessageId) {
+                            // Look for messages matching our content
+                            const messageContent = placeholderResponses[clientMessageId].messageContent;
+                            for (const msg of data.messages) {
+                                if (msg.is_self && msg.content === messageContent && msg.to_ai) {
+                                    targetMessageId = msg.message_id;
+                                    placeholderResponses[clientMessageId].realMessageId = targetMessageId;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // Now look for responses to this message
+                        if (targetMessageId) {
+                            for (const msg of data.messages) {
+                                if (msg.is_ai_response && msg.reply_to_message_id === targetMessageId) {
+                                    aiResponses.push(msg);
+                                }
+                            }
+                        }
+                        
+                        // If we found responses, update the placeholder
+                        if (aiResponses.length > 0) {
+                            updatePlaceholderWithResponses(clientMessageId, aiResponses);
+                            
+                            // Stop polling after we find responses
+                            clearInterval(checkInterval);
+                            
+                            // Hide the indicator
+                            hideAIResponseIndicator();
+                            
+                            // Remove this from placeholders as it's now a real response
+                            delete placeholderResponses[clientMessageId];
+                            
+                            // Do a full refresh to sync everything
+                            setTimeout(refreshMessages, 2000);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking for responses:', error);
+                    });
+            }, 2000); // Check every 2 seconds
+            
+            // Set a timeout to stop polling after 1 minute
+            setTimeout(() => {
+                clearInterval(checkInterval);
+            }, 60000);
+        }
+        
+        // Check for AI responses in the background without destroying the UI
+        function checkForAIResponses(tempId, realId) {
+            if (!currentConversationId) return;
+            
+            fetch(`/conversation/${currentConversationId}/messages`)
+                .then(response => response.json())
+                .then(data => {
+                    // Look for AI responses to our message
+                    const aiResponses = [];
+                    
+                    data.messages.forEach(msg => {
+                        if (msg.is_ai_response && 
+                            (msg.reply_to_message_id === realId || 
+                             msg.reply_to_message_id === tempId)) {
+                            aiResponses.push(msg);
+                        }
+                    });
+                    
+                    // Update our temporary group if we found responses
+                    if (aiResponses.length > 0) {
+                        // Find the temporary group
+                        const tempGroup = document.querySelector(`.ai-response-group[data-msg-id="${tempId}"]`) || 
+                                          document.querySelector(`.ai-response-group[data-msg-id="${realId}"]`);
+                        
+                        if (tempGroup) {
+                            // Update count
+                            const countDisplay = tempGroup.querySelector('.ai-response-count');
+                            if (countDisplay) {
+                                countDisplay.innerHTML = `
+                                    ${aiResponses.length} ${aiResponses.length > 1 ? 'answers' : 'answer'} <i class="fas fa-chevron-down dropdown-icon"></i>
+                                `;
+                            }
+                            
+                            // Update body content
+                            const bodyDiv = tempGroup.querySelector('.ai-response-body');
+                            if (bodyDiv) {
+                                // Sort responses by timestamp
+                                aiResponses.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                                
+                                let bodyContent = '';
+                                aiResponses.forEach(response => {
+                                    const aiOwner = response.ai_sender || 'Unknown';
+                                    bodyContent += `
+                                        <div class="ai-response-item">
+                                            <div class="ai-response-from">
+                                                <span>${aiOwner}'s AI</span>
+                                                <span>${formatTimestamp(response.timestamp)}</span>
+                                            </div>
+                                            <div class="ai-response-content">${response.content}</div>
+                                        </div>
+                                    `;
+                                });
+                                
+                                bodyDiv.innerHTML = bodyContent;
+                            }
+                            
+                            // Update summary
+                            const summaryContent = tempGroup.querySelector('.ai-summary-content');
+                            if (summaryContent) {
+                                if (aiResponses.length === 1) {
+                                    // For a single response, just show the content
+                                    summaryContent.innerHTML = `<div class="ai-summary-text">${aiResponses[0].content}</div>`;
+                                } else if (aiResponses.length > 1) {
+                                    // Try to get a summary for multiple responses
+                                    fetchAISummary(currentConversationId, realId)
+                                        .then(summary => {
+                                            if (summary) {
+                                                summaryContent.innerHTML = `<div class="ai-summary-text">${summary}</div>`;
+                                            } else {
+                                                summaryContent.innerHTML = '<div class="ai-summary-text">Multiple AI responses received. Click to expand.</div>';
+                                            }
+                                        })
+                                        .catch(error => {
+                                            console.error('Error fetching AI summary:', error);
+                                            summaryContent.innerHTML = '<div class="ai-summary-text">Multiple AI responses received. Click to expand.</div>';
+                                        });
+                                }
+                            }
+                            
+                            // Remove empty-group class
+                            tempGroup.classList.remove('empty-group');
+                            
+                            // Hide AI response indicator
+                            hideAIResponseIndicator();
+                        }
+                    }
+                    
+                    // If we still have no responses, check again in 3 seconds
+                    if (aiResponses.length === 0) {
+                        setTimeout(() => {
+                            checkForAIResponses(tempId, realId);
+                        }, 3000);
+                    } else {
+                        // Do a full refresh after we've updated the UI
+                        setTimeout(refreshMessages, 5000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking for AI responses:', error);
+                });
         }
         
         // Modal functions
@@ -1190,7 +2113,7 @@
         
         // Set up periodic refreshes
         setInterval(loadConversations, 10000);  // Refresh conversation list every 10 seconds
-        setInterval(refreshMessages, 2000);     // Refresh messages every 2 seconds
+        setInterval(refreshMessages, 15000);     // Refresh messages less frequently (every 15 seconds)
 
         // Add this function to the JavaScript section
         function getDeliveryStatusHtml(message) {
@@ -1222,7 +2145,7 @@
 
         // AI Settings functionality
         let aiSettings = {
-            model: "llama2",
+            model: "llama3.2:latest",
             auto_respond: false,
             base_url: "http://localhost:11434"
         };
@@ -1373,7 +2296,148 @@
                     }, 500);
                 }
             };
+            
+            // Add click handler for the Conversations link
+            document.getElementById('conversations-link').addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Show welcome screen, hide chat interface
+                welcomeScreen.style.display = 'flex';
+                chatInterface.style.display = 'none';
+                currentConversationId = null;
+                
+                // Update URL without reloading
+                history.pushState({}, '', '/');
+                
+                // Clear active states in the sidebar
+                document.querySelectorAll('.conversation-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+            });
         });
+        
+        // Add a function to ensure scrolling to the bottom of the chat
+        function scrollToBottom() {
+            if (chatMessages) {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                // Do it again after a short delay to ensure all content is rendered
+                setTimeout(() => {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }, 100);
+            }
+        }
+        
+        // Modify the sendMessage function to scroll to bottom
+        const originalSendMessage = sendMessage;
+        sendMessage = function() {
+            // Call original function
+            originalSendMessage();
+            
+            // Scroll to bottom
+            scrollToBottom();
+        };
+        
+        // Also modify sendAIMessage to scroll to bottom
+        const originalSendAIMessage = sendAIMessage;
+        sendAIMessage = function() {
+            // Call original function
+            originalSendAIMessage();
+            
+            // Scroll to bottom
+            scrollToBottom();
+        };
+        
+        // Make sure to scroll to bottom when first selecting a conversation
+        const originalSelectConversation = selectConversation;
+        selectConversation = function(conversationId) {
+            // Call original function
+            originalSelectConversation(conversationId);
+            
+            // Scroll to bottom after a short delay to ensure messages are loaded
+            setTimeout(scrollToBottom, 300);
+        };
+
+        // Helper function to reattach event listeners to reused response groups
+        function reattachResponseGroupListeners(element, messageId, wasExpanded) {
+            // Find the header element and body element
+            const headerDiv = element.querySelector('.ai-response-header');
+            const bodyDiv = element.querySelector('.ai-response-body');
+            const summaryContent = element.querySelector('.ai-summary-content');
+            
+            if (!headerDiv || !bodyDiv) return;
+            
+            // Clear existing event listeners by cloning and replacing
+            const newHeaderDiv = headerDiv.cloneNode(true);
+            headerDiv.parentNode.replaceChild(newHeaderDiv, headerDiv);
+            
+            // Add click handler to toggle expanded state
+            newHeaderDiv.addEventListener('click', function(event) {
+                // Prevent event from bubbling up
+                event.stopPropagation();
+                
+                // Always toggle regardless of where clicked
+                
+                // Toggle expanded state
+                bodyDiv.classList.toggle('expanded');
+                this.querySelector('.dropdown-icon')?.classList.toggle('open');
+                
+                // Store expansion state
+                expandedResponseGroups[messageId] = bodyDiv.classList.contains('expanded');
+                
+                // Adjust the min-height of the entire group based on expansion state
+                if (bodyDiv.classList.contains('expanded')) {
+                    // Expanded: set taller min-height
+                    element.style.minHeight = '500px';
+                } else {
+                    // Collapsed: set shorter min-height
+                    element.style.minHeight = '220px';
+                }
+            });
+            
+            // For text selection in the summary content
+            if (summaryContent) {
+                let isSelecting = false;
+                let selectStartX = 0;
+                let selectStartY = 0;
+                
+                const newSummaryContent = summaryContent.cloneNode(true);
+                summaryContent.parentNode.replaceChild(newSummaryContent, summaryContent);
+                
+                newSummaryContent.addEventListener('mousedown', function(event) {
+                    isSelecting = true;
+                    selectStartX = event.clientX;
+                    selectStartY = event.clientY;
+                    // Don't stop propagation here
+                });
+                
+                newSummaryContent.addEventListener('mousemove', function(event) {
+                    if (isSelecting) {
+                        // If user has moved a significant distance, they're probably selecting text
+                        const dx = Math.abs(event.clientX - selectStartX);
+                        const dy = Math.abs(event.clientY - selectStartY);
+                        if (dx > 5 || dy > 5) {
+                            event.stopPropagation();
+                        }
+                    }
+                });
+            }
+            
+            // Prevent clicks inside the dropdown from closing it
+            bodyDiv.addEventListener('click', function(event) {
+                event.stopPropagation();
+            });
+            
+            // If it was expanded before, make sure it stays expanded
+            if (wasExpanded) {
+                bodyDiv.classList.add('expanded');
+                element.querySelector('.dropdown-icon')?.classList.add('open');
+                expandedResponseGroups[messageId] = true;
+                element.style.minHeight = '500px'; // Set the expanded height
+            } else {
+                element.style.minHeight = '220px'; // Set the collapsed height
+            }
+        }
     </script>
 </body>
 </html>
