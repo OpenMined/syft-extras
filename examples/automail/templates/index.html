@@ -292,6 +292,24 @@
             font-size: 11px;
             margin-top: 4px;
             color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .delivery-status {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 5px;
+            gap: 4px;
+        }
+        
+        .status-pending {
+            color: var(--text-muted);
+        }
+        
+        .status-delivered {
+            color: var(--success-color);
         }
         
         .system-timestamp {
@@ -325,6 +343,11 @@
         .message-input:focus {
             border-color: var(--accent-color);
         }
+
+        .send-buttons {
+            display: flex;
+            gap: 8px;
+        }
         
         .send-button {
             background-color: var(--accent-color);
@@ -346,6 +369,14 @@
         
         .send-button i {
             font-size: 16px;
+        }
+        
+        .send-ai-button {
+            background-color: #43b581; /* A different color for the AI button */
+        }
+        
+        .send-ai-button:hover {
+            background-color: #3ca374;
         }
         
         /* Welcome Screen */
@@ -529,6 +560,165 @@
                 font-size: 16px;
             }
         }
+        
+        /* Delivery status indicators */
+        .delivery-status {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 5px;
+            gap: 4px;
+        }
+        
+        .status-pending {
+            color: var(--text-muted);
+        }
+        
+        .status-delivered {
+            color: var(--success-color);
+        }
+        
+        /* Pie chart styles */
+        .pie-chart {
+            position: relative;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--bg-accent);
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .pie-percent-text {
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        
+        /* AI settings styles */
+        .ai-toggle-container {
+            margin-top: 10px;
+            padding: 10px 16px;
+            background-color: var(--bg-tertiary);
+            border-radius: var(--border-radius);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .ai-settings-btn {
+            color: var(--accent-color);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .ai-settings-btn:hover {
+            text-decoration: underline;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-accent);
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: var(--accent-color);
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(18px);
+        }
+        
+        /* AI settings modal */
+        .ai-settings-container {
+            margin-bottom: 15px;
+        }
+        
+        .ai-settings-container h4 {
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+        
+        .ai-status {
+            margin-top: 5px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .ai-response-indicator {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--bg-tertiary);
+            color: var(--accent-color);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+        
+        .ai-response-indicator.show {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .ai-dot {
+            height: 8px;
+            width: 8px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(0.8); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.8); opacity: 0.7; }
+        }
     </style>
 </head>
 <body>
@@ -544,6 +734,21 @@
             <div id="conversation-list" class="conversation-list">
                 <!-- Conversations will be populated here -->
                 <div class="no-conversations">No conversations yet</div>
+            </div>
+            <div class="ai-toggle-container">
+                <div>
+                    <label for="ai-toggle" class="ai-toggle-label">AI Auto-Respond</label>
+                    <div id="ai-status" class="ai-status">Disabled</div>
+                </div>
+                <div class="ai-controls">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="ai-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <button id="ai-settings-btn" class="ai-settings-btn">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
             </div>
             <div class="user-info">
                 <i class="fas fa-user-circle"></i>
@@ -576,10 +781,19 @@
                 </div>
                 <div class="message-form">
                     <input type="text" id="message-input" class="message-input" placeholder="Type a message..." autocomplete="off">
-                    <button id="send-button" class="send-button">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
+                    <div class="send-buttons">
+                        <button id="send-button" class="send-button" title="Send to humans">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                        <button id="send-ai-button" class="send-button send-ai-button" title="Send to AIs">
+                            <i class="fas fa-robot"></i>
+                        </button>
+                    </div>
                 </div>
+            </div>
+            <div id="ai-response-indicator" class="ai-response-indicator">
+                <span class="ai-dot"></span>
+                <span>AI is responding...</span>
             </div>
         </div>
     </div>
@@ -602,6 +816,32 @@
             <div class="modal-actions">
                 <button class="cancel-btn" onclick="closeNewChatModal()">Cancel</button>
                 <button id="create-conversation-btn" class="create-btn">Create Conversation</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ai-settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>AI Auto-Response Settings</h3>
+                <button class="close-modal" onclick="closeAISettingsModal()">&times;</button>
+            </div>
+            <div class="ai-settings-container">
+                <h4>Ollama Model</h4>
+                <select id="ai-model" class="form-control">
+                    <option value="llama3.2:latest">llama3.2:latest</option>
+                    <option value="mistral:latest">mistral:latest</option>
+                    <option value="llama3:latest">llama3:latest</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="ai-url">Ollama API URL</label>
+                <input type="text" id="ai-url" placeholder="http://localhost:11434">
+                <div class="form-error" id="ai-url-error"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="closeAISettingsModal()">Cancel</button>
+                <button id="save-ai-settings-btn" class="create-btn">Save Settings</button>
             </div>
         </div>
     </div>
@@ -719,7 +959,10 @@
                             messageEl.className = 'message self';
                             messageEl.innerHTML = `
                                 <div class="message-content">${msg.content}</div>
-                                <div class="message-meta">${formatTimestamp(msg.timestamp)}</div>
+                                <div class="message-meta">
+                                    ${formatTimestamp(msg.timestamp)}
+                                    ${getDeliveryStatusHtml(msg)}
+                                </div>
                             `;
                         } else {
                             messageEl.className = 'message other';
@@ -765,6 +1008,41 @@
             .catch(error => {
                 console.error('Error sending message:', error);
                 alert('Error sending message. Please try again.');
+            });
+        }
+        
+        // Send a message to AI in the current conversation
+        function sendAIMessage() {
+            if (!currentConversationId) return;
+            
+            const message = messageInput.value.trim();
+            if (!message) return;
+            
+            fetch(`/conversation/${currentConversationId}/send`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    message,
+                    to_ai: true  // Indicate this is meant for AI
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    messageInput.value = '';
+                    refreshMessages();
+                    
+                    // Always show the AI response indicator when sending directly to AI
+                    showAIResponseIndicator();
+                } else {
+                    alert(data.message || 'Failed to send message to AI');
+                }
+            })
+            .catch(error => {
+                console.error('Error sending message to AI:', error);
+                alert('Error sending message to AI. Please try again.');
             });
         }
         
@@ -815,9 +1093,20 @@
         document.getElementById('welcome-new-chat-btn').addEventListener('click', openNewChatModal);
         
         sendButton.addEventListener('click', sendMessage);
+        document.getElementById('send-ai-button').addEventListener('click', sendAIMessage);
+        
         messageInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
+                // Default behavior is to send to humans
                 sendMessage();
+            }
+        });
+        
+        // Add Ctrl+Enter to send to AI
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                sendAIMessage();
+                e.preventDefault();
             }
         });
         
@@ -902,6 +1191,189 @@
         // Set up periodic refreshes
         setInterval(loadConversations, 10000);  // Refresh conversation list every 10 seconds
         setInterval(refreshMessages, 2000);     // Refresh messages every 2 seconds
+
+        // Add this function to the JavaScript section
+        function getDeliveryStatusHtml(message) {
+            if (!message.is_self) return '';
+            
+            if (message.delivered) {
+                return '<span class="delivery-status status-delivered"><i class="fas fa-check"></i></span>';
+            } else {
+                // If we have delivery_percent, show a pie chart using conic-gradient
+                if (message.delivery_percent !== undefined) {
+                    const percent = message.delivery_percent;
+                    return `
+                        <span class="delivery-status">
+                            <div class="pie-chart" title="${percent}% delivered" 
+                                 style="background-image: conic-gradient(
+                                        var(--accent-color) 0% ${percent}%, 
+                                        var(--bg-accent) ${percent}% 100%
+                                      );">
+                            </div>
+                            <span class="pie-percent-text">${percent}%</span>
+                        </span>
+                    `;
+                } else {
+                    // Fallback to the original gray dot
+                    return '<span class="delivery-status status-pending"><i class="fas fa-circle"></i></span>';
+                }
+            }
+        }
+
+        // AI Settings functionality
+        let aiSettings = {
+            model: "llama2",
+            auto_respond: false,
+            base_url: "http://localhost:11434"
+        };
+        
+        function loadAISettings() {
+            fetch('/ai_settings')
+                .then(response => response.json())
+                .then(data => {
+                    aiSettings = data.settings;
+                    
+                    // Update UI
+                    document.getElementById('ai-toggle').checked = data.enabled;
+                    document.getElementById('ai-status').textContent = data.enabled ? 'Enabled' : 'Disabled';
+                    document.getElementById('ai-model').value = aiSettings.model;
+                    document.getElementById('ai-url').value = aiSettings.base_url;
+                })
+                .catch(error => {
+                    console.error('Error loading AI settings:', error);
+                });
+        }
+        
+        function updateAISettings(settings) {
+            fetch('/ai_settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(settings),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    aiSettings = data.settings;
+                    
+                    // Update UI
+                    document.getElementById('ai-toggle').checked = data.enabled;
+                    document.getElementById('ai-status').textContent = data.enabled ? 'Enabled' : 'Disabled';
+                    
+                    // Close modal if open
+                    closeAISettingsModal();
+                } else {
+                    alert(data.message || 'Failed to update AI settings');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating AI settings:', error);
+                alert('Error updating AI settings. Please try again.');
+            });
+        }
+        
+        function openAISettingsModal() {
+            document.getElementById('ai-settings-modal').style.display = 'flex';
+            document.getElementById('ai-model').value = aiSettings.model;
+            document.getElementById('ai-url').value = aiSettings.base_url;
+        }
+        
+        function closeAISettingsModal() {
+            document.getElementById('ai-settings-modal').style.display = 'none';
+        }
+        
+        // AI response indicator
+        function showAIResponseIndicator() {
+            const indicator = document.getElementById('ai-response-indicator');
+            indicator.classList.add('show');
+            
+            // Auto-hide after 20 seconds (failsafe)
+            setTimeout(() => {
+                hideAIResponseIndicator();
+            }, 20000);
+        }
+        
+        function hideAIResponseIndicator() {
+            const indicator = document.getElementById('ai-response-indicator');
+            indicator.classList.remove('show');
+        }
+        
+        // Set up event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // ... existing DOMContentLoaded code ...
+            
+            // Load AI settings
+            loadAISettings();
+            
+            // AI toggle listener
+            document.getElementById('ai-toggle').addEventListener('change', function(e) {
+                updateAISettings({ auto_respond: e.target.checked });
+            });
+            
+            // AI settings button listener
+            document.getElementById('ai-settings-btn').addEventListener('click', openAISettingsModal);
+            
+            // Save AI settings button
+            document.getElementById('save-ai-settings-btn').addEventListener('click', function() {
+                const model = document.getElementById('ai-model').value;
+                const baseUrl = document.getElementById('ai-url').value;
+                
+                // Basic URL validation
+                if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+                    document.getElementById('ai-url-error').textContent = 'URL must start with http:// or https://';
+                    document.getElementById('ai-url-error').style.display = 'block';
+                    return;
+                }
+                
+                document.getElementById('ai-url-error').style.display = 'none';
+                
+                // Get current enabled state
+                const autoRespond = document.getElementById('ai-toggle').checked;
+                
+                updateAISettings({
+                    model: model,
+                    base_url: baseUrl,
+                    auto_respond: autoRespond
+                });
+            });
+            
+            // Check for new message from server that has AI response indicator
+            const originalRefreshMessages = refreshMessages;
+            refreshMessages = function() {
+                // Remember previous message count
+                const prevMsgCount = currentConversationId ? 
+                    document.querySelectorAll('#chat-messages .message').length : 0;
+                
+                // Call original function
+                originalRefreshMessages();
+                
+                // After refreshing, check if new messages were added
+                setTimeout(() => {
+                    if (currentConversationId) {
+                        const newMsgCount = document.querySelectorAll('#chat-messages .message').length;
+                        if (newMsgCount > prevMsgCount) {
+                            // Hide any active AI response indicator
+                            hideAIResponseIndicator();
+                        }
+                    }
+                }, 100);
+            };
+            
+            // Show AI indicator when sending a message if AI is enabled
+            const originalSendMessage = sendMessage;
+            sendMessage = function() {
+                // Call original function
+                originalSendMessage();
+                
+                // Show indicator if AI is enabled
+                if (document.getElementById('ai-toggle').checked) {
+                    setTimeout(() => {
+                        showAIResponseIndicator();
+                    }, 500);
+                }
+            };
+        });
     </script>
 </body>
 </html>

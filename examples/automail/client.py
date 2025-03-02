@@ -7,9 +7,10 @@ import json
 import os
 import sys
 import uuid
+import requests
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Optional, Union, Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -45,6 +46,9 @@ class ChatMessage:
     conversation_name: str = None
     all_participants: List[str] = None
     ts: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    message_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    to_ai: bool = False  # Flag to indicate if message is specifically for AI
+    human_only: bool = False  # Flag to indicate this message should not get AI responses
     
     def to_dict(self):
         return {
@@ -53,13 +57,17 @@ class ChatMessage:
             "conversation_id": self.conversation_id,
             "conversation_name": self.conversation_name,
             "all_participants": self.all_participants,
-            "ts": self.ts.isoformat()
+            "ts": self.ts.isoformat(),
+            "message_id": self.message_id,
+            "to_ai": self.to_ai,
+            "human_only": self.human_only
         }
 
 
 class ChatResponse(BaseModel):
     status: str
     ts: datetime
+    message_id: str = None
 
 
 class Conversation:
@@ -94,6 +102,82 @@ class Conversation:
         }
 
 
+class OllamaHandler:
+    """Handler for Ollama AI integration"""
+    def __init__(self, base_url="http://localhost:11434", model="llama2"):
+        self.base_url = base_url
+        self.model = model
+        # The API endpoint is just /api/generate
+        self.api_url = f"{self.base_url}/api/generate"
+        
+    def generate_response(self, prompt: str) -> str:
+        """Generate a response using Ollama model"""
+        try:
+            # Updated payload structure to match Ollama API
+            payload = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False
+            }
+            
+            # Add debug logging
+            logger.info(f"Sending request to Ollama API at {self.api_url}")
+            logger.info(f"Using model: {self.model}")
+            
+            response = requests.post(self.api_url, json=payload)
+            logger.info(f"Ollama API response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("response", "Sorry, I couldn't generate a response.")
+            else:
+                # Try to get more details from the error response
+                try:
+                    error_details = response.json()
+                    return f"Error from Ollama API: {response.status_code} - {error_details.get('error', 'Unknown error')}"
+                except:
+                    return f"Error from Ollama API: {response.status_code}"
+        except Exception as e:
+            logger.error(f"Failed to connect to Ollama: {str(e)}")
+            return f"Failed to connect to Ollama: {str(e)}"
+    
+    def format_chat_prompt(self, sender: str, message: str, conversation_history: List[dict]) -> str:
+        """Format a prompt for the AI using conversation context"""
+        # Get last few messages for context (limit to 5 for brevity)
+        context_messages = conversation_history[-5:] if len(conversation_history) > 5 else conversation_history
+        
+        prompt = f"""You are an AI assistant helping to respond to chat messages.
+
+Recent conversation:
+"""
+        
+        # Add conversation context
+        for msg in context_messages:
+            sender_name = "You" if msg.get("is_self", False) else msg.get("sender", "Unknown")
+            prompt += f"{sender_name}: {msg.get('content', '')}\n"
+        
+        # Add the current message and request
+        prompt += f"\n{sender}: {message}\n\nPlease write a helpful and friendly response:"
+        
+        return prompt
+
+    def _check_available_models(self):
+        """Check what models are available in Ollama"""
+        try:
+            response = requests.get(f"{self.base_url}/api/tags")
+            if response.status_code == 200:
+                models = response.json().get("models", [])
+                model_names = [model["name"] for model in models]
+                logger.info(f"Available Ollama models: {model_names}")
+                return model_names
+            else:
+                logger.warning(f"Failed to get available models: {response.status_code}")
+                return []
+        except Exception as e:
+            logger.error(f"Error checking available models: {e}")
+            return []
+
+
 # Class to handle chat functionality
 class ChatClient:
     def __init__(self, config_path=None):
@@ -101,6 +185,18 @@ class ChatClient:
         self.running = True
         self.conversations = {}  # Dictionary of conversation_id -> Conversation
         self.conversation_lock = threading.Lock()
+        
+        # AI auto-response settings
+        self.ai_enabled = False
+        self.ollama_handler = OllamaHandler()
+        self.ai_settings = {
+            "model": "llama2",
+            "auto_respond": False,
+            "base_url": "http://localhost:11434"
+        }
+        
+        # Try to load AI settings
+        self._load_ai_settings()
         
         # Set up event handler for receiving messages
         self.box = SyftEvents("chat", client=self.client)
@@ -124,7 +220,11 @@ class ChatClient:
                 "sender": message.sender,
                 "timestamp": timestamp.isoformat(),
                 "is_self": False,
-                "conversation_id": message.conversation_id
+                "conversation_id": message.conversation_id,
+                "message_id": getattr(message, "message_id", str(uuid.uuid4())),
+                "delivered": True,  # Messages received are already delivered
+                "to_ai": getattr(message, "to_ai", False),  # Include the to_ai flag
+                "human_only": getattr(message, "human_only", False)  # Include the human_only flag
             }
             
             # Find or create conversation
@@ -165,10 +265,110 @@ class ChatClient:
             
             logger.info(f"Received message from {message.sender} in conversation {conversation_id}: {message.content}")
             
+            # Check if this message is specifically for AI or if we should auto-respond
+            to_ai = getattr(message, "to_ai", False)
+            if to_ai and message.sender != "System":
+                # Always process AI-targeted messages if AI is enabled
+                if self.ai_enabled:
+                    # Process in a separate thread to avoid blocking
+                    threading.Thread(
+                        target=self._process_ai_response,
+                        args=(conversation_id, message.sender, message.content),
+                        daemon=True
+                    ).start()
+                else:
+                    logger.info(f"Message from {message.sender} was sent to AI, but AI is disabled")
+            # Only auto-respond if explicitly enabled AND the message isn't marked as human-only
+            elif self.ai_enabled and self.ai_settings.get("auto_respond", False) and not getattr(message, "human_only", False) and message.sender != "System":
+                # Process in a separate thread to avoid blocking
+                threading.Thread(
+                    target=self._process_ai_response,
+                    args=(conversation_id, message.sender, message.content),
+                    daemon=True
+                ).start()
+            
             return ChatResponse(
                 status="delivered",
-                ts=datetime.now(timezone.utc)
+                ts=datetime.now(timezone.utc),
+                message_id=getattr(message, "message_id", None)
             )
+    
+    def _load_ai_settings(self):
+        """Load AI settings from file"""
+        settings_path = os.path.join(os.path.dirname(__file__), 'ai_settings.json')
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r') as f:
+                    settings = json.load(f)
+                    self.ai_settings.update(settings)
+                    
+                    # Update Ollama handler settings
+                    self.ollama_handler = OllamaHandler(
+                        base_url=self.ai_settings.get("base_url", "http://localhost:11434"),
+                        model=self.ai_settings.get("model", "llama3.2")
+                    )
+                    
+                    # Set AI enabled state
+                    self.ai_enabled = self.ai_settings.get("auto_respond", False)
+                    
+                    logger.info(f"Loaded AI settings: {self.ai_settings}")
+            except Exception as e:
+                logger.error(f"Error loading AI settings: {e}")
+    
+    def _save_ai_settings(self):
+        """Save AI settings to file"""
+        settings_path = os.path.join(os.path.dirname(__file__), 'ai_settings.json')
+        try:
+            with open(settings_path, 'w') as f:
+                json.dump(self.ai_settings, f, indent=2)
+            logger.info(f"Saved AI settings: {self.ai_settings}")
+        except Exception as e:
+            logger.error(f"Error saving AI settings: {e}")
+    
+    def _process_ai_response(self, conversation_id: str, sender: str, message: str):
+        """Process an AI response to an incoming message"""
+        try:
+            # Get conversation
+            conversation = self.get_conversation(conversation_id)
+            if not conversation:
+                logger.error(f"Conversation {conversation_id} not found for AI response")
+                return
+            
+            # Get conversation history
+            history = conversation.get_messages()
+            
+            # Generate AI response
+            prompt = self.ollama_handler.format_chat_prompt(sender, message, history)
+            ai_response = self.ollama_handler.generate_response(prompt)
+            
+            # Small delay to make the conversation feel more natural
+            time.sleep(1.5)
+            
+            # Send the response
+            self.send_message(conversation_id, ai_response)
+            
+            logger.info(f"Sent AI response in conversation {conversation_id}")
+        except Exception as e:
+            logger.error(f"Error generating AI response: {e}")
+    
+    def update_ai_settings(self, settings: dict):
+        """Update AI settings"""
+        self.ai_settings.update(settings)
+        
+        # Update Ollama handler if needed
+        if "base_url" in settings or "model" in settings:
+            self.ollama_handler = OllamaHandler(
+                base_url=self.ai_settings.get("base_url", "http://localhost:11434"),
+                model=self.ai_settings.get("model", "llama2")
+            )
+        
+        # Update AI enabled state
+        self.ai_enabled = self.ai_settings.get("auto_respond", False)
+        
+        # Save settings
+        self._save_ai_settings()
+        
+        return self.ai_settings
     
     def create_conversation(self, name: str, recipients: List[str]) -> str:
         """Create a new conversation with one or more recipients"""
@@ -255,7 +455,7 @@ class ChatClient:
         with self.conversation_lock:
             return [conv.to_dict() for conv in self.conversations.values()]
     
-    def send_message(self, conversation_id: str, content: str):
+    def send_message(self, conversation_id: str, content: str, to_ai: bool = False):
         """Send a message to all recipients in a conversation"""
         if not content or not conversation_id:
             return False
@@ -264,21 +464,33 @@ class ChatClient:
         if not conversation:
             return False
         
-        # Store message in conversation history first
+        # Generate a unique message ID
+        message_id = str(uuid.uuid4())
+        
+        # Store message in conversation history first with delivered=False
         timestamp = datetime.now(timezone.utc)
         formatted_message = {
             "content": content,
             "sender": self.client.email,
             "timestamp": timestamp.isoformat(),
             "is_self": True,
-            "conversation_id": conversation_id
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "delivered": False,  # Initially not delivered
+            "delivery_percent": 0,  # New field for tracking percentage
+            "delivered_to": [],  # Track which recipients have received the message
+            "to_ai": to_ai,  # Flag to indicate if message is for AI
+            "human_only": not to_ai  # If not to_ai, this is human-only
         }
         
         conversation.add_message(formatted_message)
-            
+        
         # Create a full list of all participants (including self)
         all_participants = conversation.recipients.copy()
         all_participants.append(self.client.email)
+        
+        # Total recipients count for percentage calculation
+        total_recipients = len(conversation.recipients)
         
         # Send message to each recipient
         for recipient in conversation.recipients:
@@ -290,7 +502,10 @@ class ChatClient:
                         sender=self.client.email,
                         conversation_id=conversation_id,
                         conversation_name=conversation.name,
-                        all_participants=all_participants  # Include all participants in the message
+                        all_participants=all_participants,  # Include all participants in the message
+                        message_id=message_id,
+                        to_ai=to_ai,  # Include the to_ai flag
+                        human_only=not to_ai  # If not to_ai, this is human-only
                     ),
                     expiry="5m",
                     cache=True,
@@ -301,8 +516,28 @@ class ChatClient:
                 def wait_for_response(recipient_email):
                     try:
                         response = future.wait(timeout=30)
-                        if response.status_code != 200:
-                            logger.error(f"Failed to deliver message to {recipient_email}: {response.status_code}")
+                        if response.status_code == 200:
+                            # Update delivery status when we get confirmation
+                            with self.conversation_lock:
+                                for msg in conversation.messages:
+                                    if msg.get("message_id") == message_id and msg.get("is_self"):
+                                        # Add to delivered_to list
+                                        if recipient_email not in msg.get("delivered_to", []):
+                                            msg.setdefault("delivered_to", []).append(recipient_email)
+                                        
+                                        # Calculate and update percentage
+                                        delivered_count = len(msg.get("delivered_to", []))
+                                        # Exclude "System" from the recipient count
+                                        actual_recipients = [r for r in conversation.recipients if r != "System"]
+                                        actual_recipient_count = len(actual_recipients)
+                                        if actual_recipient_count > 0:
+                                            msg["delivery_percent"] = int((delivered_count / actual_recipient_count) * 100)
+                                        
+                                        # If all recipients have received, mark as fully delivered
+                                        if delivered_count >= actual_recipient_count:
+                                            msg["delivered"] = True
+                    # else:
+                    #     logger.error(f"Failed to deliver message to {recipient_email}: {response.status_code}")
                     except Exception as e:
                         logger.error(f"Error sending message to {recipient_email}: {e}")
                         
@@ -364,8 +599,9 @@ def create_flask_app(chat_client):
     def send_message(conversation_id):
         data = request.json
         message = data.get('message', '')
+        to_ai = data.get('to_ai', False)  # Check if this is for AI
         
-        if message and chat_client.send_message(conversation_id, message):
+        if message and chat_client.send_message(conversation_id, message, to_ai=to_ai):
             return jsonify({"status": "success"})
         return jsonify({"status": "error", "message": "Failed to send message"})
     
@@ -391,6 +627,84 @@ def create_flask_app(chat_client):
         except Exception as e:
             logger.error(f"Error creating conversation: {e}")
             return jsonify({"status": "error", "message": str(e)})
+    
+    @app.route('/ai_settings', methods=['GET'])
+    def get_ai_settings():
+        """Get current AI settings"""
+        return jsonify({
+            "settings": chat_client.ai_settings,
+            "enabled": chat_client.ai_enabled
+        })
+    
+    @app.route('/ai_settings', methods=['POST'])
+    def update_ai_settings():
+        """Update AI settings"""
+        data = request.json
+        try:
+            updated_settings = chat_client.update_ai_settings(data)
+            return jsonify({
+                "status": "success",
+                "settings": updated_settings,
+                "enabled": chat_client.ai_enabled
+            })
+        except Exception as e:
+            logger.error(f"Error updating AI settings: {e}")
+            return jsonify({
+                "status": "error",
+                "message": str(e)
+            })
+    
+    @app.route('/test_ollama', methods=['GET'])
+    def test_ollama():
+        """Test the Ollama API connection"""
+        try:
+            base_url = chat_client.ai_settings.get("base_url", "http://localhost:11434")
+            model = chat_client.ai_settings.get("model", "llama2")
+            
+            # First, check if the Ollama server is running
+            try:
+                server_response = requests.get(f"{base_url}/api/version")
+                server_status = server_response.status_code == 200
+                server_version = server_response.json().get("version", "unknown") if server_status else "not available"
+            except:
+                server_status = False
+                server_version = "not available"
+            
+            # Then check if the model is available
+            try:
+                models_response = requests.get(f"{base_url}/api/tags")
+                if models_response.status_code == 200:
+                    all_models = models_response.json().get("models", [])
+                    available_models = [m["name"] for m in all_models]
+                    model_available = model in available_models
+                else:
+                    available_models = []
+                    model_available = False
+            except:
+                available_models = []
+                model_available = False
+            
+            return jsonify({
+                "status": "success" if server_status else "error",
+                "server": {
+                    "running": server_status,
+                    "url": base_url,
+                    "version": server_version
+                },
+                "models": {
+                    "available": available_models,
+                    "selected": model,
+                    "is_available": model_available
+                },
+                "next_steps": "Pull the model" if (server_status and not model_available) else (
+                    "Install and start Ollama" if not server_status else "Ready to use"
+                )
+            })
+        except Exception as e:
+            return jsonify({
+                "status": "error",
+                "message": str(e)
+            })
     
     return app
 
@@ -696,6 +1010,24 @@ def create_html_templates(templates_dir):
             font-size: 11px;
             margin-top: 4px;
             color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .delivery-status {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 5px;
+            gap: 4px;
+        }
+        
+        .status-pending {
+            color: var(--text-muted);
+        }
+        
+        .status-delivered {
+            color: var(--success-color);
         }
         
         .system-timestamp {
@@ -729,6 +1061,11 @@ def create_html_templates(templates_dir):
         .message-input:focus {
             border-color: var(--accent-color);
         }
+
+        .send-buttons {
+            display: flex;
+            gap: 8px;
+        }
         
         .send-button {
             background-color: var(--accent-color);
@@ -750,6 +1087,14 @@ def create_html_templates(templates_dir):
         
         .send-button i {
             font-size: 16px;
+        }
+        
+        .send-ai-button {
+            background-color: #43b581; /* A different color for the AI button */
+        }
+        
+        .send-ai-button:hover {
+            background-color: #3ca374;
         }
         
         /* Welcome Screen */
@@ -933,6 +1278,165 @@ def create_html_templates(templates_dir):
                 font-size: 16px;
             }
         }
+        
+        /* Delivery status indicators */
+        .delivery-status {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 5px;
+            gap: 4px;
+        }
+        
+        .status-pending {
+            color: var(--text-muted);
+        }
+        
+        .status-delivered {
+            color: var(--success-color);
+        }
+        
+        /* Pie chart styles */
+        .pie-chart {
+            position: relative;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--bg-accent);
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .pie-percent-text {
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        
+        /* AI settings styles */
+        .ai-toggle-container {
+            margin-top: 10px;
+            padding: 10px 16px;
+            background-color: var(--bg-tertiary);
+            border-radius: var(--border-radius);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .ai-settings-btn {
+            color: var(--accent-color);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .ai-settings-btn:hover {
+            text-decoration: underline;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-accent);
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: var(--accent-color);
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(18px);
+        }
+        
+        /* AI settings modal */
+        .ai-settings-container {
+            margin-bottom: 15px;
+        }
+        
+        .ai-settings-container h4 {
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+        
+        .ai-status {
+            margin-top: 5px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .ai-response-indicator {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--bg-tertiary);
+            color: var(--accent-color);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+        
+        .ai-response-indicator.show {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .ai-dot {
+            height: 8px;
+            width: 8px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(0.8); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.8); opacity: 0.7; }
+        }
     </style>
 </head>
 <body>
@@ -948,6 +1452,21 @@ def create_html_templates(templates_dir):
             <div id="conversation-list" class="conversation-list">
                 <!-- Conversations will be populated here -->
                 <div class="no-conversations">No conversations yet</div>
+            </div>
+            <div class="ai-toggle-container">
+                <div>
+                    <label for="ai-toggle" class="ai-toggle-label">AI Auto-Respond</label>
+                    <div id="ai-status" class="ai-status">Disabled</div>
+                </div>
+                <div class="ai-controls">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="ai-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <button id="ai-settings-btn" class="ai-settings-btn">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
             </div>
             <div class="user-info">
                 <i class="fas fa-user-circle"></i>
@@ -980,10 +1499,19 @@ def create_html_templates(templates_dir):
                 </div>
                 <div class="message-form">
                     <input type="text" id="message-input" class="message-input" placeholder="Type a message..." autocomplete="off">
-                    <button id="send-button" class="send-button">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
+                    <div class="send-buttons">
+                        <button id="send-button" class="send-button" title="Send to humans">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                        <button id="send-ai-button" class="send-button send-ai-button" title="Send to AIs">
+                            <i class="fas fa-robot"></i>
+                        </button>
+                    </div>
                 </div>
+            </div>
+            <div id="ai-response-indicator" class="ai-response-indicator">
+                <span class="ai-dot"></span>
+                <span>AI is responding...</span>
             </div>
         </div>
     </div>
@@ -1006,6 +1534,32 @@ def create_html_templates(templates_dir):
             <div class="modal-actions">
                 <button class="cancel-btn" onclick="closeNewChatModal()">Cancel</button>
                 <button id="create-conversation-btn" class="create-btn">Create Conversation</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ai-settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>AI Auto-Response Settings</h3>
+                <button class="close-modal" onclick="closeAISettingsModal()">&times;</button>
+            </div>
+            <div class="ai-settings-container">
+                <h4>Ollama Model</h4>
+                <select id="ai-model" class="form-control">
+                    <option value="llama3.2:latest">llama3.2:latest</option>
+                    <option value="mistral:latest">mistral:latest</option>
+                    <option value="llama3:latest">llama3:latest</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="ai-url">Ollama API URL</label>
+                <input type="text" id="ai-url" placeholder="http://localhost:11434">
+                <div class="form-error" id="ai-url-error"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="closeAISettingsModal()">Cancel</button>
+                <button id="save-ai-settings-btn" class="create-btn">Save Settings</button>
             </div>
         </div>
     </div>
@@ -1123,7 +1677,10 @@ def create_html_templates(templates_dir):
                             messageEl.className = 'message self';
                             messageEl.innerHTML = `
                                 <div class="message-content">${msg.content}</div>
-                                <div class="message-meta">${formatTimestamp(msg.timestamp)}</div>
+                                <div class="message-meta">
+                                    ${formatTimestamp(msg.timestamp)}
+                                    ${getDeliveryStatusHtml(msg)}
+                                </div>
                             `;
                         } else {
                             messageEl.className = 'message other';
@@ -1169,6 +1726,41 @@ def create_html_templates(templates_dir):
             .catch(error => {
                 console.error('Error sending message:', error);
                 alert('Error sending message. Please try again.');
+            });
+        }
+        
+        // Send a message to AI in the current conversation
+        function sendAIMessage() {
+            if (!currentConversationId) return;
+            
+            const message = messageInput.value.trim();
+            if (!message) return;
+            
+            fetch(`/conversation/${currentConversationId}/send`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    message,
+                    to_ai: true  // Indicate this is meant for AI
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    messageInput.value = '';
+                    refreshMessages();
+                    
+                    // Always show the AI response indicator when sending directly to AI
+                    showAIResponseIndicator();
+                } else {
+                    alert(data.message || 'Failed to send message to AI');
+                }
+            })
+            .catch(error => {
+                console.error('Error sending message to AI:', error);
+                alert('Error sending message to AI. Please try again.');
             });
         }
         
@@ -1219,9 +1811,20 @@ def create_html_templates(templates_dir):
         document.getElementById('welcome-new-chat-btn').addEventListener('click', openNewChatModal);
         
         sendButton.addEventListener('click', sendMessage);
+        document.getElementById('send-ai-button').addEventListener('click', sendAIMessage);
+        
         messageInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
+                // Default behavior is to send to humans
                 sendMessage();
+            }
+        });
+        
+        // Add Ctrl+Enter to send to AI
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                sendAIMessage();
+                e.preventDefault();
             }
         });
         
@@ -1306,6 +1909,189 @@ def create_html_templates(templates_dir):
         // Set up periodic refreshes
         setInterval(loadConversations, 10000);  // Refresh conversation list every 10 seconds
         setInterval(refreshMessages, 2000);     // Refresh messages every 2 seconds
+
+        // Add this function to the JavaScript section
+        function getDeliveryStatusHtml(message) {
+            if (!message.is_self) return '';
+            
+            if (message.delivered) {
+                return '<span class="delivery-status status-delivered"><i class="fas fa-check"></i></span>';
+            } else {
+                // If we have delivery_percent, show a pie chart using conic-gradient
+                if (message.delivery_percent !== undefined) {
+                    const percent = message.delivery_percent;
+                    return `
+                        <span class="delivery-status">
+                            <div class="pie-chart" title="${percent}% delivered" 
+                                 style="background-image: conic-gradient(
+                                        var(--accent-color) 0% ${percent}%, 
+                                        var(--bg-accent) ${percent}% 100%
+                                      );">
+                            </div>
+                            <span class="pie-percent-text">${percent}%</span>
+                        </span>
+                    `;
+                } else {
+                    // Fallback to the original gray dot
+                    return '<span class="delivery-status status-pending"><i class="fas fa-circle"></i></span>';
+                }
+            }
+        }
+
+        // AI Settings functionality
+        let aiSettings = {
+            model: "llama2",
+            auto_respond: false,
+            base_url: "http://localhost:11434"
+        };
+        
+        function loadAISettings() {
+            fetch('/ai_settings')
+                .then(response => response.json())
+                .then(data => {
+                    aiSettings = data.settings;
+                    
+                    // Update UI
+                    document.getElementById('ai-toggle').checked = data.enabled;
+                    document.getElementById('ai-status').textContent = data.enabled ? 'Enabled' : 'Disabled';
+                    document.getElementById('ai-model').value = aiSettings.model;
+                    document.getElementById('ai-url').value = aiSettings.base_url;
+                })
+                .catch(error => {
+                    console.error('Error loading AI settings:', error);
+                });
+        }
+        
+        function updateAISettings(settings) {
+            fetch('/ai_settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(settings),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    aiSettings = data.settings;
+                    
+                    // Update UI
+                    document.getElementById('ai-toggle').checked = data.enabled;
+                    document.getElementById('ai-status').textContent = data.enabled ? 'Enabled' : 'Disabled';
+                    
+                    // Close modal if open
+                    closeAISettingsModal();
+                } else {
+                    alert(data.message || 'Failed to update AI settings');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating AI settings:', error);
+                alert('Error updating AI settings. Please try again.');
+            });
+        }
+        
+        function openAISettingsModal() {
+            document.getElementById('ai-settings-modal').style.display = 'flex';
+            document.getElementById('ai-model').value = aiSettings.model;
+            document.getElementById('ai-url').value = aiSettings.base_url;
+        }
+        
+        function closeAISettingsModal() {
+            document.getElementById('ai-settings-modal').style.display = 'none';
+        }
+        
+        // AI response indicator
+        function showAIResponseIndicator() {
+            const indicator = document.getElementById('ai-response-indicator');
+            indicator.classList.add('show');
+            
+            // Auto-hide after 20 seconds (failsafe)
+            setTimeout(() => {
+                hideAIResponseIndicator();
+            }, 20000);
+        }
+        
+        function hideAIResponseIndicator() {
+            const indicator = document.getElementById('ai-response-indicator');
+            indicator.classList.remove('show');
+        }
+        
+        // Set up event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // ... existing DOMContentLoaded code ...
+            
+            // Load AI settings
+            loadAISettings();
+            
+            // AI toggle listener
+            document.getElementById('ai-toggle').addEventListener('change', function(e) {
+                updateAISettings({ auto_respond: e.target.checked });
+            });
+            
+            // AI settings button listener
+            document.getElementById('ai-settings-btn').addEventListener('click', openAISettingsModal);
+            
+            // Save AI settings button
+            document.getElementById('save-ai-settings-btn').addEventListener('click', function() {
+                const model = document.getElementById('ai-model').value;
+                const baseUrl = document.getElementById('ai-url').value;
+                
+                // Basic URL validation
+                if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+                    document.getElementById('ai-url-error').textContent = 'URL must start with http:// or https://';
+                    document.getElementById('ai-url-error').style.display = 'block';
+                    return;
+                }
+                
+                document.getElementById('ai-url-error').style.display = 'none';
+                
+                // Get current enabled state
+                const autoRespond = document.getElementById('ai-toggle').checked;
+                
+                updateAISettings({
+                    model: model,
+                    base_url: baseUrl,
+                    auto_respond: autoRespond
+                });
+            });
+            
+            // Check for new message from server that has AI response indicator
+            const originalRefreshMessages = refreshMessages;
+            refreshMessages = function() {
+                // Remember previous message count
+                const prevMsgCount = currentConversationId ? 
+                    document.querySelectorAll('#chat-messages .message').length : 0;
+                
+                // Call original function
+                originalRefreshMessages();
+                
+                // After refreshing, check if new messages were added
+                setTimeout(() => {
+                    if (currentConversationId) {
+                        const newMsgCount = document.querySelectorAll('#chat-messages .message').length;
+                        if (newMsgCount > prevMsgCount) {
+                            // Hide any active AI response indicator
+                            hideAIResponseIndicator();
+                        }
+                    }
+                }, 100);
+            };
+            
+            // Show AI indicator when sending a message if AI is enabled
+            const originalSendMessage = sendMessage;
+            sendMessage = function() {
+                // Call original function
+                originalSendMessage();
+                
+                // Show indicator if AI is enabled
+                if (document.getElementById('ai-toggle').checked) {
+                    setTimeout(() => {
+                        showAIResponseIndicator();
+                    }, 500);
+                }
+            };
+        });
     </script>
 </body>
 </html>
