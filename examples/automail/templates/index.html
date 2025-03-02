@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,1094 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Syft Chat</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --bg-primary: #121212;
-            --bg-secondary: #1e1e1e;
-            --bg-tertiary: #252525;
-            --bg-accent: #2d2d2d;
-            --text-primary: #e0e0e0;
-            --text-secondary: #a0a0a0;
-            --text-muted: #6e6e6e;
-            --accent-color: #7289da;
-            --accent-hover: #5f73bc;
-            --danger-color: #f04747;
-            --success-color: #43b581;
-            --border-color: #333333;
-            --message-self: #3b4b8a;
-            --message-other: #2f3136;
-            --message-system: rgba(255, 255, 255, 0.05);
-            --sidebar-width: 280px;
-            --header-height: 60px;
-            --input-height: 70px;
-            --transition-speed: 0.2s;
-            --border-radius: 8px;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .app-container {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-            height: 100vh;
-        }
-        
-        /* Sidebar Styles */
-        .sidebar {
-            width: var(--sidebar-width);
-            background-color: var(--bg-secondary);
-            display: flex;
-            flex-direction: column;
-            border-right: 1px solid var(--border-color);
-            transition: width var(--transition-speed);
-        }
-        
-        .sidebar-header {
-            height: var(--header-height);
-            padding: 0 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .sidebar-header h2 {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-        
-        .new-chat-btn {
-            background-color: var(--accent-color);
-            color: white;
-            border: none;
-            padding: 8px 14px;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: background-color var(--transition-speed);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        
-        .new-chat-btn:hover {
-            background-color: var(--accent-hover);
-        }
-        
-        .new-chat-btn i {
-            font-size: 12px;
-        }
-        
-        .user-info {
-            font-size: 12px;
-            color: var(--text-secondary);
-            padding: 12px 16px;
-            background-color: var(--bg-tertiary);
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .user-info i {
-            color: var(--accent-color);
-            font-size: 14px;
-        }
-        
-        .conversation-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px 0;
-        }
-        
-        .conversation-list::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .conversation-list::-webkit-scrollbar-thumb {
-            background-color: var(--bg-accent);
-            border-radius: 3px;
-        }
-        
-        .conversation-list::-webkit-scrollbar-track {
-            background-color: var(--bg-secondary);
-        }
-        
-        .conversation-item {
-            padding: 12px 16px;
-            cursor: pointer;
-            transition: background-color var(--transition-speed);
-            border-radius: 4px;
-            margin: 2px 8px;
-        }
-        
-        .conversation-item:hover {
-            background-color: var(--bg-accent);
-        }
-        
-        .conversation-item.active {
-            background-color: rgba(114, 137, 218, 0.15);
-            border-left: 3px solid var(--accent-color);
-        }
-        
-        .conversation-title {
-            font-weight: 600;
-            font-size: 15px;
-            margin-bottom: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            color: var(--text-primary);
-        }
-        
-        .conversation-details {
-            font-size: 12px;
-            color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        .no-conversations {
-            padding: 20px 16px;
-            text-align: center;
-            color: var(--text-muted);
-            font-style: italic;
-            font-size: 14px;
-        }
-        
-        /* Main Content Styles */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background-color: var(--bg-primary);
-            position: relative;
-            height: 100%;  /* Ensure full height */
-            overflow: hidden;  /* Add this to prevent content overflow */
-        }
-        
-        .chat-header {
-            height: var(--header-height);
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
-            padding: 0 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-            z-index: 10;
-            flex-shrink: 0;  /* Prevent header from shrinking */
-        }
-        
-        .chat-header h2 {
-            font-size: 18px;
-            font-weight: 600;
-            margin: 0;
-        }
-        
-        .chat-recipients {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-top: 4px;
-        }
-        
-        .chat-messages {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            background-color: var(--bg-primary);
-            scroll-behavior: smooth;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;  /* Critical for allowing flex containers to scroll */
-        }
-        
-        .chat-messages::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .chat-messages::-webkit-scrollbar-thumb {
-            background-color: var(--bg-accent);
-            border-radius: 3px;
-        }
-        
-        .chat-messages::-webkit-scrollbar-track {
-            background-color: var(--bg-primary);
-        }
-        
-        .message {
-            margin-bottom: 16px;
-            display: flex;
-            flex-direction: column;
-            max-width: 80%;
-        }
-        
-        .message.self {
-            align-items: flex-end;
-            margin-left: auto;
-        }
-        
-        .message.other {
-            align-items: flex-start;
-            margin-right: auto;
-        }
-        
-        .message.system {
-            align-items: center;
-            max-width: 90%;
-            margin: 10px auto;
-        }
-        
-        .message-content {
-            padding: 10px 15px;
-            border-radius: 18px;
-            position: relative;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-            word-break: break-word;
-        }
-        
-        .message.self .message-content {
-            background-color: var(--message-self);
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-        
-        .message.other .message-content {
-            background-color: var(--message-other);
-            color: var(--text-primary);
-            border-bottom-left-radius: 4px;
-        }
-        
-        .message.system .message-content {
-            background-color: var(--message-system);
-            color: var(--text-secondary);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-style: italic;
-            font-size: 13px;
-            text-align: center;
-        }
-        
-        .message-meta {
-            font-size: 11px;
-            margin-top: 4px;
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .delivery-status {
-            display: inline-flex;
-            align-items: center;
-            margin-left: 5px;
-            gap: 4px;
-        }
-        
-        .status-pending {
-            color: var(--text-muted);
-        }
-        
-        .status-delivered {
-            color: var(--success-color);
-        }
-        
-        .system-timestamp {
-            font-size: 10px;
-            color: var(--text-muted);
-            margin-top: 3px;
-        }
-        
-        .message-form {
-            height: var(--input-height);
-            display: flex;
-            align-items: center;
-            padding: 12px 16px;
-            background-color: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
-            flex-shrink: 0;  /* Prevent form from shrinking */
-        }
-        
-        .message-input {
-            flex: 1;
-            padding: 12px 15px;
-            background-color: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 24px;
-            outline: none;
-            color: var(--text-primary);
-            font-size: 14px;
-            margin-right: 10px;
-            transition: border-color var(--transition-speed);
-        }
-        
-        .message-input:focus {
-            border-color: var(--accent-color);
-        }
-
-        .send-buttons {
-            display: flex;
-            gap: 8px;
-        }
-        
-        .send-button {
-            background-color: var(--accent-color);
-            color: white;
-            border: none;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: background-color var(--transition-speed);
-        }
-        
-        .send-button:hover {
-            background-color: var(--accent-hover);
-        }
-        
-        .send-button i {
-            font-size: 16px;
-        }
-        
-        .send-ai-button {
-            background-color: #43b581; /* A different color for the AI button */
-        }
-        
-        .send-ai-button:hover {
-            background-color: #3ca374;
-        }
-        
-        /* Welcome Screen */
-        .welcome-screen {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 40px;
-            background-color: var(--bg-primary);
-            text-align: center;
-        }
-        
-        .welcome-screen h2 {
-            margin-top: 0;
-            color: var(--text-primary);
-            font-size: 24px;
-            margin-bottom: 16px;
-        }
-        
-        .welcome-screen p {
-            color: var(--text-secondary);
-            max-width: 600px;
-            margin-bottom: 24px;
-            line-height: 1.5;
-        }
-        
-        .welcome-screen .new-chat-btn {
-            padding: 10px 20px;
-        }
-        
-        .welcome-icon {
-            font-size: 64px;
-            color: var(--accent-color);
-            margin-bottom: 20px;
-            opacity: 0.8;
-        }
-        
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        
-        .modal-content {
-            background-color: var(--bg-secondary);
-            padding: 24px;
-            border-radius: var(--border-radius);
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-            width: 100%;
-            max-width: 500px;
-            border: 1px solid var(--border-color);
-        }
-        
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .modal-header h3 {
-            margin: 0;
-            color: var(--text-primary);
-            font-size: 18px;
-        }
-        
-        .close-modal {
-            background: none;
-            border: none;
-            font-size: 18px;
-            cursor: pointer;
-            color: var(--text-secondary);
-            transition: color var(--transition-speed);
-        }
-        
-        .close-modal:hover {
-            color: var(--text-primary);
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: var(--text-primary);
-        }
-        
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            background-color: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            color: var(--text-primary);
-            font-size: 14px;
-            transition: border-color var(--transition-speed);
-        }
-        
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--accent-color);
-        }
-        
-        .form-error {
-            color: var(--danger-color);
-            font-size: 12px;
-            margin-top: 6px;
-            display: none;
-        }
-        
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 24px;
-            gap: 12px;
-        }
-        
-        .modal-actions button {
-            padding: 10px 16px;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            font-weight: 500;
-            transition: background-color var(--transition-speed);
-        }
-        
-        .cancel-btn {
-            background-color: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-        }
-        
-        .cancel-btn:hover {
-            background-color: var(--bg-accent);
-            color: var(--text-primary);
-        }
-        
-        .create-btn {
-            background-color: var(--accent-color);
-            border: none;
-            color: white;
-        }
-        
-        .create-btn:hover {
-            background-color: var(--accent-hover);
-        }
-        
-        /* Responsive adjustments */
-        @media screen and (max-width: 768px) {
-            .sidebar {
-                width: 240px;
-            }
-            
-            .message {
-                max-width: 90%;
-            }
-        }
-        
-        @media screen and (max-width: 576px) {
-            .sidebar {
-                width: 200px;
-            }
-            
-            .new-chat-btn span {
-                display: none;
-            }
-            
-            .sidebar-header h2 {
-                font-size: 16px;
-            }
-        }
-        
-        /* Delivery status indicators */
-        .delivery-status {
-            display: inline-flex;
-            align-items: center;
-            margin-left: 5px;
-            gap: 4px;
-        }
-        
-        .status-pending {
-            color: var(--text-muted);
-        }
-        
-        .status-delivered {
-            color: var(--success-color);
-        }
-        
-        /* Pie chart styles */
-        .pie-chart {
-            position: relative;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background-color: var(--bg-accent);
-            display: inline-flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .pie-percent-text {
-            font-size: 10px;
-            color: var(--text-muted);
-        }
-        
-        /* AI settings styles */
-        .ai-toggle-container {
-            margin-top: 10px;
-            padding: 10px 16px;
-            background-color: var(--bg-tertiary);
-            border-radius: var(--border-radius);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .ai-settings-btn {
-            color: var(--accent-color);
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        
-        .ai-settings-btn:hover {
-            text-decoration: underline;
-        }
-        
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 40px;
-            height: 22px;
-        }
-        
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: var(--bg-accent);
-            transition: .4s;
-            border-radius: 34px;
-        }
-        
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 16px;
-            width: 16px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        
-        input:checked + .toggle-slider {
-            background-color: var(--accent-color);
-        }
-        
-        input:checked + .toggle-slider:before {
-            transform: translateX(18px);
-        }
-        
-        /* AI settings modal */
-        .ai-settings-container {
-            margin-bottom: 15px;
-        }
-        
-        .ai-settings-container h4 {
-            margin-bottom: 10px;
-            color: var(--text-primary);
-        }
-        
-        .ai-status {
-            margin-top: 5px;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        
-        .ai-response-indicator {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: var(--bg-tertiary);
-            color: var(--accent-color);
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            display: none;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-            z-index: 10;
-        }
-        
-        .ai-response-indicator.show {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            animation: fadeIn 0.3s;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        .ai-dot {
-            height: 8px;
-            width: 8px;
-            background-color: var(--accent-color);
-            border-radius: 50%;
-            display: inline-block;
-            animation: pulse 1.5s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(0.8); opacity: 0.7; }
-            50% { transform: scale(1.2); opacity: 1; }
-            100% { transform: scale(0.8); opacity: 0.7; }
-        }
-
-        /* AI response group styles - improved layout */
-        .ai-response-group {
-            max-width: 90%;
-            margin: 15px auto;
-            border-radius: 12px;
-            background-color: rgba(67, 181, 129, 0.1);
-            border: 1px solid rgba(67, 181, 129, 0.2);
-            overflow: hidden;
-            min-height: 220px; /* Default collapsed height */
-            transition: min-height 0.3s ease-out;
-        }
-
-        .ai-response-header {
-            padding: 16px 20px; /* Increased padding */
-            background-color: rgba(67, 181, 129, 0.15);
-            display: flex;
-            flex-direction: column; /* Stack elements vertically */
-            cursor: pointer; /* Explicitly show pointer cursor */
-            transition: background-color 0.2s;
-            position: relative; /* For hover effects */
-        }
-
-        .ai-response-header:hover {
-            background-color: rgba(67, 181, 129, 0.25);
-        }
-        
-        /* Remove the overlapping hover indicator */
-        .ai-response-header:hover::after {
-            display: none; /* Remove the overlapping indicator */
-        }
-        
-        /* Add subtle highlight to the entire header instead */
-        .ai-response-header:hover {
-            box-shadow: inset 0 0 0 2px rgba(67, 181, 129, 0.4);
-        }
-        
-        /* Make summary content have normal cursor for text selection */
-        .ai-summary-content {
-            cursor: auto; /* Default cursor behavior */
-            position: relative; /* For positioning the expand/collapse icon */
-        }
-        
-        /* Add subtle visual indicator that shows the expand/collapse action */
-        .ai-summary-text {
-            position: relative;
-            padding-right: 5px; /* Space for the subtle indicator */
-        }
-
-        .ai-response-summary {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px; /* Add space between summary and content */
-        }
-
-        .ai-response-title {
-            font-weight: 600; /* Made slightly bolder */
-            font-size: 15px; /* Slightly larger */
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 10px; /* More space between icon and text */
-        }
-
-        .ai-response-title i {
-            color: #43b581;
-            font-size: 16px; /* Slightly larger icon */
-        }
-
-        .ai-response-count {
-            background-color: rgba(67, 181, 129, 0.3);
-            color: var(--text-primary);
-            padding: 4px 12px; /* More padding */
-            border-radius: 16px; /* More rounded */
-            font-size: 13px; /* Slightly larger */
-            font-weight: 500; /* Medium weight */
-            display: flex;
-            align-items: center;
-            gap: 6px; /* Space between text and icon */
-        }
-        
-        .ai-response-count i {
-            transition: transform 0.3s;
-        }
-        
-        .ai-response-count i.open {
-            transform: rotate(180deg);
-        }
-
-        .ai-response-body {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.5s ease-out;
-        }
-
-        .ai-response-body.expanded {
-            max-height: 400px; /* Set a fixed maximum height */
-            overflow-y: auto;  /* Enable vertical scrolling */
-            min-height: 300px;
-        }
-
-        .ai-response-item {
-            padding: 12px 15px;
-            border-bottom: 1px solid rgba(67, 181, 129, 0.2);
-        }
-
-        .ai-response-item:last-child {
-            border-bottom: none;
-        }
-
-        .ai-response-from {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-bottom: 5px;
-        }
-
-        .ai-response-content {
-            color: var(--text-primary);
-            white-space: pre-wrap;
-        }
-
-        /* AI summary content improvements */
-        .ai-summary-content {
-            padding: 15px 20px; /* More padding */
-            border-top: 1px solid rgba(67, 181, 129, 0.2);
-            white-space: pre-wrap;
-            color: var(--text-primary);
-            max-height: 200px;
-            min-height: 60px; /* Ensure minimum height */
-            overflow-y: auto; /* Allow vertical scrolling in summary */
-            scrollbar-width: thin;
-            scrollbar-color: rgba(67, 181, 129, 0.5) rgba(67, 181, 129, 0.1);
-            line-height: 1.6; /* Improved line spacing */
-            font-size: 14px; /* Standardized font size */
-        }
-        
-        .ai-summary-content::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .ai-summary-content::-webkit-scrollbar-thumb {
-            background-color: rgba(67, 181, 129, 0.5);
-            border-radius: 3px;
-        }
-        
-        .ai-summary-content::-webkit-scrollbar-track {
-            background-color: rgba(67, 181, 129, 0.1);
-            border-radius: 3px;
-        }
-
-        .ai-summary-loading {
-            color: var(--text-secondary);
-            font-style: italic;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-height: 40px; /* Ensure minimum height when loading */
-        }
-
-        .ai-summary-error {
-            color: var(--text-muted);
-            font-style: italic;
-            min-height: 40px; /* Ensure minimum height for errors */
-        }
-
-        .ai-summary-text {
-            line-height: 1.5;
-            min-height: 60px; /* Ensure minimum height */
-        }
-
-        /* Conversations link styles */
-        .conversations-link {
-            color: var(--text-primary);
-            text-decoration: none;
-            cursor: pointer;
-            transition: color var(--transition-speed);
-        }
-
-        .conversations-link:hover {
-            color: var(--accent-color);
-        }
-
-        /* Message Styles Update */
-        .message.self {
-            align-items: flex-end;
-            margin-left: auto;
-        }
-        
-        .message.other {
-            align-items: flex-start;
-            margin-right: auto;
-        }
-        
-        .message.system {
-            align-items: center;
-            max-width: 90%;
-            margin: 10px auto;
-        }
-        
-        .message-content {
-            padding: 10px 15px;
-            border-radius: 18px;
-            position: relative;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-            word-break: break-word;
-        }
-        
-        .message.self .message-content {
-            background-color: var(--message-self);
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-        
-        /* New style for messages sent to AI */
-        .message.self.to-ai .message-content {
-            background-color: #43b581; /* Same green color as the AI button */
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-        
-        .message.other .message-content {
-            background-color: var(--message-other);
-            color: var(--text-primary);
-            border-bottom-left-radius: 4px;
-        }
-        
-        /* New style for received messages intended for AI */
-        .message.other.to-ai .message-content {
-            background-color: #43b581; /* Same green color as the AI button */
-            color: white;
-            border-bottom-left-radius: 4px;
-        }
-        
-        .message.system .message-content {
-            background-color: var(--message-system);
-            color: var(--text-secondary);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-style: italic;
-            font-size: 13px;
-            text-align: center;
-        }
-        
-        /* Empty AI response group styles */
-        .ai-response-group.empty-group {
-            background-color: rgba(67, 181, 129, 0.05);
-            border: 1px dashed rgba(67, 181, 129, 0.2);
-        }
-        
-        .empty-group .ai-response-count {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        
-        .empty-group .fa-spin {
-            color: var(--accent-color);
-        }
-        
-        /* Placeholder response styling */
-        .placeholder-response {
-            opacity: 0.8;
-        }
-        
-        .placeholder-loading {
-            margin-top: 10px;
-            display: flex;
-            justify-content: center;
-        }
-        
-        .dot-loading {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            background-color: var(--accent-color);
-            border-radius: 50%;
-            margin: 0 3px;
-            animation: dotPulse 1.5s infinite;
-        }
-        
-        .dot-loading:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        
-        .dot-loading:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        
-        @keyframes dotPulse {
-            0% { transform: scale(0.8); opacity: 0.5; }
-            50% { transform: scale(1.2); opacity: 1; }
-            100% { transform: scale(0.8); opacity: 0.5; }
-        }
-        
-        /* Placeholder response styling */
-        .placeholder-group {
-            background-color: rgba(67, 181, 129, 0.05);
-            border: 1px dashed rgba(67, 181, 129, 0.3);
-            margin: 10px 0;
-            border-radius: var(--border-radius);
-            overflow: hidden;
-        }
-        
-        .typing-indicator {
-            padding: 15px;
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
-        }
-        
-        .typing-indicator span {
-            height: 10px;
-            width: 10px;
-            margin: 0 2px;
-            background-color: var(--accent-color);
-            border-radius: 50%;
-            display: inline-block;
-            opacity: 0.4;
-        }
-        
-        .typing-indicator span:nth-of-type(1) {
-            animation: pulse 1s infinite ease-in-out;
-        }
-        
-        .typing-indicator span:nth-of-type(2) {
-            animation: pulse 1s infinite ease-in-out .2s;
-        }
-        
-        .typing-indicator span:nth-of-type(3) {
-            animation: pulse 1s infinite ease-in-out .4s;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 0.4; }
-            50% { transform: scale(1.3); opacity: 1; }
-            100% { transform: scale(1); opacity: 0.4; }
-        }
-        
-        .loading-animation {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--accent-color);
-        }
-        
-        .loading-animation i {
-            color: var(--accent-color);
-        }
-        
-        .placeholder-message {
-            padding: 10px;
-            background-color: rgba(67, 181, 129, 0.05);
-            border-radius: 8px;
-        }
-        
-        /* Update chat interface */
-        #chat-interface {
-            display: none; 
-            flex: 1; 
-            display: flex; 
-            flex-direction: column;
-            height: 100%;  /* Ensure it takes full height */
-            overflow: hidden;  /* Contain the overflow */
-        }
-    </style>
+    <link rel="stylesheet" href="/static/index.css">
+    
 </head>
 <body>
     <div class="app-container">
@@ -1149,6 +62,9 @@
                         <h2 id="conversation-title">Conversation Title</h2>
                         <div id="conversation-recipients" class="chat-recipients">Recipients</div>
                     </div>
+                    <button id="toggle-users-btn" class="toggle-users-btn">
+                        <i class="fas fa-users"></i>
+                    </button>
                 </div>
                 <div id="chat-messages" class="chat-messages">
                     <!-- Messages will be populated here -->
@@ -1170,6 +86,20 @@
                 <span>AI is responding...</span>
             </div>
         </div>
+        
+        <div class="users-sidebar">
+            <div class="users-header">
+                <h2>Users</h2>
+                <span id="users-count" class="users-count">0</span>
+            </div>
+            <div id="users-list" class="users-list">
+                <!-- Users will be populated here -->
+                <div class="no-users">No users in this conversation</div>
+            </div>
+        </div>
+        
+        <!-- Add overlay for mobile -->
+        <div id="sidebar-overlay" class="sidebar-overlay"></div>
     </div>
     
     <div id="new-chat-modal" class="modal">
@@ -1220,6 +150,34 @@
         </div>
     </div>
 
+    <!-- Add this modal for displaying user's filesystem -->
+    <div id="filesystem-modal" class="modal">
+        <div class="modal-content filesystem-modal-content">
+            <div class="modal-header">
+                <h3 id="filesystem-user-title">User's Files</h3>
+                <button class="close-modal" onclick="closeFilesystemModal()">&times;</button>
+            </div>
+            <div class="filesystem-container">
+                <div class="filesystem-breadcrumb" id="filesystem-breadcrumb">
+                    <span class="breadcrumb-item">Home</span>
+                </div>
+                <div class="filesystem-toolbar">
+                    <button id="filesystem-back-btn" class="filesystem-btn" disabled>
+                        <i class="fas fa-arrow-left"></i> Back
+                    </button>
+                    <button id="filesystem-refresh-btn" class="filesystem-btn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="filesystem-list" id="filesystem-list">
+                    <div class="filesystem-loading">
+                        <i class="fas fa-circle-notch fa-spin"></i> Loading files...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Current active conversation
         let currentConversationId = null;
@@ -1237,42 +195,17 @@
         
         // Load all conversations
         function loadConversations() {
-            fetch('/conversations')
+            console.log("Loading conversations...");
+            return fetch('/conversations')
                 .then(response => response.json())
                 .then(data => {
-                    conversations = data.conversations;
-                    
-                    if (conversations.length === 0) {
-                        conversationList.innerHTML = '<div class="no-conversations">No conversations yet</div>';
-                        return;
-                    }
-                    
-                    // Sort conversations by creation date (newest first)
-                    conversations.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-                    
-                    let html = '';
-                    conversations.forEach(conv => {
-                        const isActive = currentConversationId === conv.id ? 'active' : '';
-                        html += `
-                            <div class="conversation-item ${isActive}" data-id="${conv.id}" onclick="selectConversation('${conv.id}')">
-                                <div class="conversation-title">${conv.name}</div>
-                                <div class="conversation-details">
-                                    ${conv.recipients.join(', ')}
-                                </div>
-                            </div>
-                        `;
-                    });
-                    
-                    conversationList.innerHTML = html;
-                    
-                    // If we have conversations but none is selected, select the first one
-                    if (conversations.length > 0 && !currentConversationId) {
-                        selectConversation(conversations[0].id);
-                    }
+                    conversations = data.conversations || [];
+                    renderConversationList();
+                    return data;
                 })
                 .catch(error => {
                     console.error('Error loading conversations:', error);
-                    conversationList.innerHTML = '<div class="no-conversations">Error loading conversations</div>';
+                    return { conversations: [] };
                 });
         }
         
@@ -2354,6 +1287,17 @@
             // Call original function
             originalSelectConversation(conversationId);
             
+            // Update users list
+            updateUsersList();
+            
+            // Load file selections for all users in this conversation
+            if (currentUsers && currentUsers.length > 0) {
+                currentUsers.forEach(user => {
+                    // Load selections for each user in the background
+                    loadFileSelections(conversationId, user);
+                });
+            }
+            
             // Scroll to bottom after a short delay to ensure messages are loaded
             setTimeout(scrollToBottom, 300);
         };
@@ -2438,6 +1382,892 @@
                 element.style.minHeight = '220px'; // Set the collapsed height
             }
         }
+
+        // Users sidebar functionality
+        let currentUsers = [];
+
+        // Function to update the users list
+        function updateUsersList() {
+            if (!currentConversationId) return;
+            
+            const conversation = conversations.find(c => c.id === currentConversationId);
+            if (!conversation) return;
+            
+            // Combine recipients and current user
+            currentUsers = [...conversation.recipients];
+            
+            // Add current user (self)
+            if (!currentUsers.includes('{{ user_email }}')) {
+                currentUsers.push('{{ user_email }}');
+            }
+            
+            // Update the count
+            document.getElementById('users-count').textContent = currentUsers.length;
+            
+            // Generate the HTML for users
+            const usersList = document.getElementById('users-list');
+            
+            if (currentUsers.length === 0) {
+                usersList.innerHTML = '<div class="no-users">No users in this conversation</div>';
+                return;
+            }
+            
+            let html = '';
+            currentUsers.forEach(user => {
+                const isSelf = user === '{{ user_email }}';
+                const initials = user.split('@')[0].substring(0, 2).toUpperCase();
+                
+                html += `
+                    <div class="user-item ${isSelf ? 'self' : ''}" data-email="${user}" title="Click to view files">
+                        <div class="user-icon" style="background-color: ${getColorFromEmail(user)}">${initials}</div>
+                        <div class="user-details">
+                            <div class="user-name">${user}</div>
+                            <div class="user-status">${isSelf ? 'You' : 'Member'}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            usersList.innerHTML = html;
+        }
+
+        // Generate a consistent color from email
+        function getColorFromEmail(email) {
+            // Simple hash function to get a number from string
+            let hash = 0;
+            for (let i = 0; i < email.length; i++) {
+                hash = email.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            
+            // Convert to hex color
+            const colors = [
+                '#7289da', // Discord blue
+                '#43b581', // Green
+                '#f04747', // Red
+                '#faa61a', // Orange
+                '#2e3136', // Dark gray
+                '#9b59b6', // Purple
+                '#3498db', // Light blue
+                '#e74c3c', // Light red
+                '#2ecc71', // Light green
+                '#e67e22'  // Amber
+            ];
+            
+            // Use modulo to get index within our colors array
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        // Toggle users sidebar on mobile
+        function toggleUsersSidebar() {
+            const usersSidebar = document.querySelector('.users-sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            usersSidebar.classList.toggle('show');
+            overlay.classList.toggle('show');
+        }
+
+        // Event listeners for users sidebar
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up toggle button
+            document.getElementById('toggle-users-btn').addEventListener('click', toggleUsersSidebar);
+            
+            // Close sidebar when clicking overlay
+            document.getElementById('sidebar-overlay').addEventListener('click', toggleUsersSidebar);
+            
+            // Update users list when selecting a conversation
+            const originalSelectConversation = selectConversation;
+            selectConversation = function(conversationId) {
+                // Call original function
+                originalSelectConversation(conversationId);
+                
+                // Update users list
+                updateUsersList();
+            };
+            
+            // Update users when loading conversations
+            const originalLoadConversations = loadConversations;
+            loadConversations = function() {
+                // Call original function
+                originalLoadConversations();
+                
+                // Update users if we have a current conversation
+                if (currentConversationId) {
+                    updateUsersList();
+                }
+            };
+        });
+
+        // Filesystem functionality
+        let currentFilesystemUser = null;
+        let currentFilesystemPath = [];
+        let filesystemHistory = [];
+
+        // Open filesystem modal for a user
+        function openFilesystemForUser(email) {
+            currentFilesystemUser = email;
+            currentFilesystemPath = [];
+            filesystemHistory = [];
+            
+            // Update modal title
+            document.getElementById('filesystem-user-title').textContent = `${email}'s Files`;
+            
+            // Reset breadcrumb
+            updateFilesystemBreadcrumb();
+            
+            // Disable back button initially
+            document.getElementById('filesystem-back-btn').disabled = true;
+            
+            // Load fresh selections from server before showing the modal
+            loadFileSelections(currentConversationId, email).then(() => {
+                // Set selectedFiles to the stored selections for this conversation and user
+                selectedFiles = getSelectedFiles(currentConversationId, email);
+                console.log("Using stored selections for modal:", selectedFiles);
+                
+                // Show modal
+                document.getElementById('filesystem-modal').style.display = 'flex';
+                
+                // Load the filesystem for this user
+                loadUserFilesystem(email);
+            });
+        }
+
+        // Function to load a user's filesystem
+        function loadUserFilesystem(email) {
+            const filesystemList = document.getElementById('filesystem-list');
+            filesystemList.innerHTML = '<div class="filesystem-loading"><i class="fas fa-circle-notch fa-spin"></i> Loading files...</div>';
+            
+            // Calculate the path to request
+            const pathParam = currentFilesystemPath.length > 0 ? 
+                             currentFilesystemPath.join('/') : '';
+            
+            // Make an AJAX request to the /filesystem endpoint with the user parameter
+            fetch(`/filesystem?path=${encodeURIComponent(pathParam)}&user=${encodeURIComponent(email)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        // If there's an error (like directory not found), show error and fall back to mock data
+                        console.error('Filesystem error:', data.error);
+                        filesystemList.innerHTML = `<div class="filesystem-error"><i class="fas fa-exclamation-circle"></i> ${data.error}</div>`;
+                        
+                        // For simplicity, if we can't access the real filesystem, fall back to mock data
+                        setTimeout(() => {
+                            loadFilesystemContents();
+                        }, 2000);
+                        return;
+                    }
+                    
+                    // Display the files and folders
+                    displayRealFilesystemContents(data.files);
+                })
+                .catch(error => {
+                    console.error('Error loading filesystem:', error);
+                    filesystemList.innerHTML = `<div class="filesystem-error"><i class="fas fa-exclamation-circle"></i> Error loading files: ${error.message}</div>`;
+                    
+                    // Fall back to mock data if we can't access the real filesystem
+                    setTimeout(() => {
+                        loadFilesystemContents();
+                    }, 2000);
+                });
+        }
+
+        // Close filesystem modal
+        function closeFilesystemModal() {
+            document.getElementById('filesystem-modal').style.display = 'none';
+            currentFilesystemUser = null;
+        }
+
+        // Update the breadcrumb navigation
+        function updateFilesystemBreadcrumb() {
+            const breadcrumb = document.getElementById('filesystem-breadcrumb');
+            breadcrumb.innerHTML = '';
+            
+            // Add home
+            const homeItem = document.createElement('span');
+            homeItem.className = 'breadcrumb-item';
+            homeItem.textContent = 'Home';
+            homeItem.addEventListener('click', () => {
+                // Store current path to history
+                if (currentFilesystemPath.length > 0) {
+                    filesystemHistory.push([...currentFilesystemPath]);
+                }
+                
+                // Navigate to root
+                currentFilesystemPath = [];
+                updateFilesystemBreadcrumb();
+                
+                // Load contents
+                loadUserFilesystem(currentFilesystemUser);
+                
+                // Enable back button if we have history
+                document.getElementById('filesystem-back-btn').disabled = filesystemHistory.length === 0;
+            });
+            breadcrumb.appendChild(homeItem);
+            
+            // Add path segments
+            let currentPath = '';
+            currentFilesystemPath.forEach((segment, index) => {
+                // Add separator
+                const separator = document.createElement('span');
+                separator.className = 'breadcrumb-separator';
+                separator.textContent = '>';
+                breadcrumb.appendChild(separator);
+                
+                // Update current path for this segment
+                currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+                
+                // Add segment
+                const segmentItem = document.createElement('span');
+                segmentItem.className = 'breadcrumb-item';
+                segmentItem.textContent = segment;
+                
+                // Add click handler for all but the last segment
+                if (index < currentFilesystemPath.length - 1) {
+                    const pathCopy = currentPath; // Copy for closure
+                    segmentItem.addEventListener('click', () => {
+                        // Store current path to history
+                        filesystemHistory.push([...currentFilesystemPath]);
+                        
+                        // Navigate to this path
+                        currentFilesystemPath = pathCopy.split('/').filter(part => part.length > 0);
+                        updateFilesystemBreadcrumb();
+                        
+                        // Load contents
+                        loadUserFilesystem(currentFilesystemUser);
+                        
+                        // Enable back button
+                        document.getElementById('filesystem-back-btn').disabled = false;
+                    });
+                }
+                
+                breadcrumb.appendChild(segmentItem);
+            });
+        }
+
+        // Navigate back in the filesystem history
+        function navigateBack() {
+            if (filesystemHistory.length > 0) {
+                currentFilesystemPath = filesystemHistory.pop();
+                updateFilesystemBreadcrumb();
+                
+                // Load with the previous path
+                loadUserFilesystem(currentFilesystemUser);
+                
+                // Disable back button if history is empty
+                document.getElementById('filesystem-back-btn').disabled = filesystemHistory.length === 0;
+            }
+        }
+
+        // Mock function to get filesystem contents
+        // In a real implementation, this would call an API endpoint
+        function loadFilesystemContents() {
+            const filesystemList = document.getElementById('filesystem-list');
+            filesystemList.innerHTML = '<div class="filesystem-loading"><i class="fas fa-circle-notch fa-spin"></i> Loading files...</div>';
+            
+            // In a real implementation, this would be an API call
+            // For now, we'll simulate with mock data
+            setTimeout(() => {
+                let files = mockGetUserFiles(currentFilesystemUser, currentFilesystemPath);
+                displayFilesystemContents(files);
+            }, 1000);
+        }
+
+        // Display the files and folders
+        function displayFilesystemContents(items) {
+            const filesystemList = document.getElementById('filesystem-list');
+            
+            if (!items || items.length === 0) {
+                filesystemList.innerHTML = '<div class="filesystem-empty">This folder is empty</div>';
+                return;
+            }
+            
+            // Sort items: folders first, then files, both alphabetically
+            items.sort((a, b) => {
+                if (a.type === 'folder' && b.type !== 'folder') return -1;
+                if (a.type !== 'folder' && b.type === 'folder') return 1;
+                return a.name.localeCompare(b.name);
+            });
+            
+            filesystemList.innerHTML = '';
+            
+            items.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'filesystem-item';
+                
+                const isFolder = item.type === 'folder';
+                const iconClass = isFolder ? 'folder-icon' : 'file-icon';
+                const iconType = isFolder ? 'fa-folder' : getFileIconClass(item.name);
+                
+                itemElement.innerHTML = `
+                    <div class="filesystem-item-icon ${iconClass}">
+                        <i class="fas ${iconType}"></i>
+                    </div>
+                    <div class="filesystem-item-details">
+                        <div class="filesystem-item-name">${item.name}</div>
+                        <div class="filesystem-item-meta">
+                            <span>${isFolder ? 'Folder' : getFileType(item.name)}</span>
+                            ${item.size ? `<span>${formatFileSize(item.size)}</span>` : ''}
+                            ${item.modified ? `<span>${formatDate(item.modified)}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                if (isFolder) {
+                    itemElement.addEventListener('click', () => {
+                        // Save current path to history
+                        filesystemHistory.push([...currentFilesystemPath]);
+                        
+                        // Navigate to folder
+                        currentFilesystemPath.push(item.name);
+                        loadFilesystemContents();
+                        updateFilesystemBreadcrumb();
+                        
+                        // Enable back button
+                        document.getElementById('filesystem-back-btn').disabled = false;
+                    });
+                }
+                
+                filesystemList.appendChild(itemElement);
+            });
+        }
+
+        // Helper to get appropriate icon for file type
+        function getFileIconClass(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            
+            // Image files
+            if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'].includes(ext)) {
+                return 'fa-file-image';
+            }
+            
+            // Text/code files
+            if (['txt', 'md', 'css', 'html', 'js', 'py', 'java', 'c', 'cpp', 'h', 'json', 'xml'].includes(ext)) {
+                return 'fa-file-code';
+            }
+            
+            // Document files
+            if (['pdf', 'doc', 'docx', 'odt', 'rtf'].includes(ext)) {
+                return 'fa-file-pdf';
+            }
+            
+            // Spreadsheet files
+            if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) {
+                return 'fa-file-excel';
+            }
+            
+            // Presentation files
+            if (['ppt', 'pptx', 'odp'].includes(ext)) {
+                return 'fa-file-powerpoint';
+            }
+            
+            // Archive files
+            if (['zip', 'rar', 'tar', 'gz', '7z'].includes(ext)) {
+                return 'fa-file-archive';
+            }
+            
+            // Audio files
+            if (['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(ext)) {
+                return 'fa-file-audio';
+            }
+            
+            // Video files
+            if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv'].includes(ext)) {
+                return 'fa-file-video';
+            }
+            
+            // Default file icon
+            return 'fa-file';
+        }
+
+        // Helper to get readable file type
+        function getFileType(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            
+            // Map extensions to readable types
+            const typeMap = {
+                'jpg': 'Image', 'jpeg': 'Image', 'png': 'Image', 'gif': 'Image', 'bmp': 'Image', 'svg': 'Vector Image',
+                'txt': 'Text', 'md': 'Markdown', 'css': 'CSS', 'html': 'HTML', 'js': 'JavaScript', 
+                'py': 'Python', 'java': 'Java', 'c': 'C', 'cpp': 'C++', 'h': 'Header',
+                'json': 'JSON', 'xml': 'XML',
+                'pdf': 'PDF', 'doc': 'Word', 'docx': 'Word', 'odt': 'Document', 'rtf': 'Rich Text',
+                'xls': 'Excel', 'xlsx': 'Excel', 'csv': 'CSV', 'ods': 'Spreadsheet',
+                'ppt': 'PowerPoint', 'pptx': 'PowerPoint', 'odp': 'Presentation',
+                'zip': 'ZIP Archive', 'rar': 'RAR Archive', 'tar': 'TAR Archive', 'gz': 'GZ Archive', '7z': '7Z Archive',
+                'mp3': 'MP3 Audio', 'wav': 'WAV Audio', 'ogg': 'OGG Audio', 'flac': 'FLAC Audio', 'm4a': 'M4A Audio',
+                'mp4': 'MP4 Video', 'avi': 'AVI Video', 'mov': 'MOV Video', 'wmv': 'WMV Video', 'flv': 'FLV Video', 'mkv': 'MKV Video'
+            };
+            
+            return typeMap[ext] || `${ext.toUpperCase()} File`;
+        }
+
+        // Format file size to human-readable format
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            
+            return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + units[i];
+        }
+
+        // Format date to readable format
+        function formatDate(isoDate) {
+            const date = new Date(isoDate);
+            return date.toLocaleString();
+        }
+
+        // Mock function to simulate getting user files
+        // In a real implementation, this would be replaced by an API call
+        function mockGetUserFiles(email, path) {
+            // Generate some sample data based on user email and path
+            // This would be replaced by actual API data in a real implementation
+            
+            // Root directory
+            if (path.length === 0) {
+                return [
+                    { name: 'Documents', type: 'folder' },
+                    { name: 'Images', type: 'folder' },
+                    { name: 'Code', type: 'folder' },
+                    { name: 'README.md', type: 'file', size: 2048, modified: new Date().toISOString() },
+                    { name: 'profile.jpg', type: 'file', size: 42768, modified: new Date().toISOString() }
+                ];
+            }
+            
+            // Documents folder
+            if (path[0] === 'Documents') {
+                if (path.length === 1) {
+                    return [
+                        { name: 'Work', type: 'folder' },
+                        { name: 'Personal', type: 'folder' },
+                        { name: 'report.pdf', type: 'file', size: 1024576, modified: new Date().toISOString() },
+                        { name: 'notes.txt', type: 'file', size: 512, modified: new Date().toISOString() }
+                    ];
+                }
+                
+                if (path[1] === 'Work') {
+                    return [
+                        { name: 'Presentation.pptx', type: 'file', size: 2097152, modified: new Date().toISOString() },
+                        { name: 'Budget.xlsx', type: 'file', size: 1048576, modified: new Date().toISOString() },
+                        { name: 'Proposal.docx', type: 'file', size: 524288, modified: new Date().toISOString() }
+                    ];
+                }
+                
+                if (path[1] === 'Personal') {
+                    return [
+                        { name: 'Resume.pdf', type: 'file', size: 512000, modified: new Date().toISOString() },
+                        { name: 'Journal.txt', type: 'file', size: 4096, modified: new Date().toISOString() }
+                    ];
+                }
+            }
+            
+            // Images folder
+            if (path[0] === 'Images') {
+                if (path.length === 1) {
+                    return [
+                        { name: 'Vacation', type: 'folder' },
+                        { name: 'Family', type: 'folder' },
+                        { name: 'banner.png', type: 'file', size: 2097152, modified: new Date().toISOString() }
+                    ];
+                }
+                
+                if (path[1] === 'Vacation') {
+                    return [
+                        { name: 'beach.jpg', type: 'file', size: 3145728, modified: new Date().toISOString() },
+                        { name: 'mountain.jpg', type: 'file', size: 2621440, modified: new Date().toISOString() }
+                    ];
+                }
+                
+                if (path[1] === 'Family') {
+                    return [
+                        { name: 'reunion.jpg', type: 'file', size: 4194304, modified: new Date().toISOString() },
+                        { name: 'birthday.jpg', type: 'file', size: 1835008, modified: new Date().toISOString() }
+                    ];
+                }
+            }
+            
+            // Code folder
+            if (path[0] === 'Code') {
+                if (path.length === 1) {
+                    return [
+                        { name: 'Projects', type: 'folder' },
+                        { name: 'Snippets', type: 'folder' },
+                        { name: 'main.py', type: 'file', size: 8192, modified: new Date().toISOString() },
+                        { name: 'index.html', type: 'file', size:
+                        4096, modified: new Date().toISOString() }
+                    ];
+                }
+                
+                if (path[1] === 'Projects') {
+                    return [
+                        { name: 'WebApp', type: 'folder' },
+                        { name: 'MobileApp', type: 'folder' }
+                    ];
+                }
+                
+                if (path[1] === 'Snippets') {
+                    return [
+                        { name: 'algorithm.py', type: 'file', size:
+                        2048, modified: new Date().toISOString() },
+                        { name: 'styles.css', type: 'file', size: 1024, modified: new Date().toISOString() },
+                        { name: 'utils.js', type: 'file', size: 4096, modified: new Date().toISOString() }
+                    ];
+                }
+                
+                if (path[1] === 'Projects' && path[2] === 'WebApp') {
+                    return [
+                        { name: 'app.js', type: 'file', size: 16384, modified: new Date().toISOString() },
+                        { name: 'styles.css', type: 'file', size: 8192, modified: new Date().toISOString() },
+                        { name: 'index.html', type: 'file', size: 4096, modified: new Date().toISOString() }
+                    ];
+                }
+                
+                if (path[1] === 'Projects' && path[2] === 'MobileApp') {
+                    return [
+                        { name: 'MainActivity.java', type: 'file', size: 12288, modified: new Date().toISOString() },
+                        { name: 'styles.xml', type: 'file', size: 6144, modified: new Date().toISOString() },
+                        { name: 'main.xml', type: 'file', size: 4096, modified: new Date().toISOString() }
+                    ];
+                }
+            }
+            
+            // Default case: return empty folder
+            return [];
+        }
+
+        // Event listeners for filesystem navigation
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up back button
+            document.getElementById('filesystem-back-btn').addEventListener('click', navigateBack);
+            
+            // Set up refresh button
+            document.getElementById('filesystem-refresh-btn').addEventListener('click', function() {
+                loadUserFilesystem(currentFilesystemUser);
+            });
+            
+            // Add click handlers to user items
+            document.getElementById('users-list').addEventListener('click', function(e) {
+                const userItem = e.target.closest('.user-item');
+                if (userItem) {
+                    const email = userItem.dataset.email;
+                    if (email) {
+                        openFilesystemForUser(email);
+                    }
+                }
+            });
+            
+            // Close modal when clicking outside
+            window.addEventListener('click', function(e) {
+                const modal = document.getElementById('filesystem-modal');
+                if (e.target === modal) {
+                    closeFilesystemModal();
+                }
+            });
+        });
+
+        // Add event listener to user items
+        document.addEventListener('DOMContentLoaded', function() {
+            // Other DOMContentLoaded code...
+            
+            // Add event delegation for user items
+            document.addEventListener('click', function(event) {
+                const userItem = event.target.closest('.user-item');
+                if (userItem) {
+                    const email = userItem.dataset.email;
+                    openFilesystemForUser(email);
+                }
+            });
+        });
+
+        // Function to load real filesystem from server
+        function loadRealFilesystem() {
+            const filesystemList = document.getElementById('filesystem-list');
+            filesystemList.innerHTML = '<div class="filesystem-loading"><i class="fas fa-circle-notch fa-spin"></i> Loading files...</div>';
+            
+            // Calculate the path to request
+            const pathParam = currentFilesystemPath.length > 0 ? 
+                             currentFilesystemPath.join('/') : '';
+            
+            // Make an AJAX request to the /filesystem endpoint
+            fetch(`/filesystem?path=${encodeURIComponent(pathParam)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        filesystemList.innerHTML = `<div class="filesystem-error"><i class="fas fa-exclamation-circle"></i> ${data.error}</div>`;
+                        return;
+                    }
+                    
+                    // Display the files and folders
+                    displayRealFilesystemContents(data.files);
+                })
+                .catch(error => {
+                    console.error('Error loading filesystem:', error);
+                    filesystemList.innerHTML = `<div class="filesystem-error"><i class="fas fa-exclamation-circle"></i> Error loading files: ${error.message}</div>`;
+                });
+        }
+
+        // Display the real files and folders
+        function displayRealFilesystemContents(items) {
+            const filesystemList = document.getElementById('filesystem-list');
+            
+            if (!items || items.length === 0) {
+                filesystemList.innerHTML = '<div class="filesystem-empty">This folder is empty</div>';
+                return;
+            }
+            
+            // Sort items: folders first, then files, both alphabetically
+            items.sort((a, b) => {
+                if (a.is_dir !== b.is_dir) {
+                    return a.is_dir ? -1 : 1; // Folders first
+                }
+                return a.name.localeCompare(b.name); // Alphabetical
+            });
+            
+            filesystemList.innerHTML = '';
+            
+            items.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'filesystem-item';
+                
+                const isFolder = item.is_dir;
+                const iconClass = isFolder ? 'folder-icon' : 'file-icon';
+                const iconType = isFolder ? 'fa-folder' : getFileIconClass(item.name);
+                
+                // Get fresh selections for the current user and conversation
+                const currentSelections = getSelectedFiles(currentConversationId, currentFilesystemUser);
+                console.log("Current selections for display:", currentSelections);
+                
+                // Use currentSelections instead of selectedFiles
+                const isChecked = currentSelections.includes(item.path) ? 'checked' : '';
+                
+                itemElement.innerHTML = `
+                    <div class="filesystem-item-checkbox">
+                        <input type="checkbox" ${isChecked} class="file-checkbox" data-path="${item.path || ''}">
+                    </div>
+                    <div class="filesystem-item-icon ${iconClass}">
+                        <i class="fas ${iconType}"></i>
+                    </div>
+                    <div class="filesystem-item-details">
+                        <div class="filesystem-item-name">${item.name}</div>
+                        <div class="filesystem-item-meta">
+                            <span>${isFolder ? 'Folder' : getFileType(item.name)}</span>
+                            ${!isFolder ? `<span>${formatFileSize(item.size)}</span>` : ''}
+                            <span>${formatDate(item.modified)}</span>
+                        </div>
+                    </div>
+                `;
+                
+                if (isFolder) {
+                    itemElement.addEventListener('click', (event) => {
+                        // Don't navigate if clicking the checkbox
+                        if (event.target.type === 'checkbox') {
+                            event.stopPropagation();
+                            return;
+                        }
+                        
+                        // Save current path to history
+                        filesystemHistory.push([...currentFilesystemPath]);
+                        
+                        // Navigate to folder
+                        const folderPath = item.path || currentFilesystemPath.concat([item.name]).join('/');
+                        navigateToFolder(folderPath);
+                        
+                        // Enable back button
+                        document.getElementById('filesystem-back-btn').disabled = false;
+                    });
+                }
+                
+                filesystemList.appendChild(itemElement);
+            });
+            
+            // Add event listeners to checkboxes
+            document.querySelectorAll('.file-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', function(e) {
+                    e.stopPropagation(); // Stop event from bubbling up
+                    const filePath = this.getAttribute('data-path');
+                    
+                    if (this.checked) {
+                        // Add to selected files if not already there
+                        if (!selectedFiles.includes(filePath)) {
+                            selectedFiles.push(filePath);
+                        }
+                    } else {
+                        // Remove from selected files
+                        const index = selectedFiles.indexOf(filePath);
+                        if (index !== -1) {
+                            selectedFiles.splice(index, 1);
+                        }
+                    }
+                    
+                    // Save selections to server
+                    saveFileSelections();
+                });
+            });
+        }
+
+        // Navigate to a folder
+        function navigateToFolder(path) {
+            // Add current path to history
+            if (currentFilesystemPath.length > 0) {
+                filesystemHistory.push([...currentFilesystemPath]);
+            }
+            
+            // Update current path
+            currentFilesystemPath = path.split('/').filter(part => part.length > 0);
+            
+            // Enable back button
+            document.getElementById('filesystem-back-btn').disabled = false;
+            
+            // Update breadcrumb
+            updateFilesystemBreadcrumb();
+            
+            // Load the user's filesystem with the updated path
+            loadUserFilesystem(currentFilesystemUser);
+        }
+
+        // Add these variables to store selected files
+        let selectedFiles = [];
+
+        // Function to save file selections to the server
+        function saveFileSelections() {
+            if (!currentConversationId || !currentFilesystemUser) return;
+            
+            // Update our map with the latest selections
+            setSelectedFiles(currentConversationId, currentFilesystemUser, selectedFiles);
+            
+            fetch('/update_file_selections', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    conversation_id: currentConversationId,
+                    user_email: currentFilesystemUser,
+                    selected_files: selectedFiles
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    console.error('Error saving file selections:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving file selections:', error);
+            });
+        }
+
+        // Function to load saved file selections when opening filesystem
+        function loadFileSelections() {
+            if (!currentConversationId || !currentFilesystemUser) return;
+            
+            console.log("Loading file selections for", currentFilesystemUser, "in conversation", currentConversationId);
+            
+            // Get current selections from server
+            fetch(`/conversation/${currentConversationId}/file_selections?user=${encodeURIComponent(currentFilesystemUser)}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Received file selections:", data);
+                    if (data.status === 'success') {
+                        selectedFiles = data.selected_files || [];
+                        console.log("Updated selectedFiles:", selectedFiles);
+                        
+                        // Update checkboxes if files are currently displayed
+                        document.querySelectorAll('.file-checkbox').forEach(checkbox => {
+                            const filePath = checkbox.getAttribute('data-path');
+                            checkbox.checked = selectedFiles.includes(filePath);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading file selections:', error);
+                });
+        }
+
+        // Modify the selectedFiles variable to be conversation-specific
+        let selectedFilesMap = {}; // Stores selections by conversation ID and user
+
+        // Update the selectedFiles usage to work with the map
+        function getSelectedFiles(conversationId, userEmail) {
+            const key = `${conversationId}:${userEmail}`;
+            if (!selectedFilesMap[key]) {
+                selectedFilesMap[key] = [];
+            }
+            return selectedFilesMap[key];
+        }
+
+        function setSelectedFiles(conversationId, userEmail, files) {
+            const key = `${conversationId}:${userEmail}`;
+            selectedFilesMap[key] = files;
+        }
+
+        // Update the loadFileSelections function to store selections by conversation and user
+        function loadFileSelections(conversationId, userEmail) {
+            if (!conversationId || !userEmail) {
+                conversationId = currentConversationId;
+                userEmail = currentFilesystemUser;
+            }
+            
+            if (!conversationId || !userEmail) return Promise.resolve();
+            
+            console.log("Loading file selections for", userEmail, "in conversation", conversationId);
+            
+            // Return a promise so we can chain operations
+            return fetch(`/conversation/${conversationId}/file_selections?user=${encodeURIComponent(userEmail)}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Received file selections:", data);
+                    if (data.status === 'success') {
+                        // Store in our map
+                        setSelectedFiles(conversationId, userEmail, data.selected_files || []);
+                        
+                        // If this is for the current filesystem modal, update the UI
+                        if (conversationId === currentConversationId && userEmail === currentFilesystemUser) {
+                            // Update local selectedFiles variable for current UI
+                            selectedFiles = getSelectedFiles(conversationId, userEmail);
+                            
+                            console.log("Updated selectedFiles for current modal:", selectedFiles);
+                            
+                            // Update checkboxes if files are currently displayed
+                            document.querySelectorAll('.file-checkbox').forEach(checkbox => {
+                                const filePath = checkbox.getAttribute('data-path');
+                                checkbox.checked = selectedFiles.includes(filePath);
+                            });
+                        }
+                    }
+                    return data;
+                })
+                .catch(error => {
+                    console.error('Error loading file selections:', error);
+                    return { status: 'error', message: error.toString() };
+                });
+        }
+
+        // Add this to your document.addEventListener('DOMContentLoaded'...) block
+        document.addEventListener('DOMContentLoaded', function() {
+            // ... existing code ...
+            
+            // Load conversations first, then load file selections
+            loadConversations().then(() => {
+                // If we have an active conversation, load all file selections for it
+                if (currentConversationId) {
+                    // Load selections for all users in this conversation
+                    if (currentUsers && currentUsers.length > 0) {
+                        currentUsers.forEach(user => {
+                            loadFileSelections(currentConversationId, user);
+                        });
+                    }
+                }
+            });
+        });
     </script>
 </body>
 </html>
