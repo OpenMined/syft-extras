@@ -380,6 +380,27 @@ Write as if you are the collective voice of all these AIs speaking together. Don
             logger.error(f"Error generating semantic average: {e}")
             return "Could not generate combined response. Please expand to see individual responses."
 
+    def generate_summary_with_custom_prompt(self, responses: List[dict], custom_prompt: str) -> str:
+        """Generate a summary of multiple AI responses using a custom prompt"""
+        if not responses or len(responses) <= 1:
+            return responses[0]["content"] if responses else ""
+        
+        # Start with the custom prompt
+        prompt = f"{custom_prompt}\n\n"
+        
+        # Add each response to be summarized
+        for i, response in enumerate(responses, 1):
+            ai_owner = response.get("ai_sender", "Unknown")
+            prompt += f"\n--- Response #{i} from {ai_owner}'s AI ---\n{response.get('content', '')}\n"
+        
+        try:
+            logger.info(f"Generating custom summary for {len(responses)} AI responses")
+            custom_summary = self.generate_response(prompt)
+            return custom_summary
+        except Exception as e:
+            logger.error(f"Error generating custom summary: {e}")
+            return "Could not generate custom summary. Please try again or view individual responses."
+
 
 # Move the class definition to before ChatClient
 class FileSelectionStorage:
@@ -942,6 +963,42 @@ class ChatClient:
             logger.error(f"Error generating AI response summary: {e}")
             return ""
 
+    def generate_custom_ai_summary(self, conversation_id: str, reply_to_message_id: str, custom_prompt: str) -> str:
+        """Generate a custom summary of AI responses to a message using a provided prompt"""
+        try:
+            if not self.ai_enabled:
+                return ""
+                
+            conversation = self.get_conversation(conversation_id)
+            if not conversation:
+                return ""
+                
+            # Find all AI responses to this message
+            ai_responses = []
+            for msg in conversation.get_messages():
+                if (msg.get("is_ai_response") and 
+                    msg.get("reply_to_message_id") == reply_to_message_id):
+                    ai_responses.append(msg)
+            
+            # If we have multiple responses, generate a custom summary
+            if len(ai_responses) > 1:
+                logger.info(f"Generating custom summary for {len(ai_responses)} AI responses using provided prompt")
+                summary = self.ollama_handler.generate_summary_with_custom_prompt(ai_responses, custom_prompt)
+                
+                # Store the summary (replace existing)
+                summary_key = f"{conversation_id}:{reply_to_message_id}"
+                self.ai_response_summaries[summary_key] = summary
+                
+                return summary
+            elif len(ai_responses) == 1:
+                # For a single response, just use that content
+                return ai_responses[0].get("content", "")
+            else:
+                return ""
+        except Exception as e:
+            logger.error(f"Error generating custom AI response summary: {e}")
+            return ""
+
 
 # Flask web application
 def create_flask_app(chat_client):
@@ -1106,6 +1163,15 @@ def create_flask_app(chat_client):
     def get_ai_summary(conversation_id, message_id):
         """Get or generate a summary of AI responses to a message"""
         summary = chat_client.generate_ai_response_summary(conversation_id, message_id)
+        return jsonify({"summary": summary})
+    
+    @app.route('/conversation/<conversation_id>/ai_resummary/<message_id>', methods=['POST'])
+    def get_custom_ai_summary(conversation_id, message_id):
+        """Generate a custom summary of AI responses with a user-provided prompt"""
+        data = request.json
+        custom_prompt = data.get('prompt', 'Please summarize these responses')
+        
+        summary = chat_client.generate_custom_ai_summary(conversation_id, message_id, custom_prompt)
         return jsonify({"summary": summary})
     
     @app.route('/filesystem')

@@ -795,6 +795,92 @@
             font-size: 16px; /* Slightly larger icon */
         }
 
+        /* Add styles for re-summarize button */
+        .resummary-button {
+            background-color: rgba(67, 181, 129, 0.2);
+            color: #43b581;
+            border: none;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-left: 8px;
+            transition: background-color 0.2s;
+        }
+
+        .resummary-button:hover {
+            background-color: rgba(67, 181, 129, 0.4);
+        }
+
+        /* Resummary modal styles */
+        .resummary-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .resummary-modal-content {
+            background-color: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 20px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .resummary-modal-header {
+            font-weight: 600;
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .resummary-prompt-textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: inherit;
+            resize: vertical;
+            margin-bottom: 15px;
+        }
+
+        .resummary-modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .resummary-modal-button {
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+        }
+
+        .resummary-cancel {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .resummary-submit {
+            background-color: #43b581;
+            color: white;
+        }
+
         .ai-response-count {
             background-color: rgba(67, 181, 129, 0.3);
             color: var(--text-primary);
@@ -2290,6 +2376,20 @@
         </div>
     </div>
 
+    <!-- Re-summarize Modal -->
+    <div id="resummary-modal" class="resummary-modal">
+        <div class="resummary-modal-content">
+            <div class="resummary-modal-header">Custom Summarization Prompt</div>
+            <textarea id="resummary-prompt" class="resummary-prompt-textarea" placeholder="Enter your custom prompt for summarizing the AI responses...">Please provide a concise summary of these AI responses, focusing on the main points and recommendations.</textarea>
+            <input type="hidden" id="resummary-message-id" value="">
+            <input type="hidden" id="resummary-conversation-id" value="">
+            <div class="resummary-modal-buttons">
+                <button class="resummary-modal-button resummary-cancel" id="resummary-cancel">Cancel</button>
+                <button class="resummary-modal-button resummary-submit" id="resummary-submit">Re-summarize</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Current active conversation
         let currentConversationId = null;
@@ -2704,6 +2804,9 @@
             summaryDiv.innerHTML = `
                 <div class="ai-response-title">
                     <i class="fas fa-robot"></i> AI Response
+                    <button class="resummary-button" title="Re-summarize with custom prompt">
+                        <i class="fas fa-sync-alt"></i> Re-summarize
+                    </button>
                 </div>
                 <div class="ai-response-count">
                     <span>${responses.length} ${responses.length > 1 ? 'answers' : 'answer'}</span>
@@ -2837,6 +2940,15 @@
             groupDiv.appendChild(headerDiv);
             groupDiv.appendChild(bodyDiv);
             
+            // Add event listener for re-summarize button
+            const resummaryButton = headerDiv.querySelector('.resummary-button');
+            if (resummaryButton) {
+                resummaryButton.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    openResummaryModal(currentConversationId, messageId);
+                });
+            }
+            
             // Replace existing element if present, otherwise append
             if (existingGroup) {
                 chatMessages.replaceChild(groupDiv, existingGroup);
@@ -2874,6 +2986,85 @@
             } catch (error) {
                 console.error('Error fetching summary:', error);
                 return null;
+            }
+        }
+        
+        // Re-summarize with custom prompt
+        async function resummarizeWithCustomPrompt(conversationId, messageId, customPrompt) {
+            try {
+                const response = await fetch(`/conversation/${conversationId}/ai_resummary/${messageId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ prompt: customPrompt }),
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // Update cache with new summary
+                    const cacheKey = `${conversationId}:${messageId}`;
+                    aiSummaryCache[cacheKey] = data.summary;
+                    return data.summary;
+                }
+                return null;
+            } catch (error) {
+                console.error('Error re-summarizing:', error);
+                return null;
+            }
+        }
+        
+        // Open re-summarize modal
+        function openResummaryModal(conversationId, messageId) {
+            document.getElementById('resummary-conversation-id').value = conversationId;
+            document.getElementById('resummary-message-id').value = messageId;
+            document.getElementById('resummary-modal').style.display = 'flex';
+            document.getElementById('resummary-prompt').focus();
+        }
+        
+        // Close re-summarize modal
+        function closeResummaryModal() {
+            document.getElementById('resummary-modal').style.display = 'none';
+        }
+        
+        // Handle re-summarize submission
+        async function handleResummarize() {
+            const conversationId = document.getElementById('resummary-conversation-id').value;
+            const messageId = document.getElementById('resummary-message-id').value;
+            const customPrompt = document.getElementById('resummary-prompt').value.trim();
+            
+            if (!customPrompt) {
+                alert('Please enter a custom prompt for summarization.');
+                return;
+            }
+            
+            // Close modal
+            closeResummaryModal();
+            
+            // Find the summary content element
+            const groupElement = document.querySelector(`.ai-response-group[data-msg-id="${messageId}"]`);
+            if (!groupElement) {
+                console.error('Could not find AI response group to update');
+                return;
+            }
+            
+            const summaryContent = groupElement.querySelector('.ai-summary-content');
+            if (!summaryContent) {
+                console.error('Could not find summary content element to update');
+                return;
+            }
+            
+            // Show loading state
+            summaryContent.innerHTML = '<div class="ai-summary-loading"><i class="fas fa-circle-notch fa-spin"></i> Generating new summary...</div>';
+            
+            // Get new summary
+            const newSummary = await resummarizeWithCustomPrompt(conversationId, messageId, customPrompt);
+            
+            // Update the summary content
+            if (newSummary) {
+                summaryContent.innerHTML = `<div class="ai-summary-text">${newSummary}</div>`;
+            } else {
+                summaryContent.innerHTML = '<div class="ai-summary-error">Failed to generate new summary. Please try again.</div>';
             }
         }
         
@@ -5082,6 +5273,32 @@
                     // Call sendMessage with the modified input
                     sendMessage(e, true);
                 });
+            }
+        });
+
+        // Add event listeners for the resummary modal
+        document.getElementById('resummary-cancel').addEventListener('click', closeResummaryModal);
+        document.getElementById('resummary-submit').addEventListener('click', handleResummarize);
+        
+        // Close the modal when clicking outside
+        document.getElementById('resummary-modal').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeResummaryModal();
+            }
+        });
+        
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                // Default behavior is to send to humans
+                sendMessage();
+            }
+        });
+        
+        // Add Ctrl+Enter to send to AI
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                sendAIMessage();
+                e.preventDefault();
             }
         });
     </script>
