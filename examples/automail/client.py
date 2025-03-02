@@ -184,12 +184,12 @@ Recent conversation:
             return []
 
     def generate_summary(self, responses: List[dict]) -> str:
-        """Generate a summary of multiple AI responses using Ollama model"""
+        """Generate a semantic average of multiple AI responses using Ollama model"""
         if not responses or len(responses) <= 1:
             return responses[0]["content"] if responses else ""
         
-        # Construct a prompt that asks for a summary
-        prompt = f"""You need to summarize the following AI responses to a user's question:
+        # Construct a prompt that asks for a semantic average response
+        prompt = f"""Pretend that each of these people got together to co-write a reply — and then write what they would collectively write:
 
 """
         # Add each response to the prompt
@@ -199,18 +199,23 @@ Recent conversation:
         
         prompt += """
 
-Please provide a concise summary that captures the key points from all responses.
-Highlight any consensus or important disagreements between the AIs.
-Keep your summary clear and helpful for the user.
+Rather than summarizing these responses, please write a single cohesive response that:
+1. Represents what these AI assistants would collectively write if they collaborated
+2. Blends the style, tone, and content from all responses into one "average" voice
+3. Incorporates the most common points made across all responses
+4. Presents a unified perspective that feels like a single, balanced answer
+5. Is shorter than the longest individual response.
+
+Write as if you are the collective voice of all these AIs speaking together. Don't refer to the individual responses or mention that this is a blend of multiple answers.
 """
         
         try:
-            logger.info(f"Generating summary for {len(responses)} AI responses")
-            summary = self.generate_response(prompt)
-            return summary
+            logger.info(f"Generating semantic average for {len(responses)} AI responses")
+            average_response = self.generate_response(prompt)
+            return average_response
         except Exception as e:
-            logger.error(f"Error generating summary: {e}")
-            return "Could not generate summary. Please expand to see individual responses."
+            logger.error(f"Error generating semantic average: {e}")
+            return "Could not generate combined response. Please expand to see individual responses."
 
 
 # Class to handle chat functionality
