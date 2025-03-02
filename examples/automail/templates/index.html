@@ -1494,6 +1494,222 @@
             width: 16px;
             height: 16px;
         }
+
+        /* Selected files display styling */
+        .user-selected-files {
+            margin-top: 8px;
+            font-size: 12px;
+            max-width: 100%;
+            display: none;
+        }
+
+        .selected-files-header {
+            color: #888;
+            margin-bottom: 3px;
+            font-weight: 500;
+        }
+
+        .selected-files-list {
+            list-style-type: none;
+            padding-left: 5px;
+            margin: 0;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .selected-file-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #666;
+        }
+
+        .selected-file-item i {
+            margin-right: 5px;
+            font-size: 10px;
+            color: #888;
+        }
+
+        .selected-file-item span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Make the user item taller to accommodate the files */
+        .user-item {
+            min-height: 48px;
+            padding: 10px;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .user-item .user-icon {
+            margin-right: 10px;
+        }
+
+        .user-item .user-details {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* Selected files in messages styling */
+        .selected-files-dropdown {
+            margin-top: 8px;
+            font-size: 12px;
+            background-color: rgba(0, 0, 0, 0.1);
+            border-radius: 6px;
+            overflow: hidden;
+            max-width: 400px;
+            border: 1px solid var(--border-color);
+        }
+
+        .selected-files-toggle {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+        }
+
+        .selected-files-toggle:hover {
+            background-color: rgba(0, 0, 0, 0.15);
+        }
+
+        /* Makes AI responses stand out more */
+        .message.ai-response .message-content {
+            border-left: 3px solid var(--success-color);
+            padding-left: 12px;
+        }
+
+        /* Make sure the dropdown is visible in both light and dark themes */
+        .message.self .selected-files-dropdown {
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Add animation to the dropdown chevron */
+        .selected-files-toggle .fa-chevron-down {
+            margin-left: auto;
+            transition: transform 0.3s ease;
+            color: var(--accent-color);
+        }
+
+        .selected-files-toggle .fa-chevron-down.open {
+            transform: rotate(180deg);
+        }
+
+        /* Fix the dropdown content to show properly */
+        .selected-files-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: all 0.3s ease-out;
+        }
+
+        .selected-files-content.show {
+            max-height: 500px;
+            padding-bottom: 8px;
+        }
+
+        /* DEBUGGING - Make file dropdowns extremely visible */
+        .selected-files-dropdown {
+            margin-top: 12px !important;
+            margin-bottom: 12px !important;
+            background-color: #f0f0f0 !important;
+            border: 3px solid #ff0000 !important;
+            border-radius: 8px !important;
+            overflow: hidden !important;
+            max-width: 90% !important;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+        }
+
+        .selected-files-toggle {
+            padding: 12px !important;
+            background-color: #ffcccc !important;
+            font-weight: bold !important;
+            color: #000000 !important;
+        }
+
+        .message-files-list {
+            list-style-type: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-height: 200px !important;
+            overflow-y: auto !important;
+        }
+
+        .message-files-user {
+            padding: 8px 12px !important;
+            font-weight: bold !important;
+            color: #000000 !important;
+            background-color: #e0e0e0 !important;
+            border-bottom: 1px solid #ccc !important;
+        }
+
+        .message-file-item {
+            padding: 8px 12px 8px 30px !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            background-color: #ffffff !important;
+            border-bottom: 1px solid #eee !important;
+        }
+
+        .selected-files-content.show {
+            max-height: 500px !important;
+            background-color: #ffffff !important;
+        }
+
+        .selected-files-list-header {
+            padding: 8px 12px !important;
+            font-weight: bold !important;
+            color: #000000 !important;
+            background-color: #e0e0e0 !important;
+            border-bottom: 1px solid #ccc !important;
+        }
+
+        /* Add this CSS back to the template for the missing elements */
+        .selected-files-list-header {
+            padding: 6px 10px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .message-files-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .message-files-user {
+            padding: 6px 10px;
+            font-weight: 500;
+            color: var(--accent-color);
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        .message-file-item {
+            padding: 4px 10px 4px 25px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .message-file-item i {
+            color: var(--text-muted);
+        }
+
+        .message .message-content {
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
@@ -1822,6 +2038,21 @@
             fetch(`/conversation/${currentConversationId}/messages`)
                 .then(response => response.json())
                 .then(data => {
+                    const messages = data.messages;
+                    if (!messages) return;
+                    
+                    // Debug output to check if messages have selected_files
+                    console.log("Messages received:", messages);
+                    let fileMessageCount = 0;
+                    messages.forEach(msg => {
+                        if (msg.selected_files && msg.selected_files.length > 0) {
+                            fileMessageCount++;
+                            console.log(`Message ${msg.message_id} has ${msg.selected_files.length} files:`, 
+                                         msg.selected_files);
+                        }
+                    });
+                    console.log(`Found ${fileMessageCount} messages with files`);
+                    
                     // Remember scroll position before refresh
                     const scrollPos = chatMessages.scrollTop;
                     const isAtBottom = chatMessages.scrollHeight - chatMessages.clientHeight <= chatMessages.scrollTop + 50;
@@ -1915,6 +2146,39 @@
                                 // Create a new response group
                                 renderAIResponseGroup(responses, msg.message_id);
                             }
+                        }
+                        
+                        // Add file list for messages with selected files
+                        if (msg.selected_files && msg.selected_files.length > 0) {
+                            const fileListContainer = document.createElement('div');
+                            fileListContainer.className = 'message-file-list';
+                            
+                            // Create header for files
+                            const fileHeader = document.createElement('div');
+                            fileHeader.className = 'file-list-header';
+                            fileHeader.innerHTML = `<i class="fas fa-file"></i> Files (${msg.selected_files.length})`;
+                            fileListContainer.appendChild(fileHeader);
+                            
+                            // Create file items
+                            const fileList = document.createElement('div');
+                            fileList.className = 'file-items';
+                            
+                            msg.selected_files.forEach(file => {
+                                const fileItem = document.createElement('div');
+                                fileItem.className = 'file-item';
+                                
+                                // Show file path and user who shared it
+                                fileItem.innerHTML = `
+                                    <i class="fas ${getFileIconClass(file.path)}"></i>
+                                    <span class="file-path">${file.path}</span>
+                                    <span class="file-owner">${file.user}</span>
+                                `;
+                                
+                                fileList.appendChild(fileItem);
+                            });
+                            
+                            fileListContainer.appendChild(fileList);
+                            chatMessages.appendChild(fileListContainer);
                         }
                     });
                     
@@ -2210,31 +2474,60 @@
             const message = messageInput.value.trim();
             if (!message) return;
             
+            // Collect all selected files from all users
+            let allSelectedFiles = [];
+            
+            // Gather files from all users in the conversation
+            if (currentUsers && currentUsers.length > 0) {
+                currentUsers.forEach(user => {
+                    const userFiles = getSelectedFiles(currentConversationId, user);
+                    if (userFiles && userFiles.length > 0) {
+                        // Add user attribution to each file
+                        userFiles.forEach(file => {
+                            allSelectedFiles.push({
+                                path: file,
+                                user: user
+                            });
+                        });
+                    }
+                });
+            }
+            
+            console.log("Sending message with files:", allSelectedFiles);
+            
+            // Send the message with selected files as metadata
             fetch(`/conversation/${currentConversationId}/send`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ 
-                    message,
-                    to_ai: true
+                    message: message,
+                    to_ai: true,
+                    selected_files: allSelectedFiles
                 }),
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
                     messageInput.value = '';
-                    refreshMessages();
                     
-                    // Always show the AI response indicator when sending directly to AI
+                    // Show AI response indicator
                     showAIResponseIndicator();
+                    
+                    // Refresh messages to see our sent message
+                    setTimeout(refreshMessages, 500);
+                    
+                    // Store message ID for potential AI responses
+                    if (data.message_id) {
+                        lastAIMessageId = data.message_id;
+                    }
                 } else {
-                    alert(data.message || 'Failed to send message to AI');
+                    console.error('Error sending message:', data);
                 }
             })
             .catch(error => {
-                console.error('Error sending message to AI:', error);
-                alert('Error sending message to AI. Please try again.');
+                console.error('Error:', error);
             });
         }
         
@@ -2950,6 +3243,15 @@
                                 <div class="user-status">${isSelf ? 'You' : 'Member'}</div>
                             </div>
                         `;
+                        
+                        // Add selected files container
+                        const selectedFilesContainer = document.createElement('div');
+                        selectedFilesContainer.className = 'user-selected-files';
+                        selectedFilesContainer.id = `user-files-${user.replace('@', '-').replace('.', '-')}`;
+                        userItem.appendChild(selectedFilesContainer);
+                        
+                        // Populate selected files if any
+                        updateUserSelectedFiles(user, selectedFilesContainer);
                         
                         usersList.appendChild(userItem);
                     });
@@ -3681,6 +3983,9 @@
             // Update our map with the latest selections
             setSelectedFiles(currentConversationId, currentFilesystemUser, selectedFiles);
             
+            // Update the UI to show selected files
+            updateUserSelectedFiles(currentFilesystemUser);
+            
             fetch('/update_file_selections', {
                 method: 'POST',
                 headers: {
@@ -3780,6 +4085,9 @@
                                 checkbox.checked = selectedFiles.includes(filePath);
                             });
                         }
+                        
+                        // Update the display of selected files in the users panel
+                        updateUserSelectedFiles(userEmail);
                     }
                     return data;
                 })
@@ -3813,6 +4121,172 @@
             // Initialize file selections
             initializeFileSelections();
         });
+
+        // Function to update the displayed selected files for a user
+        function updateUserSelectedFiles(userEmail, container = null) {
+            if (!currentConversationId) return;
+            
+            // Get the container if not provided
+            if (!container) {
+                const containerId = `user-files-${userEmail.replace('@', '-').replace('.', '-')}`;
+                container = document.getElementById(containerId);
+                if (!container) return;
+            }
+            
+            // Get the selected files for this user
+            const files = getSelectedFiles(currentConversationId, userEmail);
+            
+            // Update the container
+            if (files && files.length > 0) {
+                let html = '<div class="selected-files-header">Selected Files:</div>';
+                html += '<ul class="selected-files-list">';
+                
+                files.forEach(file => {
+                    // Extract just the filename from the path
+                    const fileName = file.split('/').pop();
+                    html += `<li class="selected-file-item">
+                        <i class="fas ${getFileIconClass(fileName)}"></i>
+                        <span title="${file}">${fileName}</span>
+                    </li>`;
+                });
+                
+                html += '</ul>';
+                container.innerHTML = html;
+                container.style.display = 'block';
+            } else {
+                container.innerHTML = '';
+                container.style.display = 'none';
+            }
+        }
+
+        // Ensure the displayMessage function shows file dropdowns for both user and AI messages
+        function displayMessage(message) {
+            // Check if message already exists
+            const existingMessage = document.getElementById(`message-${message.message_id}`);
+            if (existingMessage) return existingMessage;
+            
+            const messageElement = document.createElement('div');
+            messageElement.id = `message-${message.message_id}`;
+            
+            // Determine message class (self/other/system)
+            let messageClass = message.is_self ? 'self' : 'other';
+            if (message.sender === 'System') {
+                messageClass = 'system';
+            }
+            
+            // Add to-ai class if the message is directed to AI
+            if (message.to_ai) {
+                messageClass += ' to-ai';
+            }
+            
+            // Add ai-response class for AI responses
+            if (message.is_ai_response) {
+                messageClass += ' ai-response';
+            }
+            
+            messageElement.className = `message ${messageClass}`;
+            
+            // Get selected files from message metadata
+            const selectedFiles = message.selected_files || [];
+            
+            // Format timestamp
+            const timestamp = formatTimestamp(message.timestamp);
+            
+            // Create message HTML
+            let messageHTML = `
+                <div class="message-content">${message.content}</div>
+                <div class="message-meta">
+                    <span>${message.sender === 'System' ? '' : (message.is_ai_response ? `${message.ai_sender}'s AI` : message.sender)}</span>
+                    <span>${timestamp}</span>
+                    ${getDeliveryStatusHtml(message)}
+                </div>
+            `;
+            
+            // Add selected files dropdown if there are any
+            if (selectedFiles && selectedFiles.length > 0) {
+                messageHTML += `
+                    <div class="selected-files-dropdown">
+                        <div class="selected-files-toggle">
+                            <i class="fas fa-paperclip"></i> 
+                            ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} referenced
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="selected-files-content">
+                            <div class="selected-files-list-header">Referenced Files:</div>
+                            <ul class="message-files-list">
+            `;
+            
+                // Group files by user
+                const filesByUser = {};
+                selectedFiles.forEach(file => {
+                    if (!filesByUser[file.user]) {
+                        filesByUser[file.user] = [];
+                    }
+                    filesByUser[file.user].push(file.path);
+                });
+                
+                // Add each user's files
+                for (const user in filesByUser) {
+                    messageHTML += `<li class="message-files-user">${user}</li>`;
+                    filesByUser[user].forEach(path => {
+                        const fileName = path.split('/').pop();
+                        messageHTML += `
+                            <li class="message-file-item">
+                                <i class="fas ${getFileIconClass(fileName)}"></i>
+                                <span title="${path}">${fileName}</span>
+                            </li>
+                        `;
+                    });
+                }
+                
+                messageHTML += `
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            messageElement.innerHTML = messageHTML;
+            
+            // Replace the event listener for file dropdown toggle with this code
+            setTimeout(() => {
+                const toggle = messageElement.querySelector('.selected-files-toggle');
+                const content = messageElement.querySelector('.selected-files-content');
+                
+                if (toggle && content) {
+                    console.log("Adding click handler to dropdown toggle");
+                    
+                    // First make sure the content has the right styles
+                    content.style.maxHeight = "0";
+                    content.style.overflow = "hidden";
+                    
+                    toggle.addEventListener('click', function() {
+                        console.log("Toggle clicked");
+                        
+                        // Toggle the show class
+                        if (content.classList.contains('show')) {
+                            console.log("Hiding content");
+                            content.classList.remove('show');
+                            content.style.maxHeight = "0";
+                            toggle.querySelector('.fa-chevron-down').classList.remove('open');
+                        } else {
+                            console.log("Showing content");
+                            content.classList.add('show');
+                            content.style.maxHeight = "500px";
+                            toggle.querySelector('.fa-chevron-down').classList.add('open');
+                        }
+                    });
+                    
+                    // Add a visible indicator that this is clickable
+                    toggle.title = "Click to expand/collapse file list";
+                    toggle.style.cursor = "pointer";
+                } else {
+                    console.log("Could not find toggle or content elements", toggle, content);
+                }
+            }, 0);
+            
+            return messageElement;
+        }
     </script>
 </body>
 </html>

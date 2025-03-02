@@ -52,6 +52,7 @@ class ChatMessage:
     is_ai_response: bool = False  # Flag to indicate this is an AI response
     ai_sender: str = None  # The person whose AI generated this response
     reply_to_message_id: str = None  # ID of the message this is responding to
+    selected_files: List[Dict[str, str]] = None  # List of files with user and path info
     
     def to_dict(self):
         return {
@@ -66,7 +67,8 @@ class ChatMessage:
             "human_only": self.human_only,
             "is_ai_response": self.is_ai_response,
             "ai_sender": self.ai_sender,
-            "reply_to_message_id": self.reply_to_message_id
+            "reply_to_message_id": self.reply_to_message_id,
+            "selected_files": self.selected_files
         }
 
 
@@ -110,11 +112,22 @@ class Conversation:
 
 class OllamaHandler:
     """Handler for Ollama AI integration"""
-    def __init__(self, base_url="http://localhost:11434", model="llama3.2:latest"):
+    def __init__(self, base_url="http://localhost:11434", model="llama3.2:latest", client=None):
         self.base_url = base_url
         self.model = model
         # The API endpoint is just /api/generate
         self.api_url = f"{self.base_url}/api/generate"
+        self.client = client  # Store the client reference
+        
+        # Print client details for debugging
+        if client:
+            print(f"OllamaHandler initialized with client: {client.email}")
+            print(f"Client properties: {dir(client)}")
+            if hasattr(client, 'workspace'):
+                print(f"Workspace properties: {dir(client.workspace)}")
+                print(f"Datasites path: {client.workspace.datasites}")
+        else:
+            print("OllamaHandler initialized with no client reference")
         
     def generate_response(self, prompt: str) -> str:
         """Generate a response using Ollama model"""
@@ -129,22 +142,30 @@ class OllamaHandler:
             # Add debug logging
             logger.info(f"Sending request to Ollama API at {self.api_url}")
             logger.info(f"Using model: {self.model}")
+            print(f"Prompt length: {len(prompt)} characters")
+            print(f"Prompt start: {prompt[:200]}...")
+            print(f"Prompt end: ...{prompt[-200:]}")
             
             response = requests.post(self.api_url, json=payload)
             logger.info(f"Ollama API response status: {response.status_code}")
+            print(f"Ollama response status: {response.status_code}")
             
             if response.status_code == 200:
                 result = response.json()
+                print(f"Response received, length: {len(result.get('response', ''))}")
                 return result.get("response", "Sorry, I couldn't generate a response.")
             else:
                 # Try to get more details from the error response
                 try:
                     error_details = response.json()
+                    print(f"Error response: {error_details}")
                     return f"Error from Ollama API: {response.status_code} - {error_details.get('error', 'Unknown error')}"
                 except:
+                    print(f"Could not parse error response, raw: {response.text}")
                     return f"Error from Ollama API: {response.status_code}"
         except Exception as e:
             logger.error(f"Failed to connect to Ollama: {str(e)}")
+            print(f"Exception connecting to Ollama: {str(e)}")
             return f"Failed to connect to Ollama: {str(e)}"
     
     def format_chat_prompt(self, sender: str, message: str, conversation_history: List[dict]) -> str:
@@ -161,9 +182,183 @@ Recent conversation:
         for msg in context_messages:
             sender_name = "You" if msg.get("is_self", False) else msg.get("sender", "Unknown")
             prompt += f"{sender_name}: {msg.get('content', '')}\n"
+            
+            # Include file information if present
+            selected_files = msg.get("selected_files", [])
+            if selected_files:
+                file_info = "\n[Referenced files: "
+                file_names = []
+                for file in selected_files:
+                    path = file.get("path", "")
+                    if path:
+                        # Extract just the filename from the path
+                        file_name = path.split('/')[-1]
+                        file_names.append(file_name)
+                
+                if file_names:
+                    file_info += ", ".join(file_names)
+                    prompt += file_info + "]\n"
         
         # Add the current message and request
-        prompt += f"\n{sender}: {message}\n\nPlease write a helpful and friendly response:"
+        prompt += f"\n{sender}: {message}\n\n"
+        
+        # Check if there are files to include in the latest message
+        latest_msg = conversation_history[-1] if conversation_history else None
+        if latest_msg:
+            # Debug the latest message structure
+            print(f"\n--- Processing files from message: {latest_msg.get('message_id')} ---")
+            selected_files = latest_msg.get("selected_files", [])
+            print(f"Selected files: {json.dumps(selected_files, indent=2)}")
+            
+            if selected_files:
+                prompt += "Referenced file contents:\n\n"
+                files_included = 0
+                
+                # Debug client information if available
+                if self.client:
+                    print(f"Client email: {self.client.email}")
+                    print(f"Client workspace: {hasattr(self.client, 'workspace')}")
+                    if hasattr(self.client, 'workspace'):
+                        print(f"Datasites path: {self.client.workspace.datasites}")
+                        print(f"Directory exists: {os.path.exists(str(self.client.workspace.datasites))}")
+                else:
+                    print("No client object available!")
+                
+                for file_info in selected_files:
+                    # Debug file info structure
+                    print(f"\nProcessing file: {json.dumps(file_info, indent=2) if isinstance(file_info, dict) else file_info}")
+                    
+                    # Handle both dict and string format (backward compatibility)
+                    if isinstance(file_info, dict):
+                        file_path = file_info.get("path", "")
+                        user_email = file_info.get("user", "")
+                        print(f"Dict format - path: {file_path}, user: {user_email}")
+                    else:
+                        # If it's just a string path, use the sender as the user
+                        file_path = file_info
+                        user_email = sender
+                        print(f"String format - path: {file_path}, using sender as user: {user_email}")
+                    
+                    # Make sure we have both path and user
+                    if not file_path:
+                        print("Skipping file with empty path")
+                        continue
+                    
+                    # Try multiple approaches to locate the file
+                    possible_paths = []
+                    
+                    # 1. Direct path as provided
+                    possible_paths.append(file_path)
+                    print(f"1. Direct path: {file_path}")
+                    
+                    # 2. Using SyftBox/datasites path structure
+                    if user_email:
+                        datasite_path = f"SyftBox/datasites/{user_email}/{file_path}"
+                        possible_paths.append(datasite_path)
+                        print(f"2. SyftBox path: {datasite_path}")
+                        
+                        # Also try with home directory
+                        home_path = os.path.expanduser(f"~/SyftBox/datasites/{user_email}/{file_path}")
+                        possible_paths.append(home_path)
+                        print(f"3. Home SyftBox path: {home_path}")
+                        
+                    # 4. Use the client's paths when available
+                    if self.client:
+                        try:
+                            print(f"Using client paths for {self.client.email}")
+                            
+                            # For user's own files
+                            if user_email == self.client.email:
+                                # Try using my_datasite property
+                                if hasattr(self.client, 'my_datasite'):
+                                    user_path = self.client.my_datasite / file_path
+                                    possible_paths.append(str(user_path))
+                                    print(f"4. User's own datasite path: {user_path}")
+                            
+                            # Try using workspace.datasites
+                            if hasattr(self.client, 'workspace') and hasattr(self.client.workspace, 'datasites'):
+                                datasite_path = self.client.workspace.datasites / user_email / file_path
+                                possible_paths.append(str(datasite_path))
+                                print(f"5. Workspace datasite path: {datasite_path}")
+                                
+                                # Also try with just the base datasite path + file path
+                                simple_path = self.client.workspace.datasites / file_path
+                                possible_paths.append(str(simple_path))
+                                print(f"6. Simple datasite path: {simple_path}")
+                            
+                            # If client has a config with data_dir
+                            if hasattr(self.client, 'config') and hasattr(self.client.config, 'data_dir'):
+                                data_dir_path = self.client.config.data_dir / "datasites" / user_email / file_path
+                                possible_paths.append(str(data_dir_path))
+                                print(f"7. Config data_dir path: {data_dir_path}")
+                        except Exception as e:
+                            print(f"Error resolving client paths: {e}")
+                    
+                    # 8. Try with absolute path from current directory
+                    abs_path = os.path.abspath(file_path)
+                    possible_paths.append(abs_path)
+                    print(f"8. Absolute path: {abs_path}")
+                    
+                    # 9. Try current directory + file_path
+                    cwd_path = os.path.join(os.getcwd(), file_path)
+                    possible_paths.append(cwd_path)
+                    print(f"9. CWD path: {cwd_path}")
+                    
+                    # Log all paths we're going to try
+                    print(f"Will try these paths in order:")
+                    for i, path in enumerate(possible_paths):
+                        print(f"  {i+1}. {path}")
+                    
+                    # Try each path until we find one that works
+                    file_read = False
+                    for try_path in possible_paths:
+                        print(f"\nAttempting to read file from: {try_path}")
+                        try:
+                            if os.path.exists(try_path):
+                                print(f"Path exists: {try_path}")
+                                if os.path.isfile(try_path):
+                                    print(f"SUCCESS: Found file at: {try_path}")
+                                    try:
+                                        with open(try_path, 'r') as f:
+                                            file_content = f.read()
+                                            filename = os.path.basename(file_path)
+                                            content_preview = file_content[:100] + "..." if len(file_content) > 100 else file_content
+                                            print(f"Read file content ({len(file_content)} chars): {content_preview}")
+                                            
+                                            # Add file content to prompt with clear delimitation
+                                            prompt += f"--- File: {filename} ---\n{file_content}\n--- End of {filename} ---\n\n"
+                                            files_included += 1
+                                            file_read = True
+                                            break
+                                    except UnicodeDecodeError as ude:
+                                        print(f"UnicodeDecodeError reading file: {ude}")
+                                        try:
+                                            # Try with different encoding
+                                            with open(try_path, 'r', encoding='latin1') as f:
+                                                file_content = f.read()
+                                                filename = os.path.basename(file_path)
+                                                prompt += f"--- File: {filename} ---\n{file_content}\n--- End of {filename} ---\n\n"
+                                                files_included += 1
+                                                file_read = True
+                                                break
+                                        except Exception as e2:
+                                            print(f"Second attempt failed: {e2}")
+                                else:
+                                    print(f"Path exists but is not a file: {try_path}")
+                            else:
+                                print(f"Path does not exist: {try_path}")
+                        except PermissionError as pe:
+                            print(f"Permission error reading file {try_path}: {pe}")
+                        except Exception as e:
+                            print(f"Unexpected error reading file {try_path}: {e}")
+                    
+                    if not file_read:
+                        print(f"FAILED: Could not find or read file: {file_path}")
+                        prompt += f"--- File: {os.path.basename(file_path)} ---\n(File could not be accessed)\n--- End of file ---\n\n"
+                
+                print(f"\nIncluded {files_included} of {len(selected_files)} files in the prompt")
+        
+        prompt += "Please write a helpful and friendly response:"
         
         return prompt
 
@@ -270,12 +465,18 @@ class ChatClient:
         
         # AI auto-response settings
         self.ai_enabled = False
-        self.ollama_handler = OllamaHandler()
         self.ai_settings = {
             "model": "llama3.2:latest",
             "auto_respond": False,
             "base_url": "http://localhost:11434"
         }
+        
+        # Create Ollama handler with client reference
+        self.ollama_handler = OllamaHandler(
+            base_url=self.ai_settings.get("base_url", "http://localhost:11434"),
+            model=self.ai_settings.get("model", "llama3.2:latest"),
+            client=self.client  # Pass the client instance
+        )
         
         # Add storage for file selections
         self.storage = FileSelectionStorage(self)
@@ -315,7 +516,8 @@ class ChatClient:
                 "human_only": getattr(message, "human_only", False),  # Include the human_only flag
                 "is_ai_response": getattr(message, "is_ai_response", False),  # Include the is_ai_response flag
                 "ai_sender": getattr(message, "ai_sender", None),  # Include the ai_sender
-                "reply_to_message_id": getattr(message, "reply_to_message_id", None)  # Include the reply_to_message_id
+                "reply_to_message_id": getattr(message, "reply_to_message_id", None),  # Include the reply_to_message_id
+                "selected_files": getattr(message, "selected_files", [])  # Include selected files
             }
             
             # Find or create conversation
@@ -408,7 +610,8 @@ class ChatClient:
                     # Update Ollama handler settings
                     self.ollama_handler = OllamaHandler(
                         base_url=self.ai_settings.get("base_url", "http://localhost:11434"),
-                        model=self.ai_settings.get("model", "llama3.2")
+                        model=self.ai_settings.get("model", "llama3.2"),
+                        client=self.client  # Pass the client instance
                     )
                     
                     # Set AI enabled state
@@ -440,21 +643,48 @@ class ChatClient:
             # Get conversation history
             history = conversation.get_messages()
             
+            # Find the original message to get its selected files
+            original_selected_files = []
+            original_sender = ""
+            if original_message_id:
+                for msg in history:
+                    if msg.get("message_id") == original_message_id:
+                        original_selected_files = msg.get("selected_files", [])
+                        original_sender = msg.get("sender", "")
+                        logger.info(f"Found original message. Selected files: {original_selected_files}")
+                        break
+            
+            # Fix selected_files structure if needed
+            processed_files = []
+            for file_info in original_selected_files:
+                if isinstance(file_info, dict) and 'path' in file_info:
+                    # Make sure it has a user field
+                    if 'user' not in file_info:
+                        file_info['user'] = original_sender or sender
+                    processed_files.append(file_info)
+                elif isinstance(file_info, str):
+                    processed_files.append({
+                        'path': file_info,
+                        'user': original_sender or sender
+                    })
+            
             # Generate AI response
             prompt = self.ollama_handler.format_chat_prompt(sender, message, history)
+            logger.info(f"Generated prompt length: {len(prompt)} characters")
             ai_response = self.ollama_handler.generate_response(prompt)
             
             # Small delay to make the conversation feel more natural
             time.sleep(1.5)
             
-            # Send the response
+            # Send the response with the same selected files as the original message
             self.send_message(
                 conversation_id, 
                 ai_response, 
                 to_ai=False,  # This is from AI, not to AI
                 is_ai_response=True,
                 ai_sender=self.client.email, # The owner of this AI
-                reply_to_message_id=original_message_id # Link to original message
+                reply_to_message_id=original_message_id, # Link to original message
+                selected_files=processed_files  # Use the properly formatted files
             )
             
             logger.info(f"Sent AI response in conversation {conversation_id}")
@@ -469,7 +699,8 @@ class ChatClient:
         if "base_url" in settings or "model" in settings:
             self.ollama_handler = OllamaHandler(
                 base_url=self.ai_settings.get("base_url", "http://localhost:11434"),
-                model=self.ai_settings.get("model", "llama3.2:latest")
+                model=self.ai_settings.get("model", "llama3.2:latest"),
+                client=self.client  # Pass the client instance
             )
         
         # Update AI enabled state
@@ -567,7 +798,7 @@ class ChatClient:
     
     def send_message(self, conversation_id: str, content: str, to_ai: bool = False, 
                     is_ai_response: bool = False, ai_sender: str = None, 
-                    reply_to_message_id: str = None):
+                    reply_to_message_id: str = None, selected_files: List[Dict] = None):
         """Send a message to all recipients in a conversation"""
         if not content or not conversation_id:
             return False
@@ -578,6 +809,24 @@ class ChatClient:
         
         # Generate a unique message ID
         message_id = str(uuid.uuid4())
+        
+        # Ensure selected_files is properly formatted with both path and user info
+        processed_files = []
+        if selected_files:
+            for file_info in selected_files:
+                if isinstance(file_info, dict) and 'path' in file_info:
+                    # Make sure each file has a user field
+                    if 'user' not in file_info:
+                        file_info['user'] = self.client.email
+                    processed_files.append(file_info)
+                elif isinstance(file_info, str):
+                    # Convert string paths to proper dict format
+                    processed_files.append({
+                        'path': file_info,
+                        'user': self.client.email
+                    })
+        
+        logger.info(f"Sending message with {len(processed_files)} selected files: {processed_files}")
         
         # Store message in conversation history first with delivered=False
         timestamp = datetime.now(timezone.utc)
@@ -595,7 +844,8 @@ class ChatClient:
             "human_only": not to_ai and not is_ai_response,  # If not to_ai and not an AI response, mark as human_only
             "is_ai_response": is_ai_response,
             "ai_sender": ai_sender,
-            "reply_to_message_id": reply_to_message_id
+            "reply_to_message_id": reply_to_message_id,
+            "selected_files": processed_files  # Use the processed file list
         }
         
         conversation.add_message(formatted_message)
@@ -604,11 +854,14 @@ class ChatClient:
         all_participants = conversation.recipients.copy()
         all_participants.append(self.client.email)
         
-        # Total recipients count for percentage calculation
-        total_recipients = len(conversation.recipients)
+        # Filter out "System" from recipients list - System isn't a real user
+        actual_recipients = [r for r in conversation.recipients if r != "System"]
         
-        # Send message to each recipient
-        for recipient in conversation.recipients:
+        # Total recipients count for percentage calculation
+        total_recipients = len(actual_recipients)
+        
+        # Send message to each recipient (except System)
+        for recipient in actual_recipients:
             try:
                 future = rpc.send(
                     url=f"syft://{recipient}/api_data/chat/rpc/message",
@@ -623,7 +876,8 @@ class ChatClient:
                         human_only=not to_ai and not is_ai_response,  # If not to_ai and not an AI response, mark as human_only
                         is_ai_response=is_ai_response,
                         ai_sender=ai_sender,
-                        reply_to_message_id=reply_to_message_id
+                        reply_to_message_id=reply_to_message_id,
+                        selected_files=selected_files  # Include selected files
                     ),
                     expiry="5m",
                     cache=True,
@@ -654,8 +908,6 @@ class ChatClient:
                                         # If all recipients have received, mark as fully delivered
                                         if delivered_count >= actual_recipient_count:
                                             msg["delivered"] = True
-                    # else:
-                    #     logger.error(f"Failed to deliver message to {recipient_email}: {response.status_code}")
                     except Exception as e:
                         logger.error(f"Error sending message to {recipient_email}: {e}")
                         
@@ -763,8 +1015,9 @@ def create_flask_app(chat_client):
         data = request.json
         message = data.get('message', '')
         to_ai = data.get('to_ai', False)  # Check if this is for AI
+        selected_files = data.get('selected_files', [])  # Get selected files from request
         
-        if message and chat_client.send_message(conversation_id, message, to_ai=to_ai):
+        if message and chat_client.send_message(conversation_id, message, to_ai=to_ai, selected_files=selected_files):
             # Get the message ID of the most recent message sent by the user
             conversation = chat_client.get_conversation(conversation_id)
             if conversation:
