@@ -42,17 +42,24 @@ def send_ping(email):
 
 
 if __name__ == "__main__":
-    client = Client.load()
-    email = None
+    try:
+        client = Client.load()
+        email = None
 
-    while True:
-        email = input(
-            "Which datasite do you want to ping (they must have pong running)? "
-        )
-        if email not in set([d.name for d in client.datasites.glob("*")]):
-            print("Invalid datasite. Available datasites are:")
-            print(set([d.name for d in client.datasites.glob("*")]))
-        else:
-            break
+        while True:
+            email = input(
+                "Which datasite do you want to ping (they must have pong running)? "
+            )
+            datasites = sorted(
+                [d.name for d in client.datasites.glob("*") if "@" in d.name]
+            )
+            if email not in datasites:
+                print("Invalid datasite. Available datasites are:")
+                for d in datasites:
+                    print("-", d)
+            else:
+                break
 
-    send_ping(email)
+        send_ping(email)
+    except KeyboardInterrupt:
+        logger.info("bye!")
