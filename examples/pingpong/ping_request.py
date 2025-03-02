@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import List, Optional
 
 from loguru import logger
 from pydantic import BaseModel
@@ -41,25 +43,45 @@ def send_ping(email):
         raise
 
 
-if __name__ == "__main__":
+def get_datasites(client: Client) -> List[str]:
+    return sorted([ds.name for ds in client.datasites.glob("*") if "@" in ds.name])
+
+
+def valid_datasite(ds: str, client) -> bool:
+    return ds in get_datasites(client)
+
+
+def prompt_input(client: Client) -> Optional[str]:
+    while True:
+        datasites = get_datasites(client)
+        ds = input("Enter datasite (they must have a pong server running): ")
+        if valid_datasite(ds, client):
+            return ds
+        else:
+            print(f"Invalid datasite: {ds}.")
+            for d in datasites:
+                print("-", d)
+
+
+def main():
+    """Main function to handle the ping request process."""
     try:
         client = Client.load()
-        email = None
 
-        while True:
-            email = input(
-                "Which datasite do you want to ping (they must have pong running)? "
-            )
-            datasites = sorted(
-                [d.name for d in client.datasites.glob("*") if "@" in d.name]
-            )
-            if email not in datasites:
-                print("Invalid datasite. Available datasites are:")
-                for d in datasites:
-                    print("-", d)
-            else:
-                break
+        ds = sys.argv[1] if len(sys.argv) > 1 else None
 
-        send_ping(email)
+        if ds and not valid_datasite(ds, client):
+            print(f"Invalid ds: {ds}")
+            for d in get_datasites(client):
+                print("-", d)
+            sys.exit(1)
+        elif not ds:
+            ds = prompt_input(client)
+
+        send_ping(ds)
     except KeyboardInterrupt:
         logger.info("bye!")
+
+
+if __name__ == "__main__":
+    main()

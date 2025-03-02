@@ -50,9 +50,9 @@ run-pong:
     uv sync
     uv run examples/pingpong/pong_server.py
 
-run-ping:
+run-ping *args:
     uv sync
-    uv run examples/pingpong/ping_request.py
+    uv run examples/pingpong/ping_request.py {{ args }}
 
 run-crud-server:
     uv sync
