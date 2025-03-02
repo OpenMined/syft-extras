@@ -21,11 +21,10 @@ class PongResponse(BaseModel):
     ts: datetime
 
 
-def send_ping():
-    client = Client.load()
+def send_ping(email):
     start = time.time()
     future = rpc.send(
-        url=f"syft://{client.email}/api_data/pingpong/rpc/ping",
+        url=f"syft://{email}/api_data/pingpong/rpc/ping",
         body=PingRequest(msg="hello!"),
         expiry="5m",
         cache=True,
@@ -43,4 +42,17 @@ def send_ping():
 
 
 if __name__ == "__main__":
-    send_ping()
+    client = Client.load()
+    email = None
+
+    while True:
+        email = input(
+            "Which datasite do you want to ping (they must have pong running)? "
+        )
+        if email not in set([d.name for d in client.datasites.glob("*")]):
+            print("Invalid datasite. Available datasites are:")
+            print(set([d.name for d in client.datasites.glob("*")]))
+        else:
+            break
+
+    send_ping(email)
