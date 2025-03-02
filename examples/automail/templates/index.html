@@ -2901,47 +2901,70 @@
 
         // Function to update the users list
         function updateUsersList() {
-            if (!currentConversationId) return;
-            
-            const conversation = conversations.find(c => c.id === currentConversationId);
-            if (!conversation) return;
-            
-            // Combine recipients and current user
-            currentUsers = [...conversation.recipients];
-            
-            // Add current user (self)
-            if (!currentUsers.includes('{{ user_email }}')) {
-                currentUsers.push('{{ user_email }}');
+            if (!currentConversationId) {
+                // No current conversation, clear the list
+                document.getElementById('users-list').innerHTML = '';
+                currentUsers = [];
+                return Promise.resolve([]);
             }
             
-            // Update the count
-            document.getElementById('users-count').textContent = currentUsers.length;
-            
-            // Generate the HTML for users
-            const usersList = document.getElementById('users-list');
-            
-            if (currentUsers.length === 0) {
-                usersList.innerHTML = '<div class="no-users">No users in this conversation</div>';
-                return;
-            }
-            
-            let html = '';
-            currentUsers.forEach(user => {
-                const isSelf = user === '{{ user_email }}';
-                const initials = user.split('@')[0].substring(0, 2).toUpperCase();
+            // Use existing conversation data instead of making a separate API call
+            return Promise.resolve().then(() => {
+                // Find the current conversation from our conversations array
+                const conversation = conversations.find(c => c.id === currentConversationId);
+                if (!conversation) {
+                    console.error('Current conversation not found in conversations list');
+                    currentUsers = [];
+                    return [];
+                }
                 
-                html += `
-                    <div class="user-item ${isSelf ? 'self' : ''}" data-email="${user}" title="Click to view files">
-                        <div class="user-icon" style="background-color: ${getColorFromEmail(user)}">${initials}</div>
-                        <div class="user-details">
-                            <div class="user-name">${user}</div>
-                            <div class="user-status">${isSelf ? 'You' : 'Member'}</div>
-                        </div>
-                    </div>
-                `;
+                // Use the recipients list from the conversation
+                const users = [...conversation.recipients];
+                
+                // Add the current user if not already included
+                if (!users.includes('{{ user_email }}')) {
+                    users.push('{{ user_email }}');
+                }
+                
+                // Update the currentUsers array
+                currentUsers = users;
+                
+                // Update the UI
+                const usersList = document.getElementById('users-list');
+                usersList.innerHTML = '';
+                
+                if (users.length > 0) {
+                    users.forEach(user => {
+                        const isSelf = user === '{{ user_email }}';
+                        const initials = user.split('@')[0].substring(0, 2).toUpperCase();
+                        
+                        const userItem = document.createElement('div');
+                        userItem.className = `user-item ${isSelf ? 'self' : ''}`;
+                        userItem.dataset.email = user;
+                        userItem.title = "Click to view files";
+                        
+                        userItem.innerHTML = `
+                            <div class="user-icon" style="background-color: ${getColorFromEmail(user)}">${initials}</div>
+                            <div class="user-details">
+                                <div class="user-name">${user}</div>
+                                <div class="user-status">${isSelf ? 'You' : 'Member'}</div>
+                            </div>
+                        `;
+                        
+                        usersList.appendChild(userItem);
+                    });
+                } else {
+                    usersList.innerHTML = '<div class="no-users">No users in this conversation</div>';
+                }
+                
+                // Update the count display if it exists
+                const countElement = document.getElementById('users-count');
+                if (countElement) {
+                    countElement.textContent = users.length;
+                }
+                
+                return users;
             });
-            
-            usersList.innerHTML = html;
         }
 
         // Generate a consistent color from email
@@ -3033,12 +3056,15 @@
             // Show modal
             document.getElementById('filesystem-modal').style.display = 'flex';
             
-            // Set selectedFiles to the stored selections for this conversation and user
-            selectedFiles = getSelectedFiles(currentConversationId, email);
-            console.log("Using stored selections for modal:", selectedFiles);
-            
-            // Load the filesystem for this user
-            loadUserFilesystem(email);
+            // First load the file selections, then load the filesystem
+            loadFileSelections(currentConversationId, email).then(() => {
+                // After selections are loaded, get selectedFiles from the map
+                selectedFiles = getSelectedFiles(currentConversationId, email);
+                console.log("Using stored selections for modal:", selectedFiles);
+                
+                // Now load the filesystem content
+                loadUserFilesystem(email);
+            });
         }
 
         // Function to load a user's filesystem
@@ -3635,8 +3661,14 @@
             // Update breadcrumb
             updateFilesystemBreadcrumb();
             
-            // Load the user's filesystem with the updated path
-            loadUserFilesystem(currentFilesystemUser);
+            // Make sure we have the latest selections before loading filesystem
+            loadFileSelections(currentConversationId, currentFilesystemUser).then(() => {
+                // After selections are loaded, update the selectedFiles variable
+                selectedFiles = getSelectedFiles(currentConversationId, currentFilesystemUser);
+                
+                // Now load the filesystem content
+                loadUserFilesystem(currentFilesystemUser);
+            });
         }
 
         // Add these variables to store selected files
@@ -3722,12 +3754,12 @@
                 userEmail = currentFilesystemUser;
             }
             
-            if (!conversationId || !userEmail) return;
+            if (!conversationId || !userEmail) return Promise.resolve();
             
             console.log("Loading file selections for", userEmail, "in conversation", conversationId);
             
-            // Get current selections from server
-            fetch(`/conversation/${conversationId}/file_selections?user=${encodeURIComponent(userEmail)}`)
+            // Return a Promise to allow chaining
+            return fetch(`/conversation/${conversationId}/file_selections?user=${encodeURIComponent(userEmail)}`)
                 .then(response => response.json())
                 .then(data => {
                     console.log("Received file selections:", data);
@@ -3749,11 +3781,38 @@
                             });
                         }
                     }
+                    return data;
                 })
                 .catch(error => {
                     console.error('Error loading file selections:', error);
+                    return { status: 'error', error: error };
                 });
         }
+
+        // Add this function to initialize file selections when the page loads
+        function initializeFileSelections() {
+            if (currentConversationId) {
+                // Load file selections for all users in the current conversation
+                updateUsersList().then(() => {
+                    if (currentUsers && currentUsers.length > 0) {
+                        // Use Promise.all to load all selections in parallel
+                        Promise.all(currentUsers.map(user => 
+                            loadFileSelections(currentConversationId, user)
+                        )).then(() => {
+                            console.log("All file selections loaded");
+                        });
+                    }
+                });
+            }
+        }
+
+        // Ensure selections are loaded when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // ... existing DOMContentLoaded code ...
+            
+            // Initialize file selections
+            initializeFileSelections();
+        });
     </script>
 </body>
 </html>

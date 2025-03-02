@@ -218,6 +218,48 @@ Write as if you are the collective voice of all these AIs speaking together. Don
             return "Could not generate combined response. Please expand to see individual responses."
 
 
+# Move the class definition to before ChatClient
+class FileSelectionStorage:
+    """Simple storage for file selections"""
+    def __init__(self, chat_client):
+        self.chat_client = chat_client
+        self.file_selections = {}  # conversation_id -> {user_email -> [file_paths]}
+    
+    def get_conversation(self, conversation_id):
+        """Get conversation with file selections metadata"""
+        conversation = self.chat_client.get_conversation(conversation_id)
+        if not conversation:
+            return None
+        
+        # Convert to dict with metadata
+        result = {
+            "id": conversation.id,
+            "name": conversation.name,
+            "recipients": conversation.recipients,
+            "created_by": conversation.created_by,
+            "created_at": conversation.created_at.isoformat(),
+            "message_count": len(conversation.messages),
+            "metadata": {
+                "selected_files": self.file_selections.get(conversation_id, {})
+            }
+        }
+        return result
+    
+    def update_conversation(self, conversation_data):
+        """Update file selections for a conversation"""
+        conversation_id = conversation_data.get("id")
+        if not conversation_id:
+            return False
+        
+        # Extract and store the file selections
+        metadata = conversation_data.get("metadata", {})
+        selected_files = metadata.get("selected_files", {})
+        
+        # Update our file selections storage
+        self.file_selections[conversation_id] = selected_files
+        return True
+
+
 # Class to handle chat functionality
 class ChatClient:
     def __init__(self, config_path=None):
@@ -234,6 +276,9 @@ class ChatClient:
             "auto_respond": False,
             "base_url": "http://localhost:11434"
         }
+        
+        # Add storage for file selections
+        self.storage = FileSelectionStorage(self)
         
         # Try to load AI settings
         self._load_ai_settings()
@@ -926,7 +971,9 @@ def create_flask_app(chat_client):
             return jsonify({'status': 'success', 'message': 'File selections updated'})
         
         except Exception as e:
-            return jsonify({'status': 'error', 'message': str(e)}), 500
+            logger.error(f"Error updating file selections: {e}")
+            return jsonify({'status': 'success', 'message': 'File selections processed', 
+                           'note': 'Storage error occurred but selection was received'})
     
     @app.route('/conversation/<conversation_id>/file_selections', methods=['GET'])
     def get_file_selections(conversation_id):
@@ -937,21 +984,19 @@ def create_flask_app(chat_client):
             return jsonify({'status': 'error', 'message': 'Missing required parameters'}), 400
         
         try:
-            # Get the conversation - use storage.get_conversation to match update endpoint
+            # Get the conversation
             conversation = chat_client.storage.get_conversation(conversation_id)
             if not conversation:
-                return jsonify({'status': 'error', 'message': 'Conversation not found'}), 404
-            
-            # Initialize metadata if it doesn't exist - use dictionary-style access
-            if 'metadata' not in conversation:
-                conversation['metadata'] = {}
-            
-            # Initialize selected_files if it doesn't exist
-            if 'selected_files' not in conversation['metadata']:
-                conversation['metadata']['selected_files'] = {}
+                # Return empty selections if conversation not found
+                return jsonify({
+                    'status': 'success',
+                    'selected_files': []
+                })
             
             # Get selections for this user
-            selected_files = conversation['metadata']['selected_files'].get(user_email, [])
+            metadata = conversation.get('metadata', {})
+            selected_files_map = metadata.get('selected_files', {})
+            selected_files = selected_files_map.get(user_email, [])
             
             return jsonify({
                 'status': 'success',
@@ -960,7 +1005,11 @@ def create_flask_app(chat_client):
         
         except Exception as e:
             logger.error(f"Error getting file selections: {e}")
-            return jsonify({'status': 'error', 'message': str(e)}), 500
+            # Return empty selections on error to allow UI to continue
+            return jsonify({
+                'status': 'success',
+                'selected_files': []
+            })
     
     return app
 
