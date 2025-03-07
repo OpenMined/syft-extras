@@ -1,0 +1,5 @@
+{
+  "model": "llama3.2:latest",
+  "auto_respond": true,
+  "base_url": "http://localhost:11434"
+}
