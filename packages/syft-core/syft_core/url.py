@@ -1,9 +1,10 @@
 import re
 from pathlib import Path
-from typing import Generator, Union
+from typing import Any, Generator, Union
 from urllib.parse import urlencode, urlparse
 
-from pydantic import ValidationInfo
+from pydantic import Field, GetJsonSchemaHandler, ValidationInfo, field_validator
+from pydantic.json_schema import JsonSchemaValue
 from typing_extensions import Self
 
 from syft_core.types import PathLike, to_path
@@ -89,6 +90,17 @@ class SyftBoxURL(str):
         if not cls.is_valid(value):
             raise ValueError(f"Invalid SyftBoxURL: {value}")
         return cls(value)
+    
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, schema_or_field: Any, schema_handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        """Define the JSON schema representation for Pydantic models."""
+        return {
+            "type": "string",
+            "format": "uri",
+            "description": "A SyftBox URL",
+        }
 
 
 if __name__ == "__main__":
