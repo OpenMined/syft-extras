@@ -80,6 +80,47 @@ run-ping-with-config datasite="" config="":
         fi \
     fi
 
+# Consolidated PingPong Client commands
+run-pingpong *args:
+    uv sync
+    uv run examples/pingpong_consolidated/pingpong_client.py {{ args }}
+
+run-pingpong-server config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/pingpong_consolidated/pingpong_client.py --server-only --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/pingpong_consolidated/pingpong_client.py --server-only; \
+    fi
+
+run-pingpong-client config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/pingpong_consolidated/pingpong_client.py --client-only --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/pingpong_consolidated/pingpong_client.py --client-only; \
+    fi
+
+run-pingpong-to datasite="" config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        if [ -n "{{ datasite }}" ]; then \
+            uv run examples/pingpong_consolidated/pingpong_client.py --ping "{{ datasite }}" --config "{{ config }}"; \
+        else \
+            echo "{{ _yellow }}No datasite specified. Running in interactive mode.{{ _nc }}"; \
+            uv run examples/pingpong_consolidated/pingpong_client.py --client-only --config "{{ config }}"; \
+        fi \
+    else \
+        if [ -n "{{ datasite }}" ]; then \
+            uv run examples/pingpong_consolidated/pingpong_client.py --ping "{{ datasite }}"; \
+        else \
+            echo "{{ _yellow }}No datasite specified. Running in interactive mode.{{ _nc }}"; \
+            uv run examples/pingpong_consolidated/pingpong_client.py --client-only; \
+        fi \
+    fi
+
 run-crud-server:
     uv sync
     uv run examples/crud/crud_server.py
