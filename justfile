@@ -50,9 +50,35 @@ run-pong:
     uv sync
     uv run examples/pingpong/pong_server.py
 
+run-pong-with-config config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/pingpong/pong_server.py --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/pingpong/pong_server.py; \
+    fi
+
 run-ping *args:
     uv sync
     uv run examples/pingpong/ping_request.py {{ args }}
+
+run-ping-with-config datasite="" config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        if [ -n "{{ datasite }}" ]; then \
+            uv run examples/pingpong/ping_request.py --config "{{ config }}" "{{ datasite }}"; \
+        else \
+            uv run examples/pingpong/ping_request.py --config "{{ config }}"; \
+        fi \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        if [ -n "{{ datasite }}" ]; then \
+            uv run examples/pingpong/ping_request.py "{{ datasite }}"; \
+        else \
+            uv run examples/pingpong/ping_request.py; \
+        fi \
+    fi
 
 run-crud-server:
     uv sync
