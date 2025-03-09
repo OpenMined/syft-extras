@@ -118,20 +118,20 @@ class OllamaClient(SyftRPCClient):
         
     def _register_file_permission_endpoint(self):
         """Register the file permission endpoints."""
-        # @self.box.on_request("/set_file_permissions")
-        # def file_permission_handler(request_data: dict, ctx: Request) -> dict:
-        #     # Convert to model
-        #     request = FilePermissionRequest(**request_data)
-        #     response = self._handle_file_permission_request(request, ctx)
-        #     return response.model_dump()
+        @self.box.on_request("/set_file_permissions")
+        def file_permission_handler(request_data: dict, ctx: Request) -> dict:
+            # Convert to model
+            request = FilePermissionRequest(**request_data)
+            response = self._handle_file_permission_request(request, ctx)
+            return response.model_dump()
         
         @self.box.on_request("/list_file_permissions")
         def list_permissions_handler(request_data: dict, ctx: Request) -> dict:
-            return {}
+            
             # Convert to model
-            # request = FilePermissionRequest(**request_data)
-            # response = self._list_file_permissions(request, ctx)
-            # return response.model_dump()
+            request = FilePermissionRequest(**request_data)
+            response = self._list_file_permissions(request, ctx)
+            return response.model_dump()
     
     def _handle_file_permission_request(self, request: FilePermissionRequest, ctx: Request) -> FilePermissionResponse:
         """Process an incoming file permission request using .syftperm_exe files."""
@@ -506,6 +506,7 @@ class OllamaClient(SyftRPCClient):
             logger.error(f"Error listing models: {e}")
             return []
     
+        
     def _list_file_permissions(self, request: FilePermissionRequest, ctx: Request) -> FilePermissionResponse:
         """List all files a user has permission to access using both .syftperm_exe 
         and standard Syft permissions."""
@@ -515,10 +516,38 @@ class OllamaClient(SyftRPCClient):
             user_email = request.user_email
             allowed_files = []
             
-            # Starting from the datasite directory
-            datasite_path = self.box.client.datasite_path
+            # Get the datasite path
+            datasite_path = None
+            datasite_owner = None
+            
+            if hasattr(self.box, 'client') and hasattr(self.box.client, 'datasite_path'):
+                datasite_path = self.box.client.datasite_path
+                
+                # Try to determine datasite owner from path
+                try:
+                    path_str = str(datasite_path)
+                    parts = path_str.split('/')
+                    for part in parts:
+                        if '@' in part:
+                            datasite_owner = part
+                            break
+                except Exception as e:
+                    logger.warning(f"Could not determine datasite owner: {e}")
+            
+            if not datasite_path:
+                logger.warning("Could not determine datasite path - using limited permission checks")
+                return FilePermissionResponse(
+                    user_email=user_email,
+                    allowed_files=[],
+                    success=False,
+                    error="Could not determine datasite path",
+                    ts=datetime.now(timezone.utc)
+                )
+            
+            logger.info(f"Using datasite path: {datasite_path}")
             
             # 1. First check .syftperm_exe files (explicit LLM permissions)
+            logger.info(f"Checking explicit .syftperm_exe permissions for user {user_email}")
             for root, dirs, files in os.walk(datasite_path):
                 for file in files:
                     if file.endswith('.syftperm_exe'):
@@ -536,45 +565,130 @@ class OllamaClient(SyftRPCClient):
                         except Exception as e:
                             logger.error(f"Error reading permission file {perm_file_path}: {e}")
             
-            # 2. Then check all regular files for standard Syft permissions
-            logger.info(f"Checking standard Syft permissions for user {user_email}")
-            has_permission_method = hasattr(self.box.client, 'has_permission')
-            
-            if has_permission_method:
-                logger.debug("has_permission method is available")
+            # 2. Try to use Syft's database permission system
+            try:
+                from syftbox.server.db.db import get_read_permissions_for_user
+                from syftbox.server.db.schema import get_db
                 
-                # Walk directory and check each file
+                logger.info(f"Checking database permissions for user {user_email}")
+                
+                # Get a database connection and check permissions
+                try:
+                    db_conn = get_db()
+                    # Pass the datasite path to get_db()
+                    db_conn = get_db(path=datasite_path)
+                    
+                    # Get all files the user has permission to read
+                    file_permissions = get_read_permissions_for_user(db_conn, user_email)
+                    
+                    for file_perm in file_permissions:
+                        if file_perm["read_permission"]:
+                            file_path = file_perm["path"]
+                            if os.path.exists(file_path) and file_path not in allowed_files:
+                                allowed_files.append(file_path)
+                    
+                    logger.info(f"Found {len(allowed_files)} permitted files via database")
+                    
+                except Exception as db_error:
+                    logger.warning(f"Error using database permissions: {db_error}")
+                    
+            except ImportError as e:
+                logger.warning(f"Syft database modules not available: {e}")
+            
+            # 3. Try to use the in-memory permission system
+            try:
+                from syftbox.lib.constants import PERM_FILE
+                from syftbox.lib.permissions import ComputedPermission, PermissionType, SyftPermission
+                
+                logger.info(f"Checking in-memory permission system for user {user_email}")
+                
+                # Find all files we want to check permissions for
+                all_files = []
                 for root, dirs, files in os.walk(datasite_path):
                     for file in files:
-                        # Skip already processed files, permission files, and other non-data files
-                        if (file.endswith('.syftperm_exe') or file.endswith('.syftperm') 
-                            or file.endswith('.request') or file.endswith('.response')
-                            or file == "rpc.schema.json"):
+                        # Skip permission files and other system files
+                        if (file.endswith('.syftperm_exe') or file.endswith('.request') 
+                            or file.endswith('.response') or file == "rpc.schema.json"
+                            or file == PERM_FILE):
+                            continue
+                        
+                        all_files.append(os.path.join(root, file))
+                
+                logger.info(f"Found {len(all_files)} total files to check permissions for")
+                
+                # Group files by directory for more efficient permission checking
+                files_by_dir = {}
+                for file_path in all_files:
+                    dir_path = os.path.dirname(file_path)
+                    if dir_path not in files_by_dir:
+                        files_by_dir[dir_path] = []
+                    files_by_dir[dir_path].append(file_path)
+                
+                # Check permissions directory by directory
+                for dir_path, dir_files in files_by_dir.items():
+                    # Find all permission files that might apply to this directory
+                    applicable_rules = []
+                    current_dir = dir_path
+                    
+                    # Walk up the directory tree to find all applicable permission files
+                    while current_dir and current_dir.startswith(str(datasite_path)):
+                        perm_file_path = os.path.join(current_dir, PERM_FILE)
+                        if os.path.exists(perm_file_path):
+                            try:
+                                # Convert datasite_path to Path object before passing to from_file
+                                perm_file = SyftPermission.from_file(
+                                    Path(perm_file_path),
+                                    Path(datasite_path)  # Convert string to Path object
+                                )
+                                applicable_rules.extend(perm_file.rules)
+                            except Exception as e:
+                                logger.warning(f"Error parsing permission file {perm_file_path}: {str(e)}")
+                        
+                        # Move up one directory
+                        parent_dir = os.path.dirname(current_dir)
+                        if parent_dir == current_dir:  # We've reached the root
+                            break
+                        current_dir = parent_dir
+                    
+                    # Check each file in this directory
+                    for file_path in dir_files:
+                        try:
+                            # Use a relative path from the datasite root for permission checking
+                            rel_file_path = os.path.relpath(file_path, start=datasite_path)
+                            
+                            # Create a ComputedPermission object to check if the user has access
+                            computed_permission = ComputedPermission.from_user_rules_and_path(
+                                rules=applicable_rules,
+                                user=user_email,
+                                path=Path(rel_file_path)
+                            )
+                            
+                            # If the user has read permission, add to allowed files
+                            if computed_permission.has_permission(PermissionType.READ):
+                                if file_path not in allowed_files:
+                                    allowed_files.append(file_path)
+                                    
+                        except Exception as e:
+                            logger.debug(f"Error checking permission for {file_path}: {e}")
+                
+                logger.info(f"Found {len(allowed_files)} total permitted files after in-memory checks")
+                
+            except ImportError as e:
+                logger.warning(f"Syft permission modules not available: {e}")
+            
+            # 4. If user is datasite owner, they have access to all files
+            if datasite_owner and user_email == datasite_owner:
+                logger.info(f"User {user_email} is the datasite owner - adding all files")
+                for root, dirs, files in os.walk(datasite_path):
+                    for file in files:
+                        # Skip specific file types
+                        if (file.endswith('.syftperm_exe') or file.endswith('.request') 
+                            or file.endswith('.response') or file == "rpc.schema.json"):
                             continue
                         
                         file_path = os.path.join(root, file)
-                        
-                        # Skip if already in allowed_files
-                        if file_path in allowed_files:
-                            continue
-                        
-                        # Get relative path for permission check
-                        rel_path = os.path.relpath(file_path, datasite_path)
-                        
-                        try:
-                            has_access = self.box.client.has_permission(
-                                user=user_email,
-                                path=rel_path,
-                                permission="read"
-                            )
-                            
-                            if has_access:
-                                logger.debug(f"User {user_email} has standard permission for {rel_path}")
-                                allowed_files.append(file_path)
-                        except Exception as e:
-                            logger.debug(f"Error checking standard permission for {rel_path}: {e}")
-            else:
-                logger.warning("Client doesn't have has_permission method, skipping standard permission checks")
+                        if file_path not in allowed_files:
+                            allowed_files.append(file_path)
             
             return FilePermissionResponse(
                 user_email=user_email,
@@ -592,7 +706,8 @@ class OllamaClient(SyftRPCClient):
                 error=str(e),
                 ts=datetime.now(timezone.utc)
             )
-    
+
+        
     def list_permitted_files(self, to_email: str, user_email: str) -> Optional[FilePermissionResponse]:
         """List all files a user has permission to access on a remote Ollama instance.
         
