@@ -1,8 +1,10 @@
+import argparse
 from typing import Dict, List
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 from syft_event import EventRouter, SyftEvents
+from syft_core import Client
 
 
 class User(BaseModel):
@@ -43,7 +45,7 @@ def list_users(app: SyftEvents) -> UserList:
     return UserList(users=list(store.values()))
 
 
-def create_app() -> SyftEvents:
+def create_app(client=None) -> SyftEvents:
     """
     Implementation note: By isolating the app and dependencies in a function,
     we can create multiple instances of the app with different states.
@@ -51,7 +53,10 @@ def create_app() -> SyftEvents:
     This is useful for testing and running multiple instances of the app,
     without having to worry about global state.
     """
-    app = SyftEvents("my-crud-app")
+    if client is None:
+        client = Client.load()
+        
+    app = SyftEvents("my-crud-app", client=client)
 
     store: Dict[UUID, User] = {}
     app.state["store"] = store
@@ -59,6 +64,30 @@ def create_app() -> SyftEvents:
     return app
 
 
+def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="CRUD Server")
+    parser.add_argument(
+        "--config", "-c", 
+        type=str, 
+        help="Path to a custom config.json file"
+    )
+    args = parser.parse_args()
+    
+    # Initialize client with config if provided
+    client = Client.load(args.config)
+    print(f"Running as user: {client.email}")
+    
+    app = create_app(client)
+    
+    try:
+        print("Running CRUD server:", app.app_rpc_dir)
+        app.run_forever()
+    except KeyboardInterrupt:
+        print("Server stopped.")
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 if __name__ == "__main__":
-    app = create_app()
-    app.run_forever()
+    main()
