@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import argparse
 from typing import List
 from uuid import UUID, uuid4
 
@@ -19,8 +20,11 @@ class UserList(BaseModel):
     users: List[User]
 
 
-def client_example():
-    client = Client.load()
+def client_example(client=None):
+    if client is None:
+        client = Client.load()
+    
+    logger.info(f"Connected as: {client.email}")
 
     # Create 3 users
     for name in ["Alice", "Bob", "Charlie"]:
@@ -48,5 +52,20 @@ def client_example():
     logger.info(f"All users: {user_list.users}")
 
 
+def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="CRUD Client")
+    parser.add_argument(
+        "--config", "-c", 
+        type=str, 
+        help="Path to a custom config.json file"
+    )
+    args = parser.parse_args()
+
+    # Initialize client with config if provided
+    client = Client.load(args.config)
+    client_example(client)
+
+
 if __name__ == "__main__":
-    client_example()
+    main()

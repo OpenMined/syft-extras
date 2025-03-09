@@ -121,13 +121,23 @@ run-pingpong-to datasite="" config="":
         fi \
     fi
 
-run-crud-server:
+run-crud-server config="":
     uv sync
-    uv run examples/crud/crud_server.py
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/crud/crud_server.py --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/crud/crud_server.py; \
+    fi
 
-run-crud-client:
+run-crud-client config="":
     uv sync
-    uv run examples/crud/crud_client.py
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/crud/crud_client.py --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/crud/crud_client.py; \
+    fi
 
 [group('js-sdk')]
 serve-static-files:
