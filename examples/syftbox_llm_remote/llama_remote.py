@@ -16,7 +16,7 @@ from syft_rpc_client import SyftRPCClient
 
 
 # Configure logging based on environment
-def configure_logging(verbose=True):
+def configure_logging(verbose=False):
     """Configure logging based on the environment.
     
     Args:
@@ -28,7 +28,7 @@ def configure_logging(verbose=True):
         # This will be defined in Jupyter/IPython environments
         shell = get_ipython().__class__.__name__
         if shell in ['ZMQInteractiveShell', 'TerminalInteractiveShell']:
-            is_notebook = False
+            is_notebook = True
     except NameError:
         pass
     
