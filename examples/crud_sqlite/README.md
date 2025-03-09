@@ -70,7 +70,13 @@ syftbox client --server https://syftboxstage.openmined.org \
 # Start the server with default config and database
 just run-crud-sqlite-server
 
-# Or with a custom config and database file
+# Or with a custom config
+just run-crud-sqlite-server config=~/.syft_custom_config.json
+
+# Or with a custom database file
+just run-crud-sqlite-server db=~/my_users.db
+
+# Or with both custom config and database file
 just run-crud-sqlite-server config=~/.syft_custom_config.json db=~/my_users.db
 ```
 

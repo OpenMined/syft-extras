@@ -139,6 +139,28 @@ run-crud-client config="":
         uv run examples/crud/crud_client.py; \
     fi
 
+run-crud-sqlite-server config="" db="":
+    uv sync
+    if [ -n "{{ config }}" ] && [ -n "{{ db }}" ]; then \
+        uv run examples/crud_sqlite/crud_sql_server.py --config "{{ config }}" --db "{{ db }}"; \
+    elif [ -n "{{ config }}" ]; then \
+        uv run examples/crud_sqlite/crud_sql_server.py --config "{{ config }}"; \
+    elif [ -n "{{ db }}" ]; then \
+        uv run examples/crud_sqlite/crud_sql_server.py --db "{{ db }}"; \
+    else \
+        echo "{{ _yellow }}No config or db specified. Using defaults.{{ _nc }}"; \
+        uv run examples/crud_sqlite/crud_sql_server.py; \
+    fi
+
+run-crud-sqlite-client config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/crud_sqlite/crud_sql_client.py --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/crud_sqlite/crud_sql_client.py; \
+    fi
+
 [group('js-sdk')]
 serve-static-files:
     cd js-sdk && python -m http.server 8000 --bind 127.0.0.1
