@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
+from loguru import logger
 from pydantic import BaseModel
 from syft_core.client_shim import Client
+from syft_core.permissions import PermissionType, get_computed_permission
 from syft_core.url import SyftBoxURL
 from typing_extensions import Any, Dict, List, Optional, Union
 
@@ -136,6 +138,18 @@ def send(
     # Create new request file if needed
     if not req_path.exists():
         try:
+            required_permission = PermissionType.WRITE
+            relative_path = req_path.relative_to(client.workspace.datasites)
+            permission = get_computed_permission(
+                client=client,
+                path=relative_path,
+            )
+            if not permission.has_permission(required_permission):
+                # TODO: This is a temporary solution until SyftEvents handles permissions
+                logger.warning(
+                    f"User {client.email} does not have {required_permission} permission for {relative_path}. "
+                    "But we will send the request anyway."
+                )
             syft_request.dump(req_path)
         except OSError as e:
             raise SyftError(f"Request persistence failed: {req_path} - {e}")
