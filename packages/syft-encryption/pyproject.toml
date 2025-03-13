@@ -1,0 +1,14 @@
+[project]
+name = "syft-encryption"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["cryptography>=44.0.0", "jwcrypto>=1.5.6", "rich>=13.9.4"]
+
+[project.scripts]
+syft-encryption = "syft_encryption:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

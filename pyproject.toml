@@ -4,7 +4,13 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = ["syft-core", "syft-event", "syft-rpc", "syft-proxy"]
+dependencies = [
+    "syft-core",
+    "syft-event",
+    "syft-rpc",
+    "syft-proxy",
+    "syft-encryption",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -15,6 +21,7 @@ syft-core = { workspace = true }
 syft-event = { workspace = true }
 syft-rpc = { workspace = true }
 syft-proxy = { workspace = true }
+syft-encryption = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
