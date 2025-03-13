@@ -50,17 +50,116 @@ run-pong:
     uv sync
     uv run examples/pingpong/pong_server.py
 
-run-ping:
+run-pong-with-config config="":
     uv sync
-    uv run examples/pingpong/ping_request.py
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/pingpong/pong_server.py --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/pingpong/pong_server.py; \
+    fi
 
-run-crud-server:
+run-ping *args:
     uv sync
-    uv run examples/crud/crud_server.py
+    uv run examples/pingpong/ping_request.py {{ args }}
 
-run-crud-client:
+run-ping-with-config datasite="" config="":
     uv sync
-    uv run examples/crud/crud_client.py
+    if [ -n "{{ config }}" ]; then \
+        if [ -n "{{ datasite }}" ]; then \
+            uv run examples/pingpong/ping_request.py --config "{{ config }}" "{{ datasite }}"; \
+        else \
+            uv run examples/pingpong/ping_request.py --config "{{ config }}"; \
+        fi \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        if [ -n "{{ datasite }}" ]; then \
+            uv run examples/pingpong/ping_request.py "{{ datasite }}"; \
+        else \
+            uv run examples/pingpong/ping_request.py; \
+        fi \
+    fi
+
+# Consolidated PingPong Client commands
+run-pingpong *args:
+    uv sync
+    uv run examples/pingpong_consolidated/pingpong_client.py {{ args }}
+
+run-pingpong-server config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/pingpong_consolidated/pingpong_client.py --server-only --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/pingpong_consolidated/pingpong_client.py --server-only; \
+    fi
+
+run-pingpong-client config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/pingpong_consolidated/pingpong_client.py --client-only --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/pingpong_consolidated/pingpong_client.py --client-only; \
+    fi
+
+run-pingpong-to datasite="" config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        if [ -n "{{ datasite }}" ]; then \
+            uv run examples/pingpong_consolidated/pingpong_client.py --ping "{{ datasite }}" --config "{{ config }}"; \
+        else \
+            echo "{{ _yellow }}No datasite specified. Running in interactive mode.{{ _nc }}"; \
+            uv run examples/pingpong_consolidated/pingpong_client.py --client-only --config "{{ config }}"; \
+        fi \
+    else \
+        if [ -n "{{ datasite }}" ]; then \
+            uv run examples/pingpong_consolidated/pingpong_client.py --ping "{{ datasite }}"; \
+        else \
+            echo "{{ _yellow }}No datasite specified. Running in interactive mode.{{ _nc }}"; \
+            uv run examples/pingpong_consolidated/pingpong_client.py --client-only; \
+        fi \
+    fi
+
+run-crud-server config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/crud/crud_server.py --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/crud/crud_server.py; \
+    fi
+
+run-crud-client config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/crud/crud_client.py --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/crud/crud_client.py; \
+    fi
+
+run-crud-sqlite-server config="" db="":
+    uv sync
+    if [ -n "{{ config }}" ] && [ -n "{{ db }}" ]; then \
+        uv run examples/crud_sqlite/crud_sql_server.py --config "{{ config }}" --db "{{ db }}"; \
+    elif [ -n "{{ config }}" ]; then \
+        uv run examples/crud_sqlite/crud_sql_server.py --config "{{ config }}"; \
+    elif [ -n "{{ db }}" ]; then \
+        uv run examples/crud_sqlite/crud_sql_server.py --db "{{ db }}"; \
+    else \
+        echo "{{ _yellow }}No config or db specified. Using defaults.{{ _nc }}"; \
+        uv run examples/crud_sqlite/crud_sql_server.py; \
+    fi
+
+run-crud-sqlite-client config="":
+    uv sync
+    if [ -n "{{ config }}" ]; then \
+        uv run examples/crud_sqlite/crud_sql_client.py --config "{{ config }}"; \
+    else \
+        echo "{{ _yellow }}No config specified. Using default config.{{ _nc }}"; \
+        uv run examples/crud_sqlite/crud_sql_client.py; \
+    fi
 
 [group('js-sdk')]
 serve-static-files:

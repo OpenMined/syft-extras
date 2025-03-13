@@ -40,19 +40,21 @@ class GenericModel(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-def serialize(obj: Any) -> Optional[bytes]:
+def serialize(obj: Any, **kwargs: Any) -> Optional[bytes]:
     """Serialize an object to bytes for sending over the network."""
 
     if obj is None:
         return None
+    elif isinstance(obj, bytes):
+        return obj
     elif isinstance(obj, str):
         return obj.encode()
     elif isinstance(obj, BaseModel):
-        return obj.model_dump_json().encode()
+        return obj.model_dump_json(**kwargs).encode()
     elif is_dataclass(obj) and not isinstance(obj, type):
-        return GenericModel(**asdict(obj)).model_dump_json().encode()
+        return GenericModel(**asdict(obj)).model_dump_json(**kwargs).encode()
     elif isinstance(obj, dict):
-        return GenericModel(**obj).model_dump_json().encode()
+        return GenericModel(**obj).model_dump_json(**kwargs).encode()
     else:
         # list, tuple, float, int
         return json.dumps(obj).encode()

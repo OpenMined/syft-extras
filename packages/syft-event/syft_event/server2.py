@@ -60,7 +60,7 @@ class SyftEvents:
         self.__rpc: dict[Path, Callable] = {}
         self._stop_event = Event()
 
-    def start(self) -> None:
+    def init(self) -> None:
         # setup dirs
         self.app_dir.mkdir(exist_ok=True, parents=True)
         self.app_rpc_dir.mkdir(exist_ok=True, parents=True)
@@ -73,6 +73,8 @@ class SyftEvents:
         if self.schema:
             self.publish_schema()
 
+    def start(self) -> None:
+        self.init()
         # process pending requests
         try:
             self.process_pending_requests()
