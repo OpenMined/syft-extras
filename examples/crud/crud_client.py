@@ -29,7 +29,7 @@ def client_example(client=None):
     # Create 3 users
     for name in ["Alice", "Bob", "Charlie"]:
         create_future = rpc.send(
-            url=f"syft://{client.email}/api_data/my-crud-app/rpc/user/create",
+            url=rpc.make_url(client.email, "my-crud-app", "user/create"),
             body=User(name=name),
             expiry="5m",
         )
@@ -41,7 +41,7 @@ def client_example(client=None):
 
     # List all users
     list_future = rpc.send(
-        url=f"syft://{client.email}/api_data/my-crud-app/rpc/user/list",
+        url=rpc.make_url(client.email, "my-crud-app", "user/list"),
         body={},
         expiry="5m",
     )

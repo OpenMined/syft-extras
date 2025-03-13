@@ -29,7 +29,7 @@ def send_ping(email, client=None):
         client = Client.load()
     start = time.time()
     future = rpc.send(
-        url=f"syft://{email}/api_data/pingpong/rpc/ping",
+        url=rpc.make_url(datasite=email, app_name="pingpong", endpoint="ping"),
         body=PingRequest(msg="hello!"),
         expiry="5m",
         cache=True,

@@ -28,7 +28,7 @@ def client_example(client=None):
     # Create 3 users
     for name in ["Alice", "Bob", "Charlie"]:
         create_future = rpc.send(
-            url=f"syft://{client.email}/api_data/my-crud-sql-app/rpc/user/create",
+            url=rpc.make_url(client.email, "my-crud-sql-app", "user/create"),
             body=User(name=name),
             expiry="5m",
         )
@@ -40,7 +40,7 @@ def client_example(client=None):
 
     # List all users
     list_future = rpc.send(
-        url=f"syft://{client.email}/api_data/my-crud-sql-app/rpc/user/list",
+        url=rpc.make_url(client.email, "my-crud-sql-app", "user/list"),
         body={},
         expiry="5m",
     )
@@ -54,7 +54,7 @@ def client_example(client=None):
     if user_list.users:
         first_user_id = user_list.users[0].uid
         get_future = rpc.send(
-            url=f"syft://{client.email}/api_data/my-crud-sql-app/rpc/user/get",
+            url=rpc.make_url(client.email, "my-crud-sql-app", "user/get"),
             body=first_user_id,
             expiry="5m",
         )
@@ -66,7 +66,7 @@ def client_example(client=None):
 
         # Delete the first user
         delete_future = rpc.send(
-            url=f"syft://{client.email}/api_data/my-crud-sql-app/rpc/user/delete",
+            url=rpc.make_url(client.email, "my-crud-sql-app", "user/delete"),
             body=first_user_id,
             expiry="5m",
         )
@@ -78,7 +78,7 @@ def client_example(client=None):
 
         # List users again to show deletion
         list_future = rpc.send(
-            url=f"syft://{client.email}/api_data/my-crud-sql-app/rpc/user/list",
+            url=rpc.make_url(client.email, "my-crud-sql-app", "user/list"),
             body={},
             expiry="5m",
         )

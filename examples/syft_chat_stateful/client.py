@@ -121,7 +121,7 @@ class SyftChatClient:
         
         # Send to recipient
         future = rpc.send(
-            url=f"syft://{to_email}/api_data/{self.app_name}/rpc/message",
+            url=rpc.make_url(to_email, self.app_name, "message"),
             body=request,
             expiry="5m",
             cache=True,
@@ -138,7 +138,7 @@ class SyftChatClient:
             # Also store the sent message in our own database for history
             self_request = ChatRequest(message=message)
             self_future = rpc.send(
-                url=f"syft://{self.client.email}/api_data/{self.app_name}/rpc/message",
+                url=rpc.make_url(self.client.email, self.app_name, "message"),
                 body=self_request,
                 expiry="5m",
                 cache=True,
@@ -171,7 +171,7 @@ class SyftChatClient:
         )
         
         future = rpc.send(
-            url=f"syft://{self.client.email}/api_data/{self.app_name}/rpc/history",
+            url=rpc.make_url(self.client.email, self.app_name, "history"),
             body=request,
             expiry="5m",
             cache=True,
@@ -213,7 +213,7 @@ class SyftChatClient:
         start = time.time()
         
         future = rpc.send(
-            url=f"syft://{from_email}/api_data/{self.app_name}/rpc/history",
+            url=rpc.make_url(from_email, self.app_name, "history"),
             body=request,
             expiry="5m",
             cache=True,
@@ -232,7 +232,7 @@ class SyftChatClient:
                 # Only store messages we don't already have
                 self_request = ChatRequest(message=message)
                 self_future = rpc.send(
-                    url=f"syft://{self.client.email}/api_data/{self.app_name}/rpc/message",
+                    url=rpc.make_url(self.client.email, self.app_name, "message"),
                     body=self_request,
                     expiry="5m",
                     cache=True,
