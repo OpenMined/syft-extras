@@ -38,9 +38,7 @@ class SyftClientConfig(BaseModel):
     """SyftBox client configuration"""
 
     # model config
-    model_config = ConfigDict(
-        extra="ignore", json_encoders={AnyHttpUrl: lambda v: str(v)}
-    )
+    model_config = ConfigDict(extra="ignore")
 
     data_dir: Path = Field(
         validation_alias=AliasChoices("data_dir", "sync_folder"),
