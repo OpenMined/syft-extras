@@ -85,7 +85,7 @@ def send_ping(email, client=None):
     logger.info(f"📤 SENDING: Ping to {email}")
     start = time.time()
     future = rpc.send(
-        url=f"syft://{email}/api_data/pingpong/rpc/ping",
+        url=rpc.make_url(email, "pingpong", "ping"),
         body=PingRequest(
             msg=f"Hello from {client.email}!",
             ts=datetime.now(timezone.utc)

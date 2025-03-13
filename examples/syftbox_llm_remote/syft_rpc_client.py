@@ -160,7 +160,7 @@ class SyftRPCClient:
         logger.info(f"📤 SENDING: Request to {to_email}{endpoint_to_use}")
         start = time.time()
         future = rpc.send(
-            url=f"syft://{to_email}/api_data/{self.app_name}/rpc{endpoint_to_use}",
+            url=rpc.make_url(to_email, self.app_name, endpoint_to_use),
             body=request_data,
             expiry="5m",
             cache=True,
