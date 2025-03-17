@@ -36,4 +36,4 @@ extend-select = ["I"]
 "**/__init__.py" = ["F401"]
 
 [dependency-groups]
-dev = ["pytest>=8.3.4", "ruff>=0.9.3"]
+dev = ["pytest>=8.3.4"]

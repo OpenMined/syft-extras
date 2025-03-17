@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional
+import argparse as arg_parser
 
 from loguru import logger
 from pydantic import BaseModel
@@ -23,13 +24,16 @@ class PongResponse(BaseModel):
     ts: datetime
 
 
-def send_ping(email):
+def send_ping(email, client=None):
+    if client is None:
+        client = Client.load()
     start = time.time()
     future = rpc.send(
         url=f"syft://{email}/api_data/pingpong/rpc/ping",
         body=PingRequest(msg="hello!"),
         expiry="5m",
         cache=True,
+        client=client,
     )
     logger.debug(f"Request: {future.request}")
 
@@ -65,10 +69,26 @@ def prompt_input(client: Client) -> Optional[str]:
 
 def main():
     """Main function to handle the ping request process."""
-    try:
-        client = Client.load()
+    # Parse command line arguments
+    parser = arg_parser.ArgumentParser(description="Ping Request Client")
+    parser.add_argument(
+        "--config", "-c", 
+        type=str, 
+        help="Path to a custom config.json file"
+    )
+    parser.add_argument(
+        "datasite", 
+        nargs="?",  # Make this argument optional
+        help="Email of the datasite to ping"
+    )
+    args = parser.parse_args()
 
-        ds = sys.argv[1] if len(sys.argv) > 1 else None
+    try:
+        # Initialize client with config if provided
+        client = Client.load(args.config)
+        print(f"Connected as: {client.email}")
+
+        ds = args.datasite
 
         if ds and not valid_datasite(ds, client):
             print(f"Invalid ds: {ds}")
@@ -78,7 +98,7 @@ def main():
         elif not ds:
             ds = prompt_input(client)
 
-        send_ping(ds)
+        send_ping(ds, client)
     except KeyboardInterrupt:
         logger.info("bye!")
 

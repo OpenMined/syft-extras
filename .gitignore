@@ -164,6 +164,13 @@ cython_debug/
 # OS Garbage
 .DS_Store
 Thumbs.db
+.vscode
+
+# test artifacts
+.clients
+.server
+.e2e
+.logs
 
 
 # JS dependency
