@@ -1,0 +1,18 @@
+[project]
+name = "syft-http-bridge"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [{ name = "eelcovdw", email = "eelcovdw@gmail.com" }]
+requires-python = ">=3.9"
+dependencies = [
+    "syft-core",
+    "httpx>=0.28.1",
+    "ipykernel>=6.29.5",
+    "msgpack>=1.1.0",
+    "ormsgpack>=1.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
