@@ -70,12 +70,35 @@ class SerializedHttpProxy:
             self.thread_pool = None
             logger.info("Starting server without thread pool")
 
+    def _prepare_headers(self, headers: httpx.Headers) -> httpx.Headers:
+        headers_to_remove = ["Host", "host"]
+        for h in headers_to_remove:
+            try:
+                del headers[h]
+            except KeyError:
+                pass
+        return headers
+
+    def _prepare_request(
+        self,
+        request: httpx.Request,
+    ) -> httpx.Request:
+        return self.client.build_request(
+            method=request.method,
+            url=request.url.path,
+            params=request.url.params,
+            headers=self._prepare_headers(request.headers),
+            content=request.content,
+            extensions=request.extensions,
+        )
+
     def handle_request(self, request_id: UUID, serialized_request: bytes) -> None:
         """Handle a serialized HTTP request and pass the response to the handler."""
         try:
             request = deserialize_request(serialized_request)
             logger.debug(f"Sending request {request_id} to {request.url}")
-            response = self.client.send(request)
+
+            response = self.client.send(self._prepare_request(request))
             serialized_response = serialize_response(response)
         except Exception as e:
             logger.exception(f"Error processing request {request_id}")
