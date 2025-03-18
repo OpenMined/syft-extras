@@ -1,4 +1,5 @@
 import concurrent.futures
+import textwrap
 import threading
 from pathlib import Path
 from typing import Callable, Optional
@@ -26,15 +27,10 @@ DEFAULT_HTTP_APP_SYFTPERM = """
   user: '*'
   permissions:
     - read
-- path: 'app.yaml'
-  user: '*'
-  permissions:
-    - read
 - path: 'openapi.json'
   user: '*'
   permissions:
     - read
-
 - path: 'http/requests/*.request'
   user: '*'
   permissions:
@@ -46,6 +42,10 @@ DEFAULT_HTTP_APP_SYFTPERM = """
 """
 
 
+class EndpointNotAllowed(Exception):
+    """Exception raised when an endpoint is not allowed."""
+
+
 class SerializedHttpProxy:
     """Base class for a proxy that processes serialized HTTP requests and responses."""
 
@@ -54,9 +54,13 @@ class SerializedHttpProxy:
         response_handler: Callable[[UUID, bytes], None],
         proxy_client: httpx.Client,
         max_workers: int = DEFAULT_MAX_WORKERS,
+        allowed_endpoints: Optional[list[str]] = None,
+        disallowed_endpoints: Optional[list[str]] = None,
     ):
         self.response_handler = response_handler
         self.client = proxy_client
+        self.allowed_endpoints = allowed_endpoints
+        self.disallowed_endpoints = disallowed_endpoints
 
         self.use_thread_pool = max_workers > 0
         self.max_workers = max_workers
@@ -92,16 +96,33 @@ class SerializedHttpProxy:
             extensions=request.extensions,
         )
 
+    def _validate_request(self, request: httpx.Request) -> None:
+        """Validate a request based on the allow/disallow lists."""
+        url = request.url.path
+        if self.allowed_endpoints and url not in self.allowed_endpoints:
+            raise EndpointNotAllowed(f"Endpoint {url} is not in allowed_endpoints")
+        if self.disallowed_endpoints and url in self.disallowed_endpoints:
+            raise EndpointNotAllowed(f"Endpoint {url} is in disallowed_endpoints")
+
     def handle_request(self, request_id: UUID, serialized_request: bytes) -> None:
         """Handle a serialized HTTP request and pass the response to the handler."""
         try:
             request = deserialize_request(serialized_request)
+            self._validate_request(request)
             logger.debug(f"Sending request {request_id} to {request.url}")
 
-            response = self.client.send(self._prepare_request(request))
+            forwarded_request = self._prepare_request(request)
+            response = self.client.send(forwarded_request)
             serialized_response = serialize_response(response)
+        except EndpointNotAllowed as e:
+            logger.warning(f"Skipping request {request_id}: {str(e)}")
+            error_response = httpx.Response(
+                status_code=403,
+                json={"request_id": str(request_id), "error": "Forbidden"},
+            )
+            serialized_response = serialize_response(error_response)
         except Exception as e:
-            logger.exception(f"Error processing request {request_id}")
+            logger.exception(f"Error processing request {request_id}: {str(e)}")
             error_response = httpx.Response(
                 status_code=500, json={"error": str(e), "request_id": str(request_id)}
             )
@@ -148,6 +169,8 @@ class FileSystemProxy(SerializedHttpProxy):
         responses_dir: Path,
         client: httpx.Client,
         max_workers: int = DEFAULT_MAX_WORKERS,
+        allowed_endpoints: Optional[list[str]] = None,
+        disallowed_endpoints: Optional[list[str]] = None,
     ):
         self.requests_dir = requests_dir
         self.responses_dir = responses_dir
@@ -157,6 +180,8 @@ class FileSystemProxy(SerializedHttpProxy):
             response_handler=self._write_response_to_file,
             proxy_client=client,
             max_workers=max_workers,
+            allowed_endpoints=allowed_endpoints,
+            disallowed_endpoints=disallowed_endpoints,
         )
 
         self.event_handler = RequestFileHandler(self)
@@ -253,6 +278,8 @@ class SyftHttpBridge(FileSystemProxy):
         auto_create_dirs: bool = True,
         max_workers: int = DEFAULT_MAX_WORKERS,
         openapi_json_url: Optional[str] = "/openapi.json",
+        allowed_endpoints: Optional[list[str]] = None,
+        disallowed_endpoints: Optional[list[str]] = None,
     ):
         """
         Creates a syftbox to HTTP adapter.
@@ -273,12 +300,26 @@ class SyftHttpBridge(FileSystemProxy):
         requests_dir = http_dir / REQUESTS_DIR
         responses_dir = http_dir / RESPONSES_DIR
 
+        self._display_settings()
+
         super().__init__(
             requests_dir=requests_dir,
             responses_dir=responses_dir,
             client=http_client,
             max_workers=max_workers,
+            allowed_endpoints=allowed_endpoints,
+            disallowed_endpoints=disallowed_endpoints,
         )
+
+    def _display_settings(self):
+        settings_str = f"""
+        SyftBox HTTP Bridge Settings:
+        app_name: {self.app_name}
+        host: {self.host}
+        app_dir: {self.app_dir}
+        """
+
+        logger.info(textwrap.dedent(settings_str))
 
     def _create_syftperm(self):
         syftperm_path = self.app_dir / "syftperm.yaml"

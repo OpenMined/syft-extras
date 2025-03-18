@@ -10,9 +10,8 @@ def run_server():
     ollama_bridge = SyftHttpBridge(
         app_name="ollama",
         http_client=http_client,
+        allowed_endpoints=["/api/generate"],
     )
-
-    print(f"Serving {ollama_bridge.app_name} for {ollama_bridge.host}")
 
     ollama_bridge.run_forever()
 

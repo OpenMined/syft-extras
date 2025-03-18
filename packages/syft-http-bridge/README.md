@@ -95,3 +95,22 @@ response = client.get("/hello")
 ```
 
 Each pattern uses the same API code but with different transport mechanisms - direct in-process calls, HTTP requests, or Syft's secure file-based communication.
+
+## Access Control
+
+You can restrict which endpoints the bridge will serve by using allow and deny lists:
+
+```python
+# Only allow specific endpoints
+bridge = SyftHttpBridge(
+    app_name="my-app",
+    http_client=proxy_client,
+    allowed_endpoints=["/hello", "/api/data"],  # Only these endpoints will be accessible
+)
+
+# Block specific endpoints
+bridge = SyftHttpBridge(
+    app_name="my-app",
+    http_client=proxy_client,
+    disallowed_endpoints=["/admin", "/internal"],  # These endpoints will be blocked
+)

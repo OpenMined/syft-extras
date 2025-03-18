@@ -86,7 +86,7 @@ def wait_for_response_file(
     start_time = time.perf_counter()
     end_time = start_time + timeout
 
-    logger.debug(f"Waiting for response to request {request_id}...")
+    logger.debug(f"Waiting for response to request {request_id} in {responses_dir}")
 
     while time.perf_counter() < end_time:
         response = get_response_file(request_id, responses_dir, delete_response)
