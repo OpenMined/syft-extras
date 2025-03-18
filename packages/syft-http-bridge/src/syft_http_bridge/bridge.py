@@ -277,7 +277,7 @@ class SyftHttpBridge(FileSystemProxy):
         syftbox_client: Optional[SyftBoxClient] = None,
         auto_create_dirs: bool = True,
         max_workers: int = DEFAULT_MAX_WORKERS,
-        openapi_json_url: Optional[str] = "/openapi.json",
+        openapi_json_url: Optional[str] = None,
         allowed_endpoints: Optional[list[str]] = None,
         disallowed_endpoints: Optional[list[str]] = None,
     ):

@@ -5,6 +5,14 @@
 
 ## Usage
 
+### CLI
+If installed with `pip install syft-http-bridge[cli]`, you can start the bridge from the command line. 
+For example, to start a syftbox app `my-app` that forwards requests to `localhost:8000`, run:
+
+```bash
+syft-http-bridge --app-name my-app --base-url http://localhost:8000
+```
+
 ### Development Mode (with FastAPI)
 ```python
 from fastapi import FastAPI
