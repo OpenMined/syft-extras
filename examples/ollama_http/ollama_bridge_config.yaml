@@ -1,0 +1,4 @@
+app_name: ollama
+base_url: http://localhost:11434
+allowed_endpoints:
+  - /api/generate

@@ -5,7 +5,7 @@ ollama_url = "http://localhost:11434"
 
 
 def run_server():
-    http_client: httpx.Client = httpx.Client(base_url=ollama_url)
+    http_client = httpx.Client(base_url=ollama_url)
 
     ollama_bridge = SyftHttpBridge(
         app_name="ollama",
