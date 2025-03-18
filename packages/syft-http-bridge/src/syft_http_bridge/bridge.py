@@ -52,27 +52,25 @@ class SerializedHttpProxy:
     def __init__(
         self,
         response_handler: Callable[[UUID, bytes], None],
-        proxy_client: httpx.Client,
+        http_client: httpx.Client,
         max_workers: int = DEFAULT_MAX_WORKERS,
         allowed_endpoints: Optional[list[str]] = None,
         disallowed_endpoints: Optional[list[str]] = None,
     ):
         self.response_handler = response_handler
-        self.client = proxy_client
+        self.http_client = http_client
         self.allowed_endpoints = allowed_endpoints
         self.disallowed_endpoints = disallowed_endpoints
 
         self.use_thread_pool = max_workers > 0
         self.max_workers = max_workers
         if self.use_thread_pool:
-            logger.info(f"Starting server with {max_workers} workers")
             self.thread_pool = concurrent.futures.ThreadPoolExecutor(
                 max_workers=self.max_workers,
                 thread_name_prefix="proxy-worker",
             )
         else:
             self.thread_pool = None
-            logger.info("Starting server without thread pool")
 
     def _prepare_headers(self, headers: httpx.Headers) -> httpx.Headers:
         headers_to_remove = ["Host", "host"]
@@ -87,7 +85,7 @@ class SerializedHttpProxy:
         self,
         request: httpx.Request,
     ) -> httpx.Request:
-        return self.client.build_request(
+        return self.http_client.build_request(
             method=request.method,
             url=request.url.path,
             params=request.url.params,
@@ -112,7 +110,7 @@ class SerializedHttpProxy:
             logger.debug(f"Sending request {request_id} to {request.url}")
 
             forwarded_request = self._prepare_request(request)
-            response = self.client.send(forwarded_request)
+            response = self.http_client.send(forwarded_request)
             serialized_response = serialize_response(response)
         except EndpointNotAllowed as e:
             logger.warning(f"Skipping request {request_id}: {str(e)}")
@@ -167,7 +165,7 @@ class FileSystemProxy(SerializedHttpProxy):
         self,
         requests_dir: Path,
         responses_dir: Path,
-        client: httpx.Client,
+        http_client: httpx.Client,
         max_workers: int = DEFAULT_MAX_WORKERS,
         allowed_endpoints: Optional[list[str]] = None,
         disallowed_endpoints: Optional[list[str]] = None,
@@ -178,7 +176,7 @@ class FileSystemProxy(SerializedHttpProxy):
         # Initialize with a custom response handler that writes to files
         super().__init__(
             response_handler=self._write_response_to_file,
-            proxy_client=client,
+            http_client=http_client,
             max_workers=max_workers,
             allowed_endpoints=allowed_endpoints,
             disallowed_endpoints=disallowed_endpoints,
@@ -300,23 +298,26 @@ class SyftHttpBridge(FileSystemProxy):
         requests_dir = http_dir / REQUESTS_DIR
         responses_dir = http_dir / RESPONSES_DIR
 
-        self._display_settings()
-
         super().__init__(
             requests_dir=requests_dir,
             responses_dir=responses_dir,
-            client=http_client,
+            http_client=http_client,
             max_workers=max_workers,
             allowed_endpoints=allowed_endpoints,
             disallowed_endpoints=disallowed_endpoints,
         )
+        self._display_settings()
 
     def _display_settings(self):
         settings_str = f"""
         SyftBox HTTP Bridge Settings:
-        app_name: {self.app_name}
+        app name: {self.app_name}
+        base URL: {self.http_client.base_url}
         host: {self.host}
-        app_dir: {self.app_dir}
+        app dir: {self.app_dir}
+        num workers: {self.max_workers}
+        allowed endpoints: {self.allowed_endpoints}
+        disallowed endpoints: {self.disallowed_endpoints}
         """
 
         logger.info(textwrap.dedent(settings_str))
@@ -331,7 +332,7 @@ class SyftHttpBridge(FileSystemProxy):
 
         logger.debug("Fetching OpenAPI JSON")
         openapi_path = self.app_dir / "openapi.json"
-        response = self.client.get(self.openapi_json_url)
+        response = self.http_client.get(self.openapi_json_url)
         if response.status_code == 200:
             openapi_path.write_text(response.text)
         else:

@@ -49,6 +49,7 @@ def bridge_app(
         app_name="test",
         http_client=http_client,
         syftbox_client=syftbox_client,
+        openapi_json_url="/openapi.json",
     )
 
     bridge.start()
