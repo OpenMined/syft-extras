@@ -95,7 +95,6 @@ from syft_http_bridge.client import create_syft_http_client
 client = create_syft_http_client(
     app_name="my-app",
     host="user@openmined.org", # Datasite hosting the bridge
-    syftbox_client=syftbox_client,
 )
 
 # Same HTTP interface, but uses file-based transport

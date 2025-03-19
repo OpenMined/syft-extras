@@ -107,9 +107,9 @@ class SerializedHttpProxy:
         try:
             request = deserialize_request(serialized_request)
             self._validate_request(request)
-            logger.debug(f"Sending request {request_id} to {request.url}")
 
             forwarded_request = self._prepare_request(request)
+            logger.debug(f"Sending request {request_id} to {forwarded_request.url}")
             response = self.http_client.send(forwarded_request)
             serialized_response = serialize_response(response)
         except EndpointNotAllowed as e:
