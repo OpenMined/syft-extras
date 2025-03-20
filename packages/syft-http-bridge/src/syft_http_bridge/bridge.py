@@ -72,6 +72,10 @@ class SerializedHttpProxy:
         else:
             self.thread_pool = None
 
+    @property
+    def is_async_client(self) -> bool:
+        return isinstance(self.http_client, httpx.AsyncClient)
+
     def _prepare_headers(self, headers: httpx.Headers) -> httpx.Headers:
         headers_to_remove = ["Host", "host"]
         for h in headers_to_remove:
@@ -102,6 +106,21 @@ class SerializedHttpProxy:
         if self.disallowed_endpoints and url in self.disallowed_endpoints:
             raise EndpointNotAllowed(f"Endpoint {url} is in disallowed_endpoints")
 
+    def _send_to_client(self, request: httpx.Request) -> httpx.Response:
+        """Send a request using the appropriate client type."""
+        if isinstance(self.http_client, httpx.AsyncClient):
+            # TODO implement async and remove this workaround
+            import asyncio
+
+            loop = asyncio.new_event_loop()
+            try:
+                response = loop.run_until_complete(self.http_client.send(request))
+                return response
+            finally:
+                loop.close()
+        else:
+            return self.http_client.send(request)
+
     def handle_request(self, request_id: UUID, serialized_request: bytes) -> None:
         """Handle a serialized HTTP request and pass the response to the handler."""
         try:
@@ -110,7 +129,7 @@ class SerializedHttpProxy:
 
             forwarded_request = self._prepare_request(request)
             logger.debug(f"Sending request {request_id} to {forwarded_request.url}")
-            response = self.http_client.send(forwarded_request)
+            response = self._send_to_client(forwarded_request)
             serialized_response = serialize_response(response)
         except EndpointNotAllowed as e:
             logger.warning(f"Skipping request {request_id}: {str(e)}")
@@ -263,6 +282,8 @@ class FileSystemProxy(SerializedHttpProxy):
         if self.use_thread_pool:
             self.thread_pool.shutdown(wait=True)
 
+        super().stop()
+
 
 class SyftHttpBridge(FileSystemProxy):
     """Bridge that connects Syft's filesystem with HTTP requests/responses."""
@@ -332,7 +353,15 @@ class SyftHttpBridge(FileSystemProxy):
 
         logger.debug("Fetching OpenAPI JSON")
         openapi_path = self.app_dir / "openapi.json"
-        response = self.http_client.get(self.openapi_json_url)
+
+        # Create a request
+        openapi_request = self.http_client.build_request(
+            method="GET", url=self.openapi_json_url
+        )
+
+        # Use the existing _send_to_client method
+        response = self._send_to_client(openapi_request)
+
         if response.status_code == 200:
             openapi_path.write_text(response.text)
         else:
