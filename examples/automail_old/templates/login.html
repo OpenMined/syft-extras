@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoMail Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 350px;
+            text-align: center;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+        input {
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .info {
+            margin-top: 20px;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>AutoMail Chat</h1>
+        <form action="/login" method="post">
+            <input type="text" name="username" placeholder="Enter your username" required>
+            <button type="submit">Join Chat</button>
+        </form>
+        <div class="info">
+            <p>Enter any username to join the chat</p>
+            <p>If you message someone who's offline, an AI will respond for them</p>
+            <p>They can review and correct AI messages later</p>
+        </div>
+    </div>
+</body>
+</html> 
