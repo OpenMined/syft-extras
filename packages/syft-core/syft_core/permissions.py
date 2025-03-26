@@ -1,23 +1,18 @@
-"""
-TODO: move this to syft-core
-Ref: https://github.com/OpenMined/syft/blob/main/syftbox/lib/permissions.py
-"""
-
-from enum import Enum
 import os
 import re
 import sqlite3
 import traceback
-from typing import List, Optional, Tuple, TypeAlias, Union
-from typing_extensions import Annotated
+from enum import Enum
 from pathlib import Path
+from typing import List, Optional, Tuple, TypeAlias, Union
 
-from pydantic import AfterValidator, BaseModel, model_validator
-from syft_core import Client
 import wcmatch
-from wcmatch.glob import globmatch
 import yaml
+from pydantic import AfterValidator, BaseModel, model_validator
+from typing_extensions import Annotated
+from wcmatch.glob import globmatch
 
+from syft_core import Client
 
 PERM_FILE = "syftperm.yaml"
 
