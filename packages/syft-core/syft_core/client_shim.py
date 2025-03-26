@@ -71,6 +71,12 @@ class Client:
         return cls(conf=SyftClientConfig.load(filepath))
 
     @property
+    def api_request_name(self) -> str:
+        """DEPRECATED. Use app_request_name instead.
+        """
+        return self.app_request_name
+
+    @property
     def app_request_name(self) -> str:
         """Returns the name of root directory of the API request calling this property.
 
