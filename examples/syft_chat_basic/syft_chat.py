@@ -245,7 +245,7 @@ class SyftChatClient:
         start = time.time()
         
         future = rpc.send(
-            url=f"syft://{to_email}/api_data/{self.app_name}/rpc/message",
+            url=rpc.make_url(to_email, self.app_name, "message"),
             body=request,
             expiry="5m",
             cache=True,
@@ -330,7 +330,7 @@ class SyftChatClient:
         start = time.time()
         
         future = rpc.send(
-            url=f"syft://{from_email}/api_data/{self.app_name}/rpc/history",
+            url=rpc.make_url(from_email, self.app_name, "history"),
             body=request,
             expiry="5m",
             cache=True,
