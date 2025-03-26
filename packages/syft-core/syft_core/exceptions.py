@@ -4,3 +4,7 @@ class SyftBoxException(Exception):
 
 class ClientConfigException(SyftBoxException):
     pass
+
+
+class PermissionParsingError(Exception):
+    pass
