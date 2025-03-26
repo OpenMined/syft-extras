@@ -1,18 +1,18 @@
-import os
 import re
 import sqlite3
 import traceback
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Tuple, TypeAlias, Union
+from typing import List, Optional, Tuple, Union
 
 import wcmatch
 import yaml
-from pydantic import AfterValidator, BaseModel, model_validator
-from typing_extensions import Annotated
+from pydantic import BaseModel, model_validator
 from wcmatch.glob import globmatch
 
 from syft_core import Client
+from syft_core.exceptions import PermissionParsingError
+from syft_core.types import AbsolutePath, PathLike, RelativePath, issubpath
 
 PERM_FILE = "syftperm.yaml"
 
@@ -22,37 +22,6 @@ class PermissionType(Enum):
     READ = 2
     WRITE = 3
     ADMIN = 4
-
-
-PathLike: TypeAlias = Union[str, os.PathLike, Path]
-
-
-class SyftBoxException(Exception):
-    pass
-
-
-class PermissionParsingError(Exception):
-    pass
-
-
-def should_be_relative(v: Path) -> Path:
-    if v.is_absolute():
-        raise ValueError("path must be relative")
-    return v
-
-
-def should_be_absolute(v: Path) -> Path:
-    if not v.is_absolute():
-        raise ValueError("path must be absolute")
-    return v
-
-
-RelativePath = Annotated[Path, AfterValidator(should_be_relative)]
-AbsolutePath = Annotated[Path, AfterValidator(should_be_absolute)]
-
-
-def issubpath(path1: RelativePath, path2: RelativePath) -> bool:
-    return path1 in path2.parents
 
 
 class PermissionRule(BaseModel):
