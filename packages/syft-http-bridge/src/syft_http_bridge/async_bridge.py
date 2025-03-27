@@ -8,7 +8,7 @@ from nats.aio.msg import Msg
 from syft_core import Client as SyftBoxClient
 
 from syft_http_bridge.nats_client import (
-    NatsRPCServer,
+    NatsRPCClient,
     make_request_subject,
     nats_subject_to_email,
 )
@@ -165,11 +165,7 @@ class SyftNatsBridge(AsyncHttpProxy):
         self.app_name = app_name
         self.app_dir = self.syftbox_client.api_data(app_name, datasite=self.responder)
 
-        self._nats_rpc_server = NatsRPCServer(
-            app_name=self.app_name,
-            responder=responder,
-            nats_url=nats_url,
-        )
+        self.rpc_client = NatsRPCClient(nats_url)
 
         super().__init__(
             response_handler=self._handle_response,
@@ -185,7 +181,13 @@ class SyftNatsBridge(AsyncHttpProxy):
         response: bytes,
         requester: str,
     ) -> None:
-        await self._nats_rpc_server.send_response(requester, str(request_id), response)
+        await self.rpc_client.send_response(
+            requester=requester,
+            responder=self.responder,
+            app_name=self.app_name,
+            request_id=str(request_id),
+            payload=response,
+        )
 
     async def _handle_nats_event(self, msg: Msg):
         logger.debug("Received message")
@@ -198,7 +200,7 @@ class SyftNatsBridge(AsyncHttpProxy):
                 return
             request_id = UUID(request_id)
 
-            if self._nats_rpc_server.is_message_expired(msg):
+            if self.rpc_client.is_message_expired(msg):
                 logger.warning(f"Received expired request {request_id}")
                 return
 
@@ -216,9 +218,7 @@ class SyftNatsBridge(AsyncHttpProxy):
 
     async def start(self) -> None:
         subj = make_request_subject("*", self.responder, self.app_name)
-        await self._nats_rpc_server.subscribe_with_callback(
-            subj, self._handle_nats_event
-        )
+        await self.rpc_client.subscribe_with_callback(subj, self._handle_nats_event)
 
     async def close(self) -> None:
-        await self._nats_rpc_server.close()
+        await self.rpc_client.close()

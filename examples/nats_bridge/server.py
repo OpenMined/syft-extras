@@ -26,16 +26,25 @@ class NatsTransport(AsyncBaseTransport):
         app_name: str,
         nats_url: str = "nats://localhost:4222",
     ):
-        self.nats_client = NatsRPCClient(
-            requester=requester,
-            responder=responder,
-            app_name=app_name,
-            nats_url=nats_url,
-        )
+        self.requester = requester
+        self.responder = responder
+        self.app_name = app_name
+        self.nats_client = NatsRPCClient(nats_url=nats_url)
 
     async def handle_async_request(self, request: Request) -> Response:
-        req_id = await self.nats_client.send_request(serialize_request(request))
-        response = await self.nats_client.wait_for_response(req_id)
+        request_id = await self.nats_client.send_request(
+            requester=self.requester,
+            responder=self.responder,
+            app_name=self.app_name,
+            payload=serialize_request(request),
+        )
+
+        response = await self.nats_client.wait_for_response(
+            requester=self.requester,
+            responder=self.responder,
+            app_name=self.app_name,
+            request_id=request_id,
+        )
         response = deserialize_response(response)
         return response
 
@@ -92,11 +101,7 @@ async def main():
     )
     await bridge.start()
 
-    client = NatsRPCClient(
-        requester="me@openmined.org",
-        responder="host@openmined.org",
-        app_name="my-http-app",
-    )
+    client = NatsRPCClient(nats_url="nats://localhost:4222")
 
     client = httpx.AsyncClient(
         base_url="http://syft",
@@ -107,7 +112,8 @@ async def main():
         ),
     )
 
-    await benchmark(client, n=1000)
+    res = await client.get("/")
+    print(res.text)
     await bridge.close()
 
 
