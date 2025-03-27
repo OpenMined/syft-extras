@@ -207,6 +207,12 @@ wheels = [
 ]
 
 [[package]]
+name = "nats-py"
+version = "2.10.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/2f/0f1b94844760a894659388059bc618b59fd794a3ef2f5113d710864d3fa7/nats_py-2.10.0.tar.gz", hash = "sha256:9d44265a097edb30d40e214c1dd1a7405c1451d33480ce714c041fb73bb66a10", size = 113637 }
+
+[[package]]
 name = "ormsgpack"
 version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -582,6 +588,7 @@ source = { editable = "packages/syft-http-bridge" }
 dependencies = [
     { name = "httpx" },
     { name = "loguru" },
+    { name = "nats-py" },
     { name = "ormsgpack" },
     { name = "syft-core" },
 ]
@@ -596,6 +603,7 @@ cli = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "loguru", specifier = ">=0.7.3" },
+    { name = "nats-py", specifier = ">=2.10.0" },
     { name = "ormsgpack", specifier = ">=1.8.0" },
     { name = "pyyaml", marker = "extra == 'cli'", specifier = ">=6.0.2" },
     { name = "syft-core", editable = "packages/syft-core" },
