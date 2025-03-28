@@ -41,18 +41,19 @@ General layout:
 
 
 `nats_client.py`
-- `SyftNatsClient`, wraps `nats-io` with the request/response patterns for apps
+- `SyftNatsClient`, wraps `nats-py` with the request/response patterns for syft apps
   - `nats-py` is fully async, so all our client/server code is async as well
   - can use `anyio` if we want a synchronous server/client, see `fastapi` `TestClient` implementation they do the same trick
+  - Will work out of the box for syft-rpc as well, or any other request/response pattern
 - `create_nats_httpx_client`, implements clientside logic for HTTP request/response over NATS
 
 `async_bridge.py`
 - `AsyncHttpProxy`, async version of `bridge.py`. not NATS specific, this will eventually replace `bridge.py`
-- `SyftNatsBridge`, implements serverside logic for HTTP request/response over NATS
+- `SyftNatsBridge`, implements serverside logic for HTTP request/response over NATS. HTTPX-based, so we can mock with starlette testclients instead of HTTP
 
 
 `fraggle.syft_utils`
-- Adds NATS support to the existing `FastAPI` app. `FastAPI` listens to messages from NATS and sends them to the app
+- Adds NATS communication to any existing FastAPI app. FastAPI listens to messages from NATS and sends them to the app as if they were normal HTTP.
 
 
 `fraggle.clients.base_client`
@@ -98,7 +99,7 @@ pub to responses.{requester}.{responder}.{app_name}.{request_id}
 sub to responses.{requester}.{responder}.{app_name}.{request_id}
 ```
 
-note on request_id being used in the topic name: When we get many requests this might not be efficient, but it makes the implementation easier when listening for responses. We can change this later if needed.
+note on request_id being used in the topic name: When we get many requests this might create too many topics for NATS, but it makes the implementation easier when listening for responses. We can change this later if it becomes a problem.
 
 ## Permissions (TODO)
 
@@ -119,15 +120,15 @@ pub responses.*.{username}.>
 
 ## TODO
 
-**to make fraggle work**
+**to make fraggle communicate over NATS**
 - [x] cleanup + fix benchmark
 - [x] test ping-pong with online/offline client/server
 - [x] setup + test with syft-http-bridge 
   - [x] server https://github.com/OpenMined/syft-extras/blob/main/packages/syft-http-bridge/src/syft_http_bridge/bridge.py
   - [x] client https://github.com/OpenMined/syft-extras/blob/main/packages/syft-http-bridge/src/syft_http_bridge/client.py
 - [x] deploy + test on staging
-  - [ ] TLS?
-- [ ] integrate with fraggle
+  - [x] TLS
+- [ ] integrate with fraggle (in progress)
   - [ ] https://github.com/OpenMined/fraggle/blob/nsai-demo/syftbox-rag/src/fraggle/syft_utils.py
 - [ ] Link up to syftbox
   - [ ] infer nats url from syftbox config?
