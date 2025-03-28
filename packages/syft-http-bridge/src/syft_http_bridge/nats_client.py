@@ -15,11 +15,15 @@ from typing import (
     Union,
 )
 
+import httpx
 import nats
+from httpx import AsyncBaseTransport, Request, Response
 from loguru import logger
 from nats.aio.client import Client
 from nats.aio.msg import Msg
 from nats.js.client import JetStreamContext
+
+from syft_http_bridge.serde import deserialize_response, serialize_request
 
 
 def _utcnow() -> datetime:
@@ -121,16 +125,14 @@ class NatsClient:
             headers=headers,
         )
 
-    def _hash_subject(self, subject: str) -> str:
-        # Hashing is required since durable names don't support special characters
-        return hashlib.blake2s(subject.encode(), digest_size=8).hexdigest()
-
     def make_default_durable_name(self, subject: str) -> str:
         """
         NATS needs a durable name for pull subscriptions
         in order to keep track of messages received and acknowledged.
+
+        use 16byte blake2, which is unique and deterministic
         """
-        return f"durable-{self._hash_subject(subject)}"
+        return hashlib.blake2b(subject.encode(), digest_size=16).hexdigest()
 
     async def subscribe_with_callback(
         self, subject: str, callback: Callable[[Msg], Any]
@@ -228,11 +230,13 @@ class SyftNatsClient(NatsClient):
         requester: str,
         responder: str,
         app_name: str,
-        request_id: str,
+        request_id: str | uuid.UUID,
         payload: bytes,
         timeout: Optional[float] = None,
     ) -> None:
         await self.connect()
+
+        request_id = str(request_id)
         subject = make_response_subject(requester, responder, app_name, request_id)
         headers = {
             "request_id": request_id,
@@ -253,3 +257,62 @@ class SyftNatsClient(NatsClient):
     ) -> None:
         subject = make_request_subject("*", responder, app_name)
         await self.subscribe_with_callback(subject, callback)
+
+
+class NatsTransport(AsyncBaseTransport):
+    def __init__(
+        self,
+        requester: str,
+        responder: str,
+        app_name: str,
+        nats_url: str = "nats://localhost:4222",
+    ):
+        self.requester = requester
+        self.responder = responder
+        self.app_name = app_name
+        self.nats_client = SyftNatsClient(nats_url=nats_url)
+
+    async def handle_async_request(self, request: Request) -> Response:
+        request_id = await self.nats_client.send_request(
+            requester=self.requester,
+            responder=self.responder,
+            app_name=self.app_name,
+            payload=serialize_request(request),
+        )
+
+        response = await self.nats_client.wait_for_response(
+            requester=self.requester,
+            responder=self.responder,
+            app_name=self.app_name,
+            request_id=request_id,
+        )
+        response = deserialize_response(response)
+        return response
+
+    async def __aenter__(self) -> Self:
+        await self.nats_client.connect()
+        return self
+
+    async def aclose(self) -> None:
+        await self.nats_client.close()
+
+
+def create_nats_httpx_client(
+    requester: str,
+    responder: str,
+    app_name: str,
+    nats_url: str = "nats://localhost:4222",
+    **client_kwargs: Any,
+) -> httpx.AsyncClient:
+    transport = NatsTransport(
+        requester,
+        responder,
+        app_name,
+        nats_url=nats_url,
+    )
+
+    return httpx.AsyncClient(
+        transport=transport,
+        base_url="http://syft",
+        **client_kwargs,
+    )

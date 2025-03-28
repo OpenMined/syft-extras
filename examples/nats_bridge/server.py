@@ -1,14 +1,11 @@
+import asyncio
 import statistics
 import time
-from typing import Self
 
-import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from httpx import AsyncBaseTransport, Request, Response
 from syft_http_bridge.async_bridge import SyftNatsBridge
-from syft_http_bridge.nats_client import SyftNatsClient
-from syft_http_bridge.serde import deserialize_response, serialize_request
+from syft_http_bridge.nats_client import create_nats_httpx_client
 
 app = FastAPI()
 
@@ -16,44 +13,6 @@ app = FastAPI()
 @app.get("/")
 async def read_root():
     return "Hello World"
-
-
-class NatsTransport(AsyncBaseTransport):
-    def __init__(
-        self,
-        requester: str,
-        responder: str,
-        app_name: str,
-        nats_url: str = "nats://localhost:4222",
-    ):
-        self.requester = requester
-        self.responder = responder
-        self.app_name = app_name
-        self.nats_client = SyftNatsClient(nats_url=nats_url)
-
-    async def handle_async_request(self, request: Request) -> Response:
-        request_id = await self.nats_client.send_request(
-            requester=self.requester,
-            responder=self.responder,
-            app_name=self.app_name,
-            payload=serialize_request(request),
-        )
-
-        response = await self.nats_client.wait_for_response(
-            requester=self.requester,
-            responder=self.responder,
-            app_name=self.app_name,
-            request_id=request_id,
-        )
-        response = deserialize_response(response)
-        return response
-
-    async def __aenter__(self) -> Self:
-        await self.nats_client.connect()
-        return self
-
-    async def aclose(self) -> None:
-        await self.nats_client.close()
 
 
 async def benchmark(client, n=100):
@@ -93,31 +52,30 @@ async def benchmark(client, n=100):
 
 
 async def main():
-    client = TestClient(app)
+    requester = "alice@openmined.org"
+    responder = "bob@openmined.org"
+    app_name = "my-http-app"
+
+    httpx_client = TestClient(app)
     bridge = SyftNatsBridge(
-        app_name="my-http-app",
-        responder="host@openmined.org",
-        http_client=client,
+        app_name=app_name,
+        responder=responder,
+        http_client=httpx_client,
     )
     await bridge.start()
 
-    client = SyftNatsClient(nats_url="nats://localhost:4222")
-
-    client = httpx.AsyncClient(
-        base_url="http://syft",
-        transport=NatsTransport(
-            requester="me@openmined.org",
-            responder="host@openmined.org",
-            app_name="my-http-app",
-        ),
+    # Client alice makes a client to talk to bob's app
+    # `create_nats_httpx_client` returns a client with a NATS-based transport (instead of HTTP)
+    syft_mq_client = create_nats_httpx_client(
+        requester=requester,
+        responder=responder,
+        app_name=app_name,
     )
 
-    res = await client.get("/")
+    res = await syft_mq_client.get("/")
     print(res.text)
     await bridge.close()
 
 
 if __name__ == "__main__":
-    import asyncio
-
     asyncio.run(main())
