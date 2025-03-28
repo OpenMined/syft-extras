@@ -183,7 +183,7 @@ class NatsClient:
         await self.close()
 
 
-class NatsRPCClient(NatsClient):
+class SyftNatsClient(NatsClient):
     async def send_request(
         self,
         requester: str,
@@ -244,3 +244,12 @@ class NatsRPCClient(NatsClient):
             headers=headers,
             timeout=timeout,
         )
+
+    async def subscribe_to_app(
+        self,
+        responder: str,
+        app_name: str,
+        callback: Callable[[Msg], Awaitable[None]],
+    ) -> None:
+        subject = make_request_subject("*", responder, app_name)
+        await self.subscribe_with_callback(subject, callback)

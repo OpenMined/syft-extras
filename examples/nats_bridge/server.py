@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import AsyncBaseTransport, Request, Response
 from syft_http_bridge.async_bridge import SyftNatsBridge
-from syft_http_bridge.nats_client import NatsRPCClient
+from syft_http_bridge.nats_client import SyftNatsClient
 from syft_http_bridge.serde import deserialize_response, serialize_request
 
 app = FastAPI()
@@ -29,7 +29,7 @@ class NatsTransport(AsyncBaseTransport):
         self.requester = requester
         self.responder = responder
         self.app_name = app_name
-        self.nats_client = NatsRPCClient(nats_url=nats_url)
+        self.nats_client = SyftNatsClient(nats_url=nats_url)
 
     async def handle_async_request(self, request: Request) -> Response:
         request_id = await self.nats_client.send_request(
@@ -101,7 +101,7 @@ async def main():
     )
     await bridge.start()
 
-    client = NatsRPCClient(nats_url="nats://localhost:4222")
+    client = SyftNatsClient(nats_url="nats://localhost:4222")
 
     client = httpx.AsyncClient(
         base_url="http://syft",

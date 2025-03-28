@@ -8,8 +8,7 @@ from nats.aio.msg import Msg
 from syft_core import Client as SyftBoxClient
 
 from syft_http_bridge.nats_client import (
-    NatsRPCClient,
-    make_request_subject,
+    SyftNatsClient,
     nats_subject_to_email,
 )
 from syft_http_bridge.serde import deserialize_request, serialize_response
@@ -165,7 +164,7 @@ class SyftNatsBridge(AsyncHttpProxy):
         self.app_name = app_name
         self.app_dir = self.syftbox_client.api_data(app_name, datasite=self.responder)
 
-        self.rpc_client = NatsRPCClient(nats_url)
+        self.rpc_client = SyftNatsClient(nats_url)
 
         super().__init__(
             response_handler=self._handle_response,
@@ -190,7 +189,6 @@ class SyftNatsBridge(AsyncHttpProxy):
         )
 
     async def _handle_nats_event(self, msg: Msg):
-        logger.debug("Received message")
         try:
             await msg.ack()
             # Extract important information
@@ -217,8 +215,11 @@ class SyftNatsBridge(AsyncHttpProxy):
             logger.exception(f"Error handling message: {str(e)}")
 
     async def start(self) -> None:
-        subj = make_request_subject("*", self.responder, self.app_name)
-        await self.rpc_client.subscribe_with_callback(subj, self._handle_nats_event)
+        await self.rpc_client.subscribe_to_app(
+            responder=self.responder,
+            app_name=self.app_name,
+            callback=self._handle_nats_event,
+        )
 
     async def close(self) -> None:
         await self.rpc_client.close()
