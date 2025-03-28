@@ -10,7 +10,6 @@ from syft_core import Client as SyftBoxClient
 from typer import Option
 
 from syft_http_bridge.bridge import SyftHttpBridge
-from syft_http_bridge.constants import DEFAULT_MAX_WORKERS
 
 cli = typer.Typer(no_args_is_help=True)
 console = Console()
@@ -22,7 +21,7 @@ def run(
     base_url: Annotated[str, Option()],
     host: Annotated[Optional[str], Option()] = None,
     client_path: Annotated[Optional[Path], Option()] = None,
-    workers: Annotated[int, Option()] = DEFAULT_MAX_WORKERS,
+    workers: Annotated[int, Option()] = 10,
     openapi_url: Annotated[Optional[str], Option()] = None,
     allowed_endpoints: Annotated[Optional[List[str]], Option()] = None,
     disallowed_endpoints: Annotated[Optional[List[str]], Option()] = None,
