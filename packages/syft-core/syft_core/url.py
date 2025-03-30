@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Generator, Union
 from urllib.parse import urlencode, urlparse
 
-from pydantic import Field, GetJsonSchemaHandler, ValidationInfo, field_validator
+from pydantic import GetJsonSchemaHandler, ValidationInfo
 from pydantic.json_schema import JsonSchemaValue
 from typing_extensions import Self
 
@@ -90,7 +90,7 @@ class SyftBoxURL(str):
         if not cls.is_valid(value):
             raise ValueError(f"Invalid SyftBoxURL: {value}")
         return cls(value)
-    
+
     @classmethod
     def __get_pydantic_json_schema__(
         cls, schema_or_field: Any, schema_handler: GetJsonSchemaHandler
@@ -101,16 +101,3 @@ class SyftBoxURL(str):
             "format": "uri",
             "description": "A SyftBox URL",
         }
-
-
-if __name__ == "__main__":
-    syftbox_url = SyftBoxURL("syft://info@domain.com/datasite1")
-    print(syftbox_url.parsed)
-    print(syftbox_url.to_local_path(Path("~/SyftBox/datasites")))
-    print(syftbox_url.as_http_params())
-    print(
-        SyftBoxURL.from_path(
-            "~/SyftBox/datasites/test@openmined.org/public/some/path",
-            SyftWorkspace(Path("~/SyftBox")),
-        )
-    )

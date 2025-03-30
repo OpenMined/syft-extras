@@ -1,9 +1,5 @@
 """
 SyftBox Client Shim for apps and external dependencies
-
-
-NOTE: this will likely get refactored as it's own SDK.
-But we need it to maintain compatibility with apps
 """
 
 from pathlib import Path
@@ -72,8 +68,7 @@ class Client:
 
     @property
     def api_request_name(self) -> str:
-        """DEPRECATED. Use app_request_name instead.
-        """
+        """DEPRECATED. Use app_request_name instead."""
         return self.app_request_name
 
     @property
@@ -87,7 +82,7 @@ class Client:
         api_path = Path.cwd()
         api_name = api_path.name
         return api_name
-    
+
     def api_data(
         self,
         api_request_name: Optional[str] = CURRENT_APP_REQUEST_NAME,
