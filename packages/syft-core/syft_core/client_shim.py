@@ -98,7 +98,7 @@ class Client:
 
     def app_data(
         self,
-        api_request_name: Optional[str] = CURRENT_APP_REQUEST_NAME,
+        app_request_name: Optional[str] = CURRENT_APP_REQUEST_NAME,
         datasite: Optional[str] = MY_DATASITE,
     ) -> Path:
         """
@@ -112,7 +112,7 @@ class Client:
                 If None, defaults to the current user's configured email.
 
         Returns:
-            Path: A filesystem path pointing to '<workspace>/datasites/<datasite>/api_data/<app_request_name>'.
+            Path: A filesystem path pointing to '<workspace>/datasites/<datasite>/app_data/<app_request_name>'.
         """
         app_request_name = app_request_name or self.app_request_name
         datasite = datasite or self.config.email
