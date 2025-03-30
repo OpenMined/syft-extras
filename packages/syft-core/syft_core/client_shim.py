@@ -98,21 +98,21 @@ class Client:
 
     def app_data(
         self,
-        api_request_name: Optional[str] = CURRENT_APP_REQUEST_NAME,
+        app_request_name: Optional[str] = CURRENT_APP_REQUEST_NAME,
         datasite: Optional[str] = MY_DATASITE,
     ) -> Path:
         """
-        Gets the filesystem path to an application's API data directory for a specific datasite.
+        Gets the filesystem path to an application's APP data directory for a specific datasite.
 
         Args:
-            app_request_name (Optional[str], default=CURRENT_APP_REQUEST_NAME): The name of the API request
-            whose API data path is needed.
-                If None, defaults to the name of the API request from which this method is being called.
+            app_request_name (Optional[str], default=CURRENT_APP_REQUEST_NAME): The name of the APP request
+            whose APP data path is needed.
+                If None, defaults to the name of the APP request from which this method is being called.
             datasite (Optional[str], default=MY_DATASITE): The datasite's email.
                 If None, defaults to the current user's configured email.
 
         Returns:
-            Path: A filesystem path pointing to '<workspace>/datasites/<datasite>/api_data/<app_request_name>'.
+            Path: A filesystem path pointing to '<workspace>/datasites/<datasite>/app_data/<app_request_name>'.
         """
         app_request_name = app_request_name or self.app_request_name
         datasite = datasite or self.config.email
