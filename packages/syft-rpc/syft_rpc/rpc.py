@@ -32,7 +32,7 @@ def make_url(datasite: str, app_name: str, endpoint: str) -> SyftBoxURL:
     """Create a Syft Box URL from a datasite, app name, and RPC endpoint."""
 
     return SyftBoxURL(
-        f"syft://{datasite}/api_data/{app_name}/rpc/" + endpoint.lstrip("/")
+        f"syft://{datasite}/app_data/{app_name}/rpc/" + endpoint.lstrip("/")
     )
 
 
@@ -184,8 +184,8 @@ def broadcast(
 
     Example:
         >>> future = broadcast(
-        ...     urls=["syft://user1@domain.com/api_data/app_name/rpc/endpoint",
-        ...           "syft://user2@domain.com/api_data/app_name/rpc/endpoint"],
+        ...     urls=["syft://user1@domain.com/app_data/app_name/rpc/endpoint",
+        ...           "syft://user2@domain.com/app_data/app_name/rpc/endpoint"],
         ...     expiry="1d",
         ... )
         >>> responses = future.gather_completed()  # Wait for all responses

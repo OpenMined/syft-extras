@@ -168,7 +168,7 @@ class SyftFileTransport(FileSystemTransport):
         self.syftbox_client = syftbox_client or SyftBoxClient.load()
         self.host = host
         self.app_name = app_name
-        self.app_dir = self.syftbox_client.api_data(app_name, datasite=self.host)
+        self.app_dir = self.syftbox_client.app_data(app_name, datasite=self.host)
 
         if auto_create_dirs:
             self.app_dir.mkdir(parents=True, exist_ok=True)

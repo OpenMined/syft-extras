@@ -195,7 +195,7 @@ class SyftRPCClient:
         available_servers = []
         for ds in self.list_datasites():
             # Check if the datasite has the RPC endpoint published
-            rpc_path = self.client.datasites / ds / "api_data" / self.app_name / "rpc" / "rpc.schema.json"
+            rpc_path = self.client.datasites / ds / "app_data" / self.app_name / "rpc" / "rpc.schema.json"
             if rpc_path.exists():
                 available_servers.append(ds)
         return available_servers

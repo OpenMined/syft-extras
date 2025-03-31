@@ -102,7 +102,7 @@ async def rpc_send(rpc_req: RPCSendRequest, blocking: bool = False):
 @app.get("/rpc/schema/{app_name}")
 async def rpc_schema(app_name: str):
     try:
-        app_path = client.api_data(app_name)
+        app_path = client.app_data(app_name)
         app_schema = app_path / "rpc" / "rpc.schema.json"
         return json.loads(app_schema.read_text())
     except Exception as ex:
