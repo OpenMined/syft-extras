@@ -54,7 +54,7 @@ class SyftEvents:
         self.schema = publish_schema
         self.state: dict[str, Any] = {}
         self.client = client or Client.load()
-        self.app_dir = self.client.api_data(self.app_name)
+        self.app_dir = self.client.app_data(self.app_name)
         self.app_rpc_dir = self.app_dir / "rpc"
         self.obs = Observer()
         self.__rpc: dict[Path, Callable] = {}
@@ -262,7 +262,7 @@ class SyftEvents:
         path = path.format(
             email=self.client.email,
             datasite=self.client.email,
-            api_data=self.client.api_data(self.app_name),
+            app_data=self.client.app_data(self.app_name),
         )
         if not path.startswith("**/"):
             path = f"**/{path}"
@@ -273,13 +273,13 @@ if __name__ == "__main__":
     box = SyftEvents("test_app")
 
     # requests are always bound to the app
-    # root path = {datasite}/api_data/{app_name}/rpc
+    # root path = {datasite}/app_data/{app_name}/rpc
     @box.on_request("/endpoint")
     def endpoint_request(req):
         print("rpc /endpoint:", req)
 
     # requests are always bound to the app
-    # root path = {datasite}/api_data/{app_name}/rpc
+    # root path = {datasite}/app_data/{app_name}/rpc
     @box.on_request("/another")
     def another_request(req):
         print("rpc /another: ", req)
@@ -308,7 +308,7 @@ if __name__ == "__main__":
 #     box = SyftEvents("vector_store")
 
 #     # requests are always bound to the app
-#     # root path = {datasite}/api_data/{app_name}/rpc
+#     # root path = {datasite}/app_data/{app_name}/rpc
 #     @box.on_request("/doc_query")
 #     def query(query: str) -> list[str]:
 #         """Return similar documents for a given query"""

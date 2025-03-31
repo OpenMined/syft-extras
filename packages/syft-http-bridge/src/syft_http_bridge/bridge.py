@@ -309,7 +309,7 @@ class SyftHttpBridge(FileSystemProxy):
         self.syftbox_client = syftbox_client or SyftBoxClient.load()
         self.host = host or self.syftbox_client.email
         self.app_name = app_name
-        self.app_dir = self.syftbox_client.api_data(app_name, datasite=self.host)
+        self.app_dir = self.syftbox_client.app_data(app_name, datasite=self.host)
         self.openapi_json_url = openapi_json_url
 
         if auto_create_dirs:

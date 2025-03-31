@@ -12,7 +12,7 @@ from syft_core.types import PathLike, to_path
 from syft_core.url import SyftBoxURL
 from syft_core.workspace import SyftWorkspace
 
-# this just makes it a bit clear what the default is for the api_data() method
+# this just makes it a bit clear what the default is for the app_data() method
 CURRENT_APP_REQUEST_NAME = None
 MY_DATASITE = None
 

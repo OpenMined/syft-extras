@@ -53,7 +53,7 @@ def test_rpc_send_blocking():
 
 def test_rpc_schema():
     """Test the RPC schema endpoint to ensure it returns the correct schema for the specified app."""
-    app_path = syft_client.api_data("test_app")
+    app_path = syft_client.app_data("test_app")
     app_schema = app_path / "rpc" / "rpc.schema.json"
 
     os.makedirs(app_path / "rpc", exist_ok=True)
