@@ -76,7 +76,6 @@ class NatsClient:
         self.nats_url: str = nats_url
         self.nc: Optional[Client] = None
         self.js: Optional[JetStreamContext] = None
-        self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
 
     async def connect(self) -> None:
         if not self.nc or self.nc.is_closed:
@@ -156,22 +155,19 @@ class NatsClient:
     ) -> Optional[bytes]:
         await self.connect()
 
-        try:
-            durable = self.make_default_durable_name(subject)
-            sub = await self.js.pull_subscribe(subject, durable=durable)
-            msgs = await sub.fetch(1, timeout=timeout)
+        durable = self.make_default_durable_name(subject)
+        sub = await self.js.pull_subscribe(subject, durable=durable)
+        msgs = await sub.fetch(1, timeout=timeout)
 
-            if msgs:
-                msg = msgs[0]
-                data = msg.data
-                if ack:
-                    await msg.ack()
-                if exclude_expired and self.is_message_expired(msg):
-                    return None
-                return data
-            return None
-        except nats.errors.TimeoutError:
-            return None
+        if msgs:
+            msg = msgs[0]
+            data = msg.data
+            if ack:
+                await msg.ack()
+            if exclude_expired and self.is_message_expired(msg):
+                raise ValueError(f"Message with subject {subject} has expired")
+            return data
+        raise ValueError(f"Message with subject {subject} not found or timed out")
 
     async def close(self) -> None:
         if self.nc:
@@ -273,6 +269,7 @@ class NatsTransport(AsyncBaseTransport):
         self.nats_client = SyftNatsClient(nats_url=nats_url)
 
     async def handle_async_request(self, request: Request) -> Response:
+        print("Handling async request")
         request_id = await self.nats_client.send_request(
             requester=self.requester,
             responder=self.responder,
@@ -285,8 +282,32 @@ class NatsTransport(AsyncBaseTransport):
             responder=self.responder,
             app_name=self.app_name,
             request_id=request_id,
+            timeout=3,
         )
         response = deserialize_response(response)
+        return response
+
+    def handle_request(self, request: Request) -> Response:
+        print("Handling sync request")
+        is_asyncio_event_loop_running = False
+        try:
+            is_asyncio_event_loop_running = asyncio.get_event_loop().is_running()
+        except RuntimeError:
+            pass
+        if is_asyncio_event_loop_running:
+            future = asyncio.ensure_future(self.handle_async_request(request))
+            import time
+
+            time_waited = 0
+            while not future.done():
+                time_waited += 0.1
+                time.sleep(0.1)
+                if time_waited > 3:
+                    raise TimeoutError("Request timed out")
+
+            response = future.result()
+        else:
+            response = asyncio.run(self.handle_async_request(request))
         return response
 
     async def __aenter__(self) -> Self:
@@ -311,7 +332,7 @@ def create_nats_httpx_client(
         nats_url=nats_url,
     )
 
-    return httpx.AsyncClient(
+    return httpx.Client(
         transport=transport,
         base_url="http://syft",
         **client_kwargs,
