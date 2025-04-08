@@ -295,7 +295,7 @@ class SyftPermission(BaseModel):
     ) -> "SyftPermission":
         perm = cls.create(context, dir)
         perm.add_rule(path="**", user=context.email, permission=["admin"])
-        perm.add_rule(path="**", user="*", permission=["write", "read"])
+        perm.add_rule(path="**", user="*", permission=["create", "write", "read"])
         return perm
 
     def add_rule(
