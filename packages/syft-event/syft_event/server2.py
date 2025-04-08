@@ -24,10 +24,6 @@ DEFAULT_WATCH_EVENTS: List[Type[FileSystemEvent]] = [
     FileModifiedEvent,
 ]
 PERMS = """
-- path: 'syftperm.yaml'
-  user: '*'
-  permissions:
-    - read
 - path: 'rpc.schema.json'
   user: '*'
   permissions:
@@ -35,11 +31,15 @@ PERMS = """
 - path: '**/*.request'
   user: '*'
   permissions:
-    - admin
+    - create
+    - write
+    - read
 - path: '**/*.response'
   user: '*'
   permissions:
-    - admin
+    - create
+    - write
+    - read
 """
 
 
