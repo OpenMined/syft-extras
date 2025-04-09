@@ -1,11 +1,11 @@
 [project]
 name = "syft-event"
-version = "0.1.0"
+version = "0.2.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "syft-rpc",
+    "syft-rpc==0.2.0",
     "pathspec>=0.12.1",
     "pydantic>=2.10.4",
     "watchdog>=6.0.0",
