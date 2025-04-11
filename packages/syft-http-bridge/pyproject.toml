@@ -9,8 +9,7 @@ dependencies = [
     "syft-core",
     "httpx>=0.28.1",
     "ormsgpack>=1.8.0",
-    "loguru>=0.7.3",
-    "orjson"
+    "loguru>=0.7.3"
 ]
 
 [build-system]
