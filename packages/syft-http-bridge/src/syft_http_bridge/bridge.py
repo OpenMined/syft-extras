@@ -12,7 +12,6 @@ from watchdog.events import FileCreatedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from syft_http_bridge.constants import (
-    DEFAULT_MAX_WORKERS,
     HTTP_DIR,
     REQUESTS_DIR,
     RESPONSES_DIR,
@@ -21,6 +20,8 @@ from syft_http_bridge.serde import (
     deserialize_request,
     serialize_response,
 )
+
+DEFAULT_MAX_WORKERS = 0
 
 DEFAULT_HTTP_APP_SYFTPERM = """
 - path: 'syftperm.yaml'
