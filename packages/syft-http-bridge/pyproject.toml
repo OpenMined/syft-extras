@@ -6,10 +6,6 @@ readme = "README.md"
 authors = [{ name = "eelcovdw", email = "eelcovdw@gmail.com" }]
 requires-python = ">=3.9"
 dependencies = [
-    "syft-core",
-    "httpx>=0.28.1",
-    "ormsgpack>=1.8.0",
-    "loguru>=0.7.3",
 ]
 
 [build-system]
