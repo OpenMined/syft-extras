@@ -238,6 +238,11 @@ class SyftEvents:
         def rpc_callback(event: FileSystemEvent):
             return self.__handle_rpc(Path(event.src_path), handler)
 
+        # make sure dir exists
+        endpoint.mkdir(exist_ok=True, parents=True)
+        # touch the keep file
+        (endpoint / ".syftkeep").touch()
+
         self.obs.schedule(
             RpcRequestHandler(rpc_callback),
             path=str(endpoint),
@@ -253,9 +258,7 @@ class SyftEvents:
             raise ValueError("wildcards are not allowed in path")
 
         # this path must exist so that watch can emit events
-        epath = self.app_rpc_dir / endpoint.lstrip("/").rstrip("/")
-        epath.mkdir(exist_ok=True, parents=True)
-        return epath
+        return self.app_rpc_dir / endpoint.lstrip("/").rstrip("/")
 
     def __format_glob(self, path: str) -> str:
         # replace placeholders with actual values
