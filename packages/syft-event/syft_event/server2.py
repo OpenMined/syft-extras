@@ -32,10 +32,14 @@ rules:
     - '*'
 - pattern: '**/*.request'
   access:
+    read:
+    - '*'
     write:
     - '*'
 - pattern: '**/*.response'
   access:
+    read:
+    - '*'
     write:
     - '*'
 """
