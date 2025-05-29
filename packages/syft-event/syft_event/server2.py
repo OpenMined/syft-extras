@@ -23,23 +23,25 @@ DEFAULT_WATCH_EVENTS: List[Type[FileSystemEvent]] = [
     FileCreatedEvent,
     FileModifiedEvent,
 ]
+
 PERMS = """
-- path: 'rpc.schema.json'
-  user: '*'
-  permissions:
-    - read
-- path: '**/*.request'
-  user: '*'
-  permissions:
-    - create
-    - write
-    - read
-- path: '**/*.response'
-  user: '*'
-  permissions:
-    - create
-    - write
-    - read
+rules:
+- pattern: rpc.schema.json
+  access:
+    read:
+    - '*'
+- pattern: '**/*.request'
+  access:
+    read:
+    - '*'
+    write:
+    - '*'
+- pattern: '**/*.response'
+  access:
+    read:
+    - '*'
+    write:
+    - '*'
 """
 
 
@@ -66,7 +68,7 @@ class SyftEvents:
         self.app_rpc_dir.mkdir(exist_ok=True, parents=True)
 
         # write perms
-        perms = self.app_rpc_dir / "syftperm.yaml"
+        perms = self.app_rpc_dir / "syft.pub.yaml"
         perms.write_text(PERMS)
 
         # publish schema
