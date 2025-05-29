@@ -44,6 +44,7 @@ def _resolve_parameter(
             url=request.url,
             headers=request.headers,
             body=request.body,
+            method=request.method,
         )
 
     elif inspect.isclass(ptype) and ptype is SyftEvents:

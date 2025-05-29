@@ -10,6 +10,7 @@ class Request(BaseModel):
     url: str
     headers: Dict[str, str] = Field(default_factory=dict)
     body: Optional[bytes]
+    method: str
 
 
 class Response(BaseModel):
