@@ -25,7 +25,8 @@ class SyftBoxURL(str):
         pattern = r"^syft://([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)(/.*)?$"
         return bool(re.match(pattern, url))
 
-    def query_params(self) -> dict[str, str]:
+    @property
+    def query(self) -> dict[str, str]:
         """Returns the query parameters as a dictionary."""
         if not self.parsed.query:
             return {}
