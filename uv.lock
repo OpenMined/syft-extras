@@ -583,7 +583,7 @@ requires-dist = [
 
 [[package]]
 name = "syft-event"
-version = "0.2.1"
+version = "0.2.2"
 source = { editable = "packages/syft-event" }
 dependencies = [
     { name = "loguru" },
