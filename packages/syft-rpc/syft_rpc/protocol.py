@@ -6,6 +6,7 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from enum import Enum, IntEnum
+from http import HTTPStatus
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -52,25 +53,30 @@ class SyftMethod(str, Enum):
     DELETE = "DELETE"
 
 
-class SyftStatus(IntEnum):
-    """Standard HTTP-like status codes for Syft responses."""
+# Merge standard HTTP status codes with Syft-prefixed ones
+http_members = {member.name: member.value for member in HTTPStatus}
+http_members.update(
+    {
+        "SYFT_200_OK": 200,
+        "SYFT_400_BAD_REQUEST": 400,
+        "SYFT_403_FORBIDDEN": 403,
+        "SYFT_404_NOT_FOUND": 404,
+        "SYFT_419_EXPIRED": 419,
+        "SYFT_499_CLIENT_CLOSED_REQUEST": 499,
+        "SYFT_500_SERVER_ERROR": 500,
+    }
+)
 
-    SYFT_200_OK = 200
-    SYFT_400_BAD_REQUEST = 400
-    SYFT_403_FORBIDDEN = 403
-    SYFT_404_NOT_FOUND = 404
-    SYFT_419_EXPIRED = 419
-    SYFT_500_SERVER_ERROR = 500
+# Define methods in a namespace dict
+class_namespace = {
+    **http_members,
+    # Add custom properties
+    "is_success": property(lambda self: 200 <= self.value < 300),
+    "is_error": property(lambda self: self.value >= 400),
+}
 
-    @property
-    def is_success(self) -> bool:
-        """Check if the status code indicates success."""
-        return 200 <= self.value < 300
-
-    @property
-    def is_error(self) -> bool:
-        """Check if the status code indicates an error."""
-        return self.value >= 400
+# Dynamically create the enum with methods
+SyftStatus = IntEnum("SyftStatus", class_namespace)
 
 
 class Base(BaseModel):
