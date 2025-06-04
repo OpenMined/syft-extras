@@ -62,6 +62,7 @@ def serialize(obj: Any, **kwargs: Any) -> Optional[bytes]:
 
 def send(
     url: Union[SyftBoxURL, str],
+    method: Union[SyftMethod, str] = SyftMethod.GET,
     body: Optional[BodyType] = None,
     headers: Optional[HeaderType] = None,
     expiry: str = DEFAULT_EXPIRY,
@@ -102,9 +103,10 @@ def send(
     # If client is not provided, load the default client
     client = Client.load() if client is None else client
 
+    method = SyftMethod(method) if isinstance(method, str) else method
     syft_request = SyftRequest(
         sender=client.email,
-        method=SyftMethod.GET,
+        method=method,
         url=url if isinstance(url, SyftBoxURL) else SyftBoxURL(url),
         headers=headers or {},
         body=serialize(body),
