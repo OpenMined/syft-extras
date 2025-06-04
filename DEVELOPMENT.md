@@ -38,4 +38,4 @@ uv build .
 3. Navigate to the `dist` folder and do some tests:
 	1. Upzip the `.tar` to see the content, and also `uvx wheel unpack <path_to_whl_file>` to see the content of the `whl` file
 	2. Make a new env, install the wheel with `uv pip install <path_to_whl_file>` to test things
-4. Upload it to PiPy: `uvx twine upload ./dist/*`. For this 
+4. Upload it to PiPy: `uvx twine upload ./dist/*`. For this, you will need to have a pypi token.
