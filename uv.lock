@@ -615,14 +615,6 @@ dependencies = [
     { name = "syft-rpc" },
 ]
 
-[package.dev-dependencies]
-cli = [
-    { name = "syft-http-bridge", extra = ["cli"] },
-]
-dev = [
-    { name = "pytest" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "syft-core", editable = "packages/syft-core" },
@@ -631,10 +623,6 @@ requires-dist = [
     { name = "syft-proxy", editable = "packages/syft-proxy" },
     { name = "syft-rpc", editable = "packages/syft-rpc" },
 ]
-
-[package.metadata.requires-dev]
-cli = [{ name = "syft-http-bridge", extras = ["cli"], editable = "packages/syft-http-bridge" }]
-dev = [{ name = "pytest", specifier = ">=8.3.4" }]
 
 [[package]]
 name = "syft-http-bridge"
@@ -662,7 +650,6 @@ requires-dist = [
     { name = "syft-core", editable = "packages/syft-core" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.15.1" },
 ]
-provides-extras = ["cli"]
 
 [[package]]
 name = "syft-proxy"
@@ -701,20 +688,12 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "pydantic", specifier = ">=2.9.2" },
     { name = "syft-core", editable = "packages/syft-core" },
     { name = "typing-extensions", specifier = ">=4.12.2" },
 ]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.3.4" }]
 
 [[package]]
 name = "tomli"
