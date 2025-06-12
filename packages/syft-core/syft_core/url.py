@@ -26,6 +26,18 @@ class SyftBoxURL(str):
         return bool(re.match(pattern, url))
 
     @property
+    def query(self) -> dict[str, str]:
+        """Returns the query parameters as a dictionary."""
+        if not self.parsed.query:
+            return {}
+
+        return dict(
+            param.split("=", 1)
+            for param in self.parsed.query.split("&")
+            if "=" in param
+        )
+
+    @property
     def protocol(self) -> str:
         """Returns the protocol (syft://)."""
         return self.parsed.scheme + "://"
