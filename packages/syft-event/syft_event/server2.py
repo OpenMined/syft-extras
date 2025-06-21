@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 from threading import Event
 from typing import Any
+import inspect
+import asyncio
+import concurrent.futures
 
 from loguru import logger
 from syft_core import Client
@@ -214,7 +217,17 @@ class SyftEvents:
                 return
 
             # call the function
-            resp = func(**kwargs)
+
+            # check if the function is a coroutine
+
+            if inspect.iscoroutinefunction(func):
+                # if it is, run it in a new event loop in a separate thread
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, func(**kwargs))
+                    resp = future.result()
+            else:
+                # if it is not, call it directly
+                resp = func(**kwargs)
 
             if isinstance(resp, Response):
                 resp_data = resp.body
