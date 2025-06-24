@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(rm:*)",
+      "Bash(mv:*)",
+      "Bash(python -m pytest tests/test_permissions.py -v)",
+      "Bash(python3 -m pytest tests/test_permissions.py -v)",
+      "Bash(chmod:*)",
+      "Bash(source:*)",
+      "Bash(python -m pytest tests/test_permissions.py -v -x)",
+      "Bash(python -m pytest tests/test_permissions.py::TestNewPermissionFormat::test_computed_permissions_with_terminal -v)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(./test.sh:*)",
+      "Bash(./lint.sh lint:*)",
+      "Bash(./lint.sh:*)",
+      "Bash(uv run:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": []
+  }
+}
