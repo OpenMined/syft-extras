@@ -1,0 +1,108 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+        exclude:
+          # Python 3.8 is not available on macos-latest (ARM64)
+          - os: macos-latest
+            python-version: '3.8'
+        include:
+          # Add macos-13 (Intel) for Python 3.8
+          - os: macos-13
+            python-version: '3.8'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+
+    - name: Test syft-core (Unix)
+      if: always() && runner.os != 'Windows'
+      working-directory: packages/syft-core
+      run: |
+        uv venv
+        uv pip install -e .
+        uv pip install pytest pytest-cov pytest-xdist
+        uv run pytest tests/ -v --cov=syft_core --cov-report=term-missing --cov-report=xml
+    
+    - name: Test syft-core (Windows)
+      if: always() && runner.os == 'Windows'
+      working-directory: packages/syft-core
+      shell: pwsh
+      run: |
+        uv venv
+        uv pip install -e .
+        uv pip install pytest pytest-cov pytest-xdist
+        uv run pytest tests/ -v --cov=syft_core --cov-report=term-missing --cov-report=xml
+
+    - name: Upload syft-core coverage
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      uses: codecov/codecov-action@v4
+      with:
+        file: packages/syft-core/coverage.xml
+        flags: syft-core
+        name: syft-core-coverage
+        fail_ci_if_error: false
+
+    # Add more package tests here as needed
+    # - name: Test syft-another-package
+    #   if: always()
+    #   working-directory: packages/syft-another-package
+    #   run: |
+    #     uv venv
+    #     uv pip install -e .
+    #     uv pip install pytest pytest-cov pytest-xdist
+    #     uv run pytest tests/ -v --cov=syft_another_package --cov-report=term-missing --cov-report=xml
+
+  lint:
+    name: Lint and Type Check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+
+    - name: Run lint script (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        chmod +x ./lint.sh
+        ./lint.sh lint
+    
+    - name: Run lint script (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        .\lint.ps1 lint
