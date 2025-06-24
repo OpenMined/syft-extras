@@ -584,7 +584,7 @@ requires-dist = [
 
 [[package]]
 name = "syft-event"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "packages/syft-event" }
 dependencies = [
     { name = "loguru" },
@@ -693,7 +693,7 @@ requires-dist = [
 
 [[package]]
 name = "syft-rpc"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "packages/syft-rpc" }
 dependencies = [
     { name = "pydantic" },

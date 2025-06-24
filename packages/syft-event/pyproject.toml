@@ -1,11 +1,11 @@
 [project]
 name = "syft-event"
-version = "0.2.4"
+version = "0.2.5"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "syft-rpc==0.2.3",
+    "syft-rpc>=0.2.4",
     "pathspec>=0.12.1",
     "pydantic>=2.10.4",
     "watchdog>=6.0.0",
@@ -24,7 +24,6 @@ exclude = ["syft_event/**/__pycache__"]
 [tool.hatch.build.targets.sdist]
 only-include = ["syft_event", "pyproject.toml", "README.md"]
 exclude = ["syft_event/**/__pycache__"]
-
 
 
 [tool.uv.sources]
