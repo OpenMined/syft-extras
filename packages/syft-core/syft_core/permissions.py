@@ -1,3 +1,9 @@
+"""
+New permissions system using syft.pub.yaml format
+This module provides the same interface as the original permissions.py
+but with support for the new file format.
+"""
+
 import re
 import sqlite3
 import traceback
@@ -14,7 +20,36 @@ from syft_core import Client
 from syft_core.exceptions import PermissionParsingError
 from syft_core.types import AbsolutePath, PathLike, RelativePath, issubpath
 
-PERM_FILE = "syftperm.yaml"
+__all__ = [
+    "PERM_FILE",
+    "OLD_PERM_FILE",
+    "PermissionType",
+    "PermissionRule",
+    "SyftPermission",
+    "ComputedPermission",
+    "get_computed_permission",
+    "set_auto_convert_permissions",
+    "get_auto_convert_permissions",
+]
+
+PERM_FILE = "syft.pub.yaml"
+OLD_PERM_FILE = "syftperm.yaml"
+_AUTO_CONVERT_PERMISSIONS = True  # Set to False to disable auto-conversion
+
+
+def set_auto_convert_permissions(enabled: bool) -> None:
+    """Enable or disable automatic conversion of old permission files.
+
+    Args:
+        enabled: True to enable auto-conversion (default), False to disable
+    """
+    global _AUTO_CONVERT_PERMISSIONS
+    _AUTO_CONVERT_PERMISSIONS = enabled
+
+
+def get_auto_convert_permissions() -> bool:
+    """Get the current auto-conversion setting."""
+    return _AUTO_CONVERT_PERMISSIONS
 
 
 class PermissionType(Enum):
@@ -31,6 +66,7 @@ class PermissionRule(BaseModel):
     allow: bool = True
     permissions: List[PermissionType]  # read/write/create/admin
     priority: int
+    terminal: bool = False  # stops inheritance when True
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, PermissionRule):
@@ -45,12 +81,10 @@ class PermissionRule(BaseModel):
     def depth(self) -> int:
         return len(self.permfile_path.parts)
 
-        # write model validator that accepts either a single string or a list of strings as permissions when initializing
-
     @model_validator(mode="before")
     @classmethod
     def validate_permissions(cls, values: dict) -> dict:
-        # check if values only contains keys that are in the model
+        # Check if values only contains keys that are in the model
         invalid_keys = set(values.keys()) - (
             set(cls.model_fields.keys()) | set(["type"])
         )
@@ -59,18 +93,18 @@ class PermissionRule(BaseModel):
                 f"rule yaml contains invalid keys {invalid_keys}, only {cls.model_fields.keys()} are allowed"
             )
 
-        # add that if the type value is "disallow" we set allow to false
+        # Add that if the type value is "disallow" we set allow to false
         if values.get("type") == "disallow":
             values["allow"] = False
 
-        # if path refers to a location higher in the directory tree than the current file, raise an error
+        # If path refers to a location higher in the directory tree than the current file, raise an error
         path = values.get("path")
         if path and path.startswith("../"):
             raise PermissionParsingError(
                 f"path {path} refers to a location higher in the directory tree than the current file"
             )
 
-        # if user is not a valid email, or *, raise an error
+        # If user is not a valid email, or *, raise an error
         email = values.get("user", "")
         is_valid_email = re.match(r"[^@]+@[^@]+", email or "")
         if email != "*" and not is_valid_email:
@@ -78,7 +112,7 @@ class PermissionRule(BaseModel):
                 f"user {values.get('user')} is not a valid email or *"
             )
 
-        # listify permissions
+        # Listify permissions
         perms = values.get("permissions")
         if isinstance(perms, str):
             perms = [perms]
@@ -98,7 +132,7 @@ class PermissionRule(BaseModel):
             and "{useremail}" in path
             and path.index("**") < path.rindex("{useremail}")
         ):
-            # this would make creating the path2rule mapping more challenging to compute beforehand
+            # This would make creating the path2rule mapping more challenging to compute beforehand
             raise PermissionParsingError("** can never be after {useremail}")
 
         return values
@@ -107,7 +141,7 @@ class PermissionRule(BaseModel):
     def from_rule_dict(
         cls, dir_path: RelativePath, rule_dict: dict, priority: int
     ) -> "PermissionRule":
-        # initialize from dict
+        # Initialize from dict
         return cls(dir_path=dir_path, **rule_dict, priority=priority)
 
     @classmethod
@@ -126,9 +160,7 @@ class PermissionRule(BaseModel):
         return cls(
             dir_path=Path(row["permfile_path"]).parent,
             path=row["path"],
-            user=row[
-                "user"
-            ],  # Default to all users since DB schema doesn't show user field
+            user=row["user"],
             allow=not row["disallow"],
             priority=row["priority"],
             permissions=permissions,
@@ -137,7 +169,7 @@ class PermissionRule(BaseModel):
     def to_db_row(self) -> dict:
         """Convert PermissionRule to a database row dictionary"""
         return {
-            "permfile_path": str(self.permfile_path),  # Reconstruct full path
+            "permfile_path": str(self.permfile_path),
             "permfile_dir": str(self.dir_path),
             "permfile_depth": self.depth,
             "priority": self.priority,
@@ -180,7 +212,7 @@ class PermissionRule(BaseModel):
             match = False
             emails_in_file_path = [
                 part for part in str(relative_file_path).split("/") if "@" in part
-            ]  # todo: improve this
+            ]
             for email in emails_in_file_path:
                 if globmatch(
                     str(relative_file_path),
@@ -207,12 +239,42 @@ class PermissionRule(BaseModel):
 class SyftPermission(BaseModel):
     relative_filepath: RelativePath
     rules: List[PermissionRule]
+    terminal: bool = False
 
     def save(self, path: Path) -> None:
         if path.is_dir():
             path = path / PERM_FILE
+
+        # Convert to new format
+        data = {}
+        if self.terminal:
+            data["terminal"] = True
+
+        # Group rules by pattern
+        pattern_rules = {}
+        for rule in self.rules:
+            if rule.path not in pattern_rules:
+                pattern_rules[rule.path] = {
+                    "pattern": rule.path,
+                    "access": {"read": [], "write": [], "admin": []},
+                }
+
+            access = pattern_rules[rule.path]["access"]
+            # Add user to highest permission level only
+            if PermissionType.ADMIN in rule.permissions:
+                if rule.user not in access["admin"]:
+                    access["admin"].append(rule.user)
+            elif PermissionType.WRITE in rule.permissions:
+                if rule.user not in access["write"]:
+                    access["write"].append(rule.user)
+            elif PermissionType.READ in rule.permissions:
+                if rule.user not in access["read"]:
+                    access["read"].append(rule.user)
+
+        data["rules"] = list(pattern_rules.values())
+
         with open(path, "w") as f:
-            yaml.dump([x.as_file_json() for x in self.rules], f)
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
     def ensure(self, path: Path) -> bool:
         """For backwards compatibility, we ensure that the permission file exists with these permissions"""
@@ -274,6 +336,7 @@ class SyftPermission(BaseModel):
         dir: Path,
     ) -> "SyftPermission":
         perm = cls.create(context, dir)
+        perm.terminal = False
         perm.add_rule(path="**", user=context.email, permission=["admin"])
         perm.add_rule(path="**", user="*", permission=["read"])
         return perm
@@ -284,7 +347,7 @@ class SyftPermission(BaseModel):
         context: "SyftBoxContext",  # type: ignore # noqa: F821
         dir: Path,
     ) -> "SyftPermission":
-        # for backwards compatibility
+        # For backwards compatibility
         return cls.mine_with_public_rw(context, dir)
 
     @classmethod
@@ -294,6 +357,7 @@ class SyftPermission(BaseModel):
         dir: Path,
     ) -> "SyftPermission":
         perm = cls.create(context, dir)
+        perm.terminal = False
         perm.add_rule(path="**", user=context.email, permission=["admin"])
         perm.add_rule(path="**", user="*", permission=["create", "write", "read"])
         return perm
@@ -306,10 +370,12 @@ class SyftPermission(BaseModel):
         allow: bool = True,
     ) -> None:
         priority = len(self.rules)
-        if isinstance(permission, list) and isinstance(permission[0], PermissionType):
-            permission = [
-                PermissionType[p.upper()] for p in permission if isinstance(p, str)
-            ]
+        if (
+            isinstance(permission, list)
+            and len(permission) > 0
+            and isinstance(permission[0], str)
+        ):
+            permission = [PermissionType[p.upper()] for p in permission]
         rule = PermissionRule(
             dir_path=self.dir_path,
             path=path,
@@ -317,6 +383,7 @@ class SyftPermission(BaseModel):
             allow=allow,
             permissions=permission,
             priority=priority,
+            terminal=self.terminal,
         )
         self.rules.append(rule)
 
@@ -326,25 +393,99 @@ class SyftPermission(BaseModel):
 
     @classmethod
     def from_file(cls, path: Path, datasite_path: Path) -> "SyftPermission":
+        # Check if we need to convert from old format
+        old_path = path.parent / OLD_PERM_FILE
+        if not path.exists() and old_path.exists() and _AUTO_CONVERT_PERMISSIONS:
+            # Convert from old format
+            print(f"Converting {old_path} to {path}")
+            with open(old_path, "r") as f:
+                data = yaml.safe_load(f)
+            relative_path = old_path.relative_to(datasite_path)
+            perm = cls.from_rule_dicts(relative_path, data)
+
+            # Save in new format
+            perm.save(path.parent)
+
+            # Delete old file
+            old_path.unlink()
+            print(f"Deleted old permission file: {old_path}")
+
+            # Update relative path to new file
+            perm.relative_filepath = path.relative_to(datasite_path)
+            return perm
+
         with open(path, "r") as f:
-            rule_dicts = yaml.safe_load(f)
+            data = yaml.safe_load(f)
             relative_path = path.relative_to(datasite_path)
-            return cls.from_rule_dicts(relative_path, rule_dicts)
+            return cls.from_rule_dicts(relative_path, data)
 
     @classmethod
     def from_rule_dicts(
-        cls, permfile_file_path: PathLike, rule_dicts: list[dict]
+        cls, permfile_file_path: PathLike, data: Union[dict, list]
     ) -> "SyftPermission":
-        if not isinstance(rule_dicts, list):
-            raise ValueError(
-                f"rules should be passed as a list of dicts, received {type(rule_dicts)}"
-            )
+        # Handle new format with terminal flag and rules array
+        if isinstance(data, list):
+            # Legacy format - list of rules
+            rule_dicts = data
+            terminal = False
+        else:
+            # New format - dict with terminal and rules
+            rule_dicts = data.get("rules", [])
+            terminal = data.get("terminal", False)
+
         rules = []
         dir_path = Path(permfile_file_path).parent
+
         for i, rule_dict in enumerate(rule_dicts):
-            rule = PermissionRule.from_rule_dict(dir_path, rule_dict, priority=i)
-            rules.append(rule)
-        return cls(relative_filepath=permfile_file_path, rules=rules)
+            # Convert new format to old format
+            if "access" in rule_dict:
+                # New format with access object
+                access = rule_dict["access"]
+                pattern = rule_dict["pattern"]
+
+                # Create rules for each permission type and user
+                users_permissions = {}
+
+                # Collect all users and their highest permission level
+                for user in access.get("admin", []):
+                    users_permissions[user] = [
+                        PermissionType.ADMIN,
+                        PermissionType.WRITE,
+                        PermissionType.CREATE,
+                        PermissionType.READ,
+                    ]
+
+                for user in access.get("write", []):
+                    if user not in users_permissions:
+                        users_permissions[user] = [
+                            PermissionType.WRITE,
+                            PermissionType.CREATE,
+                            PermissionType.READ,
+                        ]
+
+                for user in access.get("read", []):
+                    if user not in users_permissions:
+                        users_permissions[user] = [PermissionType.READ]
+
+                # Create a rule for each user
+                for user, perms in users_permissions.items():
+                    rules.append(
+                        PermissionRule(
+                            dir_path=dir_path,
+                            path=pattern,
+                            user=user,
+                            permissions=perms,
+                            priority=i,
+                            terminal=terminal,
+                        )
+                    )
+            else:
+                # Old format
+                rule = PermissionRule.from_rule_dict(dir_path, rule_dict, priority=i)
+                rule.terminal = terminal
+                rules.append(rule)
+
+        return cls(relative_filepath=permfile_file_path, rules=rules, terminal=terminal)
 
     @classmethod
     def from_string(cls, s: str, path: PathLike) -> "SyftPermission":
@@ -382,22 +523,22 @@ class ComputedPermission(BaseModel):
         return str(self.file_path).split("/", 1)[0]
 
     def has_permission(self, permtype: PermissionType) -> bool:
-        # exception for owners: they can always read and write to their own datasite
+        # Exception for owners: they can always read and write to their own datasite
         if self.path_owner == self.user:
             return True
-        # exception for admins: they can do anything for this path
+        # Exception for admins: they can do anything for this path
         if self.perms[PermissionType.ADMIN]:
             return True
-        # exception for permfiles: any modifications to permfiles are only allowed for admins
+        # Exception for permfiles: any modifications to permfiles are only allowed for admins
         if self.file_path.name == PERM_FILE and permtype in [
             PermissionType.CREATE,
             PermissionType.WRITE,
         ]:
             return self.perms[PermissionType.ADMIN]
-        # exception for read/write, they are only allowed if read is also allowed
+        # Exception for read/write, they are only allowed if read is also allowed
         if permtype in [PermissionType.CREATE, PermissionType.WRITE]:
             return self.perms[PermissionType.READ] and self.perms[permtype]
-        # default case
+        # Default case
         return self.perms[permtype]
 
     def user_matches(self, rule: PermissionRule) -> bool:
@@ -411,13 +552,13 @@ class ComputedPermission(BaseModel):
 
     def rule_applies_to_path(self, rule: PermissionRule) -> bool:
         if rule.has_email_template:
-            # we fill in a/b/{useremail}/*.txt -> a/b/user@email.org/*.txt
+            # We fill in a/b/{useremail}/*.txt -> a/b/user@email.org/*.txt
             resolved_path_pattern = rule.resolve_path_pattern(self.user)
         else:
             resolved_path_pattern = rule.path
 
-        # target file path (the one that we want to check permissions for relative to the syftperm file
-        # we need this because the syftperm file specifies path patterns relative to its own location
+        # Target file path (the one that we want to check permissions for relative to the syftperm file
+        # We need this because the syftperm file specifies path patterns relative to its own location
 
         if issubpath(rule.dir_path, self.file_path):
             relative_file_path = self.file_path.relative_to(rule.dir_path)
@@ -447,20 +588,71 @@ def get_computed_permission(
     path: RelativePath,
 ) -> ComputedPermission:
     snapshot_folder = client.workspace.datasites
-    # validate the paths
+    # Validate the paths
 
     path = RelativePath(path)
     snapshot_folder = AbsolutePath(snapshot_folder)
 
-    # get all the rules
+    # Get all the rules
     all_rules = []
+    current_path_parts = path.parts
+
+    # First, convert any old permission files if auto-conversion is enabled
+    if _AUTO_CONVERT_PERMISSIONS:
+        for old_file in snapshot_folder.rglob(OLD_PERM_FILE):
+            new_file = old_file.parent / PERM_FILE
+            if not new_file.exists():
+                try:
+                    SyftPermission.from_file(new_file, snapshot_folder)
+                except Exception as e:
+                    print(f"Failed to convert {old_file}: {e}")
+
+    # First pass: find if there's a terminal permission file in our path
+    terminal_depth = -1
     for file in snapshot_folder.rglob(PERM_FILE):
-        content = file.read_text()
-        rule_dicts = yaml.safe_load(content)
-        perm_file = SyftPermission.from_rule_dicts(
-            permfile_file_path=file.relative_to(snapshot_folder), rule_dicts=rule_dicts
-        )
-        all_rules.extend(perm_file.rules)
+        try:
+            perm_file_parts = file.relative_to(snapshot_folder).parent.parts
+            # Check if this permission file is in our path hierarchy
+            if len(perm_file_parts) <= len(current_path_parts):
+                if all(
+                    current_path_parts[i] == perm_file_parts[i]
+                    for i in range(len(perm_file_parts))
+                ):
+                    # This permission file is in our path hierarchy
+                    content = file.read_text()
+                    data = yaml.safe_load(content)
+                    if isinstance(data, dict) and data.get("terminal", False):
+                        # Found a terminal permission file in our path
+                        if len(perm_file_parts) > terminal_depth:
+                            terminal_depth = len(perm_file_parts)
+        except Exception:
+            continue
+
+    # Second pass: collect rules, respecting terminal boundaries
+    for file in snapshot_folder.rglob(PERM_FILE):
+        try:
+            content = file.read_text()
+            data = yaml.safe_load(content)
+            perm_file = SyftPermission.from_rule_dicts(
+                permfile_file_path=file.relative_to(snapshot_folder), data=data
+            )
+
+            perm_file_parts = file.relative_to(snapshot_folder).parent.parts
+
+            # Check if this permission file applies to our path
+            is_in_path = len(perm_file_parts) <= len(current_path_parts) and all(
+                current_path_parts[i] == perm_file_parts[i]
+                for i in range(len(perm_file_parts))
+            )
+
+            if is_in_path:
+                # Skip if this is a parent of a terminal permission file
+                if terminal_depth >= 0 and len(perm_file_parts) < terminal_depth:
+                    continue  # Skip this parent's rules
+                all_rules.extend(perm_file.rules)
+        except Exception:
+            # Skip invalid permission files
+            continue
 
     permission = ComputedPermission.from_user_rules_and_path(
         rules=all_rules, user=client.email, path=path
