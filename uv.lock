@@ -645,6 +645,7 @@ dependencies = [
     { name = "loguru" },
     { name = "ormsgpack" },
     { name = "syft-core" },
+    { name = "watchdog" },
 ]
 
 [package.optional-dependencies]
@@ -661,6 +662,7 @@ requires-dist = [
     { name = "pyyaml", marker = "extra == 'cli'", specifier = ">=6.0.2" },
     { name = "syft-core", editable = "packages/syft-core" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.15.1" },
+    { name = "watchdog", specifier = ">=3.0.0" },
 ]
 provides-extras = ["cli"]
 
