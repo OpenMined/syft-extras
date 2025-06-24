@@ -45,7 +45,7 @@ jobs:
         uv venv
         uv pip install -e .
         uv pip install pytest pytest-cov pytest-xdist
-        uv run pytest tests/ -v --cov=syft_core --cov-report=term-missing --cov-report=xml
+        uv run python -m pytest tests/ -v --cov=syft_core --cov-report=term-missing --cov-report=xml
     
     - name: Test syft-core (Windows)
       if: always() && runner.os == 'Windows'
@@ -55,7 +55,7 @@ jobs:
         uv venv
         uv pip install -e .
         uv pip install pytest pytest-cov pytest-xdist
-        uv run pytest tests/ -v --cov=syft_core --cov-report=term-missing --cov-report=xml
+        uv run python -m pytest tests/ -v --cov=syft_core --cov-report=term-missing --cov-report=xml
 
     - name: Upload syft-core coverage
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
