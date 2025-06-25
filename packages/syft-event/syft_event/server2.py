@@ -6,7 +6,7 @@ from threading import Event
 from typing import Any
 import inspect
 import asyncio
-import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
 
 from loguru import logger
 from syft_core import Client
@@ -64,6 +64,7 @@ class SyftEvents:
         self.obs = Observer()
         self.__rpc: dict[Path, Callable] = {}
         self._stop_event = Event()
+        self._thread_pool = ThreadPoolExecutor()
 
     def init(self) -> None:
         # setup dirs
@@ -131,6 +132,7 @@ class SyftEvents:
         self._stop_event.set()
         self.obs.stop()
         self.obs.join()
+        self._thread_pool.shutdown(wait=True)
 
     def include_router(self, router: EventRouter, *, prefix: str = "") -> None:
         """Include all routes from a router with an optional prefix."""
@@ -222,9 +224,8 @@ class SyftEvents:
 
             if inspect.iscoroutinefunction(func):
                 # if it is, run it in a new event loop in a separate thread
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, func(**kwargs))
-                    resp = future.result()
+                future = self._thread_pool.submit(asyncio.run, func(**kwargs))
+                resp = future.result()
             else:
                 # if it is not, call it directly
                 resp = func(**kwargs)
