@@ -14,8 +14,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+        exclude:
+          # Python 3.8 is not available on macos-latest (ARM64)
+          - os: macos-latest
+            python-version: '3.8'
+        include:
+          # Add macos-13 (Intel) for Python 3.8
+          - os: macos-13
+            python-version: '3.8'
 
     steps:
     - uses: actions/checkout@v4
@@ -30,10 +38,17 @@ jobs:
       with:
         enable-cache: true
 
-    - name: Test syft-core
+    - name: Test all packages (Unix)
+      if: runner.os != 'Windows'
       run: |
         chmod +x ./test.sh
-        ./test.sh syft-core
+        ./test.sh
+    
+    - name: Test all packages (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        .\test.ps1
 
 
 

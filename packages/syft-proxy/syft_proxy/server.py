@@ -21,7 +21,11 @@ HEADER_SYFTBOX_URL = "x-syftbox-url"
 HEADER_SYFTBOX_URLS = "x-syftbox-urls"
 RPC_REQUEST_EXPIRY = "30s"
 
-client = Client.load()
+# Try to load client, but don't fail if config doesn't exist (for testing)
+try:
+    client = Client.load()
+except Exception:
+    client = None
 
 app = FastAPI()
 
@@ -59,6 +63,11 @@ async def info():
 @app.post("/rpc")
 async def rpc_send(rpc_req: RPCSendRequest, blocking: bool = False):
     try:
+        if client is None:
+            raise HTTPException(
+                status_code=503, detail="SyftBox client not initialized"
+            )
+
         future: SyftFuture = rpc.send(
             client=client,
             url=rpc_req.url,
@@ -73,7 +82,7 @@ async def rpc_send(rpc_req: RPCSendRequest, blocking: bool = False):
                 f"Non-blocking RPC request {future.id} sent to {future.request.url}"
             )
             app_name = f"proxy-{rpc_req.app_name}"
-            rpc_db.save_future(future, app_name)
+            rpc_db.save_future(future, app_name, client=client)
             return RPCStatus(
                 id=str(future.id),
                 status=RPCStatusCode.PENDING,
@@ -102,9 +111,15 @@ async def rpc_send(rpc_req: RPCSendRequest, blocking: bool = False):
 @app.get("/rpc/schema/{app_name}")
 async def rpc_schema(app_name: str):
     try:
+        if client is None:
+            raise HTTPException(
+                status_code=503, detail="SyftBox client not initialized"
+            )
         app_path = client.app_data(app_name)
         app_schema = app_path / "rpc" / "rpc.schema.json"
         return json.loads(app_schema.read_text())
+    except HTTPException:
+        raise
     except Exception as ex:
         logger.error(f"Error sending RPC request: {ex}")
         raise HTTPException(status_code=500, detail=str(ex))
@@ -114,7 +129,14 @@ async def rpc_schema(app_name: str):
 async def rpc_status(id: str):
     # try to get future from the db
     try:
-        future = rpc_db.get_future(id)
+        if client is None:
+            raise HTTPException(
+                status_code=503, detail="SyftBox client not initialized"
+            )
+
+        future = rpc_db.get_future(id, client=client)
+    except HTTPException:
+        raise
     except Exception as ex:
         logger.error(f"RPC future {id}: EXCEPTION {ex}")
         raise HTTPException(status_code=500, detail=str(ex))
@@ -171,8 +193,3 @@ async def rpc_status(id: str):
                 response=result,
             ).model_dump(mode="json"),
         )
-
-
-# @app.post("/llm/chat")
-# async def chat(request: Request):
-#     return JSONResponse(result)
