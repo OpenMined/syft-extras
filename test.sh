@@ -1,9 +1,10 @@
 #!/bin/bash
-set -e
-
 # Test script for syft-extras packages
 
 echo "Running tests for syft-extras packages..."
+
+# Track overall test status
+ALL_TESTS_PASSED=true
 
 # Function to run tests for a package
 run_package_tests() {
@@ -15,7 +16,7 @@ run_package_tests() {
     echo "Testing $package_name"
     echo "========================================="
     
-    cd "$package_dir"
+    cd "$package_dir" || { echo "Failed to enter $package_dir"; ALL_TESTS_PASSED=false; return 1; }
     
     # Remove existing virtual environment if it exists
     if [ -d ".venv" ]; then
@@ -25,7 +26,12 @@ run_package_tests() {
     
     # Create virtual environment with uv
     echo "Creating virtual environment..."
-    uv venv .venv
+    if ! uv venv .venv; then
+        echo -e "\033[0;31mFailed to create virtual environment for $package_name\033[0m"
+        ALL_TESTS_PASSED=false
+        cd - > /dev/null
+        return 1
+    fi
     
     # Activate virtual environment based on OS
     echo "Activating virtual environment..."
@@ -39,13 +45,31 @@ run_package_tests() {
     
     # Install the package in editable mode with test dependencies
     echo "Installing $package_name and test dependencies..."
-    uv pip install -e .
-    uv pip install pytest pytest-cov pytest-xdist
+    if ! uv pip install -e .; then
+        echo -e "\033[0;31mFailed to install $package_name\033[0m"
+        ALL_TESTS_PASSED=false
+        deactivate
+        cd - > /dev/null
+        return 1
+    fi
+    
+    if ! uv pip install pytest pytest-cov pytest-xdist; then
+        echo -e "\033[0;31mFailed to install test dependencies for $package_name\033[0m"
+        ALL_TESTS_PASSED=false
+        deactivate
+        cd - > /dev/null
+        return 1
+    fi
     
     # Run tests if they exist
     if [ -d "tests" ]; then
         echo "Running tests..."
-        python -m pytest tests/ -v --cov="${package_name//-/_}" --cov-report=term-missing
+        if python -m pytest tests/ -v --cov="${package_name//-/_}" --cov-report=term-missing; then
+            echo -e "\033[0;32mTests PASSED for $package_name\033[0m"
+        else
+            echo -e "\033[0;31mTests FAILED for $package_name\033[0m"
+            ALL_TESTS_PASSED=false
+        fi
     else
         echo "No tests directory found, skipping tests for $package_name"
     fi
@@ -66,7 +90,7 @@ if [ "$1" ]; then
     if [ -d "packages/$1" ]; then
         run_package_tests "packages/$1"
     else
-        echo "Package '$1' not found in packages directory"
+        echo -e "\033[0;31mPackage '$1' not found in packages directory\033[0m"
         exit 1
     fi
 else
@@ -79,4 +103,10 @@ else
 fi
 
 echo ""
-echo "All tests completed!"
+if [ "$ALL_TESTS_PASSED" = true ]; then
+    echo -e "\033[0;32mAll tests completed successfully!\033[0m"
+    exit 0
+else
+    echo -e "\033[0;31mSome tests FAILED!\033[0m"
+    exit 1
+fi

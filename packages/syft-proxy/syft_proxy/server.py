@@ -21,7 +21,11 @@ HEADER_SYFTBOX_URL = "x-syftbox-url"
 HEADER_SYFTBOX_URLS = "x-syftbox-urls"
 RPC_REQUEST_EXPIRY = "30s"
 
-client = Client.load()
+# Try to load client, but don't fail if config doesn't exist (for testing)
+try:
+    client = Client.load()
+except Exception:
+    client = None
 
 app = FastAPI()
 
@@ -102,9 +106,13 @@ async def rpc_send(rpc_req: RPCSendRequest, blocking: bool = False):
 @app.get("/rpc/schema/{app_name}")
 async def rpc_schema(app_name: str):
     try:
+        if client is None:
+            raise HTTPException(status_code=503, detail="SyftBox client not initialized")
         app_path = client.app_data(app_name)
         app_schema = app_path / "rpc" / "rpc.schema.json"
         return json.loads(app_schema.read_text())
+    except HTTPException:
+        raise
     except Exception as ex:
         logger.error(f"Error sending RPC request: {ex}")
         raise HTTPException(status_code=500, detail=str(ex))
