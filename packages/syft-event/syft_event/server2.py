@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
 from typing import Any
-import inspect
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
 from loguru import logger
 from syft_core import Client
