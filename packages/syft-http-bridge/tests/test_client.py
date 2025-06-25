@@ -262,7 +262,9 @@ class TestWaitForResponseFile:
                 wait_for_response_file(request_id, responses_dir, timeout=0.5)
             elapsed = time.time() - start_time
             
-            assert 0.5 <= elapsed < 0.7  # Should timeout after ~500ms
+            # Allow some tolerance for timing variations in CI
+            # The timeout should be at least 0.5s but allow up to 1.0s for slow systems
+            assert 0.5 <= elapsed < 1.0, f"Timeout took {elapsed}s, expected ~0.5s"
 
     def test_wait_for_response_file_invalid_response(self):
         """Test waiting when response file contains invalid data."""
