@@ -2,6 +2,9 @@
 
 Write-Host "Running tests for syft-extras packages..."
 
+# Track overall test status
+$script:allTestsPassed = $true
+
 # Function to run tests for a package
 function Run-PackageTests {
     param(
@@ -17,38 +20,62 @@ function Run-PackageTests {
     
     Push-Location $packageDir
     
-    # Remove existing virtual environment if it exists
-    if (Test-Path ".venv") {
-        Write-Host "Removing existing virtual environment..."
-        Remove-Item -Recurse -Force .venv
+    try {
+        # Remove existing virtual environment if it exists
+        if (Test-Path ".venv") {
+            Write-Host "Removing existing virtual environment..."
+            Remove-Item -Recurse -Force .venv
+        }
+        
+        # Create virtual environment with uv
+        Write-Host "Creating virtual environment..."
+        uv venv .venv
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to create virtual environment"
+        }
+        
+        # Activate virtual environment
+        Write-Host "Activating virtual environment..."
+        & .venv\Scripts\Activate.ps1
+        
+        # Install the package in editable mode with test dependencies
+        Write-Host "Installing $packageName and test dependencies..."
+        uv pip install -e .
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to install package"
+        }
+        
+        uv pip install pytest pytest-cov pytest-xdist
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to install test dependencies"
+        }
+        
+        # Run tests if they exist
+        if (Test-Path "tests") {
+            Write-Host "Running tests..."
+            $packageNameUnderscored = $packageName -replace '-', '_'
+            python -m pytest tests/ -v --cov="$packageNameUnderscored" --cov-report=term-missing
+            
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Tests FAILED for $packageName" -ForegroundColor Red
+                $script:allTestsPassed = $false
+            } else {
+                Write-Host "Tests PASSED for $packageName" -ForegroundColor Green
+            }
+        } else {
+            Write-Host "No tests directory found, skipping tests for $packageName"
+        }
+        
+        # Deactivate virtual environment
+        deactivate
     }
-    
-    # Create virtual environment with uv
-    Write-Host "Creating virtual environment..."
-    uv venv .venv
-    
-    # Activate virtual environment
-    Write-Host "Activating virtual environment..."
-    & .venv\Scripts\Activate.ps1
-    
-    # Install the package in editable mode with test dependencies
-    Write-Host "Installing $packageName and test dependencies..."
-    uv pip install -e .
-    uv pip install pytest pytest-cov pytest-xdist
-    
-    # Run tests if they exist
-    if (Test-Path "tests") {
-        Write-Host "Running tests..."
-        $packageNameUnderscored = $packageName -replace '-', '_'
-        python -m pytest tests/ -v --cov="$packageNameUnderscored" --cov-report=term-missing
-    } else {
-        Write-Host "No tests directory found, skipping tests for $packageName"
+    catch {
+        Write-Host "ERROR in $packageName : $_" -ForegroundColor Red
+        $script:allTestsPassed = $false
     }
-    
-    # Deactivate virtual environment
-    deactivate
-    
-    Pop-Location
+    finally {
+        Pop-Location
+    }
 }
 
 # Main script
@@ -63,7 +90,7 @@ if ($args.Count -gt 0) {
     if (Test-Path $packagePath) {
         Run-PackageTests $packagePath
     } else {
-        Write-Host "Package '$packageName' not found in packages directory"
+        Write-Host "Package '$packageName' not found in packages directory" -ForegroundColor Red
         exit 1
     }
 } else {
@@ -74,4 +101,10 @@ if ($args.Count -gt 0) {
 }
 
 Write-Host ""
-Write-Host "All tests completed!"
+if ($script:allTestsPassed) {
+    Write-Host "All tests completed successfully!" -ForegroundColor Green
+    exit 0
+} else {
+    Write-Host "Some tests FAILED!" -ForegroundColor Red
+    exit 1
+}
