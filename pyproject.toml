@@ -10,6 +10,7 @@ dependencies = [
     "syft-rpc",
     "syft-proxy",
     "syft-http-bridge",
+    "syft-high-low",
 ]
 
 [build-system]
@@ -22,6 +23,7 @@ syft-event = { workspace = true }
 syft-rpc = { workspace = true }
 syft-proxy = { workspace = true }
 syft-http-bridge = { workspace = true }
+syft-high-low = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]

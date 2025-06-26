@@ -1,0 +1,15 @@
+[project]
+name = "syft-high-low"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [{ name = "eelcovdw", email = "eelcovdw@gmail.com" }]
+requires-python = ">=3.9"
+dependencies = ["typer>=0.16.0"]
+
+[project.scripts]
+syft-high-low = "syft_high_low.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
