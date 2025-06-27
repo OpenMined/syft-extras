@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
 from typing import Any
+import traceback
 
 from loguru import logger
 from syft_core import Client
@@ -180,6 +181,7 @@ class SyftEvents:
         return register_watch
 
     def __handle_rpc(self, path: Path, func: Callable):
+        req = None
         try:
             # may happen =)
             if not path.exists():
@@ -221,14 +223,21 @@ class SyftEvents:
             # call the function
 
             # check if the function is a coroutine
-
-            if inspect.iscoroutinefunction(func):
-                # if it is, run it in a new event loop in a separate thread
-                future = self._thread_pool.submit(asyncio.run, func(**kwargs))
-                resp = future.result()
-            else:
-                # if it is not, call it directly
-                resp = func(**kwargs)
+            try:
+                if inspect.iscoroutinefunction(func):
+                    # if it is, run it in a new event loop in a separate thread
+                    future = self._thread_pool.submit(asyncio.run, func(**kwargs))
+                    resp = future.result()
+                else:
+                    # if it is not, call it directly
+                    resp = func(**kwargs)
+            except Exception as e:
+                logger.error(f"Error calling function {func.__name__}: {e}")
+                logger.error(traceback.format_exc())
+                resp = Response(
+                    body=f"Internal server error. Please try again later.",
+                    status_code=SyftStatus.SYFT_500_SERVER_ERROR,
+                )
 
             if isinstance(resp, Response):
                 resp_data = resp.body
@@ -247,8 +256,8 @@ class SyftEvents:
                 client=self.client,
             )
         except Exception as e:
-            logger.error(f"Error handling request {path}: {e}")
-            raise
+            raise e
+
 
     def __register_rpc(self, endpoint: Path, handler: Callable) -> Callable:
         def rpc_callback(event: FileSystemEvent):
