@@ -252,12 +252,54 @@ def test_handle_rpc_sync_func_returns_dict(mock_args, mock_rpc, mock_req, syft_e
 @patch("syft_event.server2.SyftRequest")
 @patch("syft_event.server2.rpc")
 @patch("syft_event.server2.func_args_from_request")
-def test_handle_rpc_exception_in_handler(mock_args, mock_rpc, mock_req, syft_events):
+def test_handle_rpc_sync_exception_in_handler(mock_args, mock_rpc, mock_req, syft_events):
     path = Path("/tmp/fake.request")
-    func = MagicMock(side_effect=Exception("handler error"))
+    func = MagicMock(side_effect=Exception("sync handler error"))
+    func.__name__ = "sync_handler"
     mock_req.load.return_value = MagicMock(is_expired=False)
     mock_args.return_value = {}
+    
     # Use patch.object on the Path class instead of instance
-    with patch.object(Path, "exists", return_value=True):
-        with pytest.raises(Exception, match="handler error"):
-            syft_events._SyftEvents__handle_rpc(path, func) 
+    with patch.object(Path, "exists", return_value=True), \
+         patch("loguru.logger.error") as mock_logger:
+        syft_events._SyftEvents__handle_rpc(path, func)
+    
+    # Verify that reply_to was called with 500 status code
+    mock_rpc.reply_to.assert_called_once()
+    call_args = mock_rpc.reply_to.call_args
+    assert call_args[1]["body"] == "Internal server error. Please try again later."
+    assert call_args[1]["status_code"] == SyftStatus.SYFT_500_SERVER_ERROR
+    
+    # Verify that the error was logged
+    assert mock_logger.call_count == 2  # Two logger.error calls: one for the error, one for traceback
+
+@patch("syft_event.server2.SyftRequest")
+@patch("syft_event.server2.rpc")
+@patch("syft_event.server2.func_args_from_request")
+def test_handle_rpc_async_exception_in_handler(mock_args, mock_rpc, mock_req, syft_events):
+    path = Path("/tmp/fake.request")
+    
+    # Create a real async function that raises an exception
+    async def async_func(**kwargs):
+        raise Exception("async handler error")
+    
+    mock_req.load.return_value = MagicMock(is_expired=False)
+    mock_args.return_value = {}
+    
+    # Use patch.object on the Path class instead of instance
+    with patch.object(Path, "exists", return_value=True), \
+         patch.object(syft_events._thread_pool, "submit") as mock_submit, \
+         patch("loguru.logger.error") as mock_logger:
+        future = MagicMock()
+        future.result.side_effect = Exception("async handler error")
+        mock_submit.return_value = future
+        syft_events._SyftEvents__handle_rpc(path, async_func)
+    
+    # Verify that reply_to was called with 500 status code
+    mock_rpc.reply_to.assert_called_once()
+    call_args = mock_rpc.reply_to.call_args
+    assert call_args[1]["body"] == "Internal server error. Please try again later."
+    assert call_args[1]["status_code"] == SyftStatus.SYFT_500_SERVER_ERROR
+    
+    # Verify that the error was logged
+    assert mock_logger.call_count == 2  # Two logger.error calls: one for the error, one for traceback 
