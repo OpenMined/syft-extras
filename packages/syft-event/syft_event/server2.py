@@ -50,11 +50,27 @@ rules:
 
 
 class SyftEvents:
+    """
+    SyftEvents server for handling RPC requests and file system events.
+
+    This class provides a framework for creating event-driven applications that can:
+    - Handle RPC requests via file system events
+    - Watch for file changes and trigger handlers
+    - Generate and publish API schemas
+    - Provide configurable error handling with security considerations
+
+    Error Handling Strategy:
+    - **Client Errors** (request loading, schema validation): Always shown to help clients understand what they did wrong
+    - **Server Errors** (function execution):
+      - Production mode: Generic error message for security
+      - Debug mode: Full error details including traceback for debugging
+    """
     def __init__(
         self,
         app_name: str,
         publish_schema: bool = True,
         client: Optional[Client] = None,
+        debug_mode: bool = False,
     ):
         self.app_name = app_name
         self.schema = publish_schema
@@ -66,6 +82,19 @@ class SyftEvents:
         self.__rpc: dict[Path, Callable] = {}
         self._stop_event = Event()
         self._thread_pool = ThreadPoolExecutor()
+        
+        # Debug mode configuration - explicit boolean
+        self.debug_mode = debug_mode
+
+    def set_debug_mode(self, enabled: bool) -> None:
+        """
+        Enable or disable debug mode at runtime.
+        
+        Args:
+            enabled: True to enable debug mode, False to disable
+        """
+        self.debug_mode = enabled
+        logger.info(f"Debug mode {'enabled' if enabled else 'disabled'}")
 
     def init(self) -> None:
         # setup dirs
@@ -190,6 +219,7 @@ class SyftEvents:
                 req = SyftRequest.load(path)
             except Exception as e:
                 logger.error(f"Error loading request {path}", e)
+                # Request loading errors are safe to show in production
                 rpc.write_response(
                     path,
                     body=f"Error loading request: {repr(e)}",
@@ -212,6 +242,7 @@ class SyftEvents:
                 kwargs = func_args_from_request(func, req, self)
             except Exception as e:
                 logger.warning(f"Invalid request body schema {req.url}: {e}")
+                # Schema validation errors are safe to show in production
                 rpc.reply_to(
                     req,
                     body=f"Invalid request schema: {str(e)}",
@@ -234,10 +265,27 @@ class SyftEvents:
             except Exception as e:
                 logger.error(f"Error calling function {func.__name__}: {e}")
                 logger.error(traceback.format_exc())
-                resp = Response(
-                    body=f"Internal server error. Please try again later.",
-                    status_code=SyftStatus.SYFT_500_SERVER_ERROR,
-                )
+                
+                # Function execution errors are potentially dangerous
+                # use debug mode logic to show full error details
+                # in production mode, return generic error message
+                if self.debug_mode:
+                    resp = Response(
+                        body=json.dumps({
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                            "function_name": func.__name__,
+                            "traceback": traceback.format_exc()
+                        }, indent=2),
+                        status_code=SyftStatus.SYFT_500_SERVER_ERROR,
+                        headers={"Content-Type": "application/json"}
+                    )
+                else:
+                    # In production mode, return generic error message
+                    resp = Response(
+                        body="Internal server error. Please try again later.",
+                        status_code=SyftStatus.SYFT_500_SERVER_ERROR,
+                    )
 
             if isinstance(resp, Response):
                 resp_data = resp.body
