@@ -65,6 +65,7 @@ class SyftEvents:
       - Production mode: Generic error message for security
       - Debug mode: Full error details including traceback for debugging
     """
+
     def __init__(
         self,
         app_name: str,
@@ -82,14 +83,14 @@ class SyftEvents:
         self.__rpc: dict[Path, Callable] = {}
         self._stop_event = Event()
         self._thread_pool = ThreadPoolExecutor()
-        
+
         # Debug mode configuration - explicit boolean
         self.debug_mode = debug_mode
 
     def set_debug_mode(self, enabled: bool) -> None:
         """
         Enable or disable debug mode at runtime.
-        
+
         Args:
             enabled: True to enable debug mode, False to disable
         """
@@ -109,11 +110,12 @@ class SyftEvents:
         if self.schema:
             self.publish_schema()
 
-    def start(self) -> None:
+    def start(self, process_pending_requests: bool = True) -> None:
         self.init()
         # process pending requests
         try:
-            self.process_pending_requests()
+            if process_pending_requests:
+                self.process_pending_requests()
         except Exception as e:
             print("Error processing pending requests", e)
             raise
@@ -265,20 +267,23 @@ class SyftEvents:
             except Exception as e:
                 logger.error(f"Error calling function {func.__name__}: {e}")
                 logger.error(traceback.format_exc())
-                
+
                 # Function execution errors are potentially dangerous
                 # use debug mode logic to show full error details
                 # in production mode, return generic error message
                 if self.debug_mode:
                     resp = Response(
-                        body=json.dumps({
-                            "error_type": type(e).__name__,
-                            "error_message": str(e),
-                            "function_name": func.__name__,
-                            "traceback": traceback.format_exc()
-                        }, indent=2),
+                        body=json.dumps(
+                            {
+                                "error_type": type(e).__name__,
+                                "error_message": str(e),
+                                "function_name": func.__name__,
+                                "traceback": traceback.format_exc(),
+                            },
+                            indent=2,
+                        ),
                         status_code=SyftStatus.SYFT_500_SERVER_ERROR,
-                        headers={"Content-Type": "application/json"}
+                        headers={"Content-Type": "application/json"},
                     )
                 else:
                     # In production mode, return generic error message
@@ -305,7 +310,6 @@ class SyftEvents:
             )
         except Exception as e:
             raise e
-
 
     def __register_rpc(self, endpoint: Path, handler: Callable) -> Callable:
         def rpc_callback(event: FileSystemEvent):
