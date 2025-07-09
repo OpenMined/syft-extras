@@ -83,6 +83,8 @@ class SyftBoxURL(str):
     @classmethod
     def from_path(cls, path: PathLike, workspace: SyftWorkspace) -> Self:
         rel_path = to_path(path).relative_to(workspace.datasites)
+        # convert to posix path to make it work on Windows OS
+        rel_path = rel_path.as_posix()
         return cls(f"syft://{rel_path}")
 
     @classmethod
