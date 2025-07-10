@@ -59,9 +59,11 @@ class SyftClientConfig(BaseModel):
     )
     """URL of the remote SyftBox server"""
 
-    client_url: AnyHttpUrl = Field(
+    client_url: Optional[AnyHttpUrl] = Field(
         validation_alias=AliasChoices("client_url", "port"),
         description="URL where the client is running",
+        default=None,
+        deprecated=True,
     )
     """URL where the client is running"""
 
@@ -85,7 +87,7 @@ class SyftClientConfig(BaseModel):
     """Path to the config file"""
 
     @field_validator("client_url", mode="before")
-    def port_to_url(cls, val: Union[int, str]) -> Optional[str]:
+    def port_to_url(cls, val: Union[int, str, None]) -> Optional[str]:
         if isinstance(val, int):
             return f"http://127.0.0.1:{val}"
         return val
