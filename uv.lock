@@ -565,7 +565,7 @@ wheels = [
 
 [[package]]
 name = "syft-core"
-version = "0.2.5"
+version = "0.2.6"
 source = { editable = "packages/syft-core" }
 dependencies = [
     { name = "pydantic", extra = ["email"] },
