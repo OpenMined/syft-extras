@@ -34,6 +34,8 @@ SERVER_URL_ENV = "SYFTBOX_SERVER_URL"
 DATA_DIR_ENV = "SYFTBOX_DATA_DIR"
 PORT_ENV = "SYFTBOX_PORT"
 ACCESS_TOKEN_ENV = "SYFTBOX_ACCESS_TOKEN"
+CLIENT_TOKEN_ENV = "SYFTBOX_CLIENT_TOKEN"
+REFRESH_TOKEN_ENV = "SYFTBOX_REFRESH_TOKEN"
 CLIENT_TIMEOUT_ENV = "SYFTBOX_CLIENT_TIMEOUT"
 
 # Old configuration file path for the client
@@ -53,58 +55,55 @@ class SyftClientConfig(BaseModel):
     )
     """Local directory where client data is stored"""
 
-    server_url: AnyHttpUrl = Field(
-        default=DEFAULT_SERVER_URL,
-        description="URL of the remote SyftBox server",
-    )
-    """URL of the remote SyftBox server"""
-
-    client_url: Optional[AnyHttpUrl] = Field(
-        validation_alias=AliasChoices("client_url", "port"),
-        description="URL where the client is running",
-        default=None,
-        deprecated=True,
-    )
-    """URL where the client is running"""
-
     email: EmailStr = Field(description="Email address of the user")
     """Email address of the user"""
 
-    token: Optional[str] = Field(
-        default=None,
-        description="Depracated: Use access_token instead. API token for the user",
-        deprecated=True,
+    server_url: AnyHttpUrl = Field(
+        default=DEFAULT_SERVER_URL,
+        description="URL of the SyftBox server",
     )
-    """Depracated: Use access_token instead. API token for the user"""
+    """URL of the SyftBox server"""
+
+    client_url: Optional[AnyHttpUrl] = Field(
+        validation_alias=AliasChoices("client_url", "port"),
+        default=None,
+        description="URL for the local control plane server. Populated automatically by SyftBox.",
+    )
+    """URL for the local control plane server. Populated automatically by SyftBox."""
+
+    client_token: Optional[str] = Field(
+        default=None,
+        description="Client token for authenticating with the local control plane server. Populated automatically by SyftBox.",
+    )
+    """Client token for authenticating with the local control plane server. Populated automatically by SyftBox."""
+
+    refresh_token: Optional[str] = Field(
+        default=None,
+        description="Refresh token for authenticating with the SyftBox server. Populated after running `syftbox login`.",
+    )
+    """Refresh token for authenticating with the SyftBox server. Populated after running `syftbox login`."""
 
     access_token: Optional[str] = Field(
-        default=None, description="Access token for the user"
+        exclude=True,  # WARN: we don't need `access_token` to be serialized, hence exclude=True
+        default=None,
+        description="Access token for the SyftBox API Server",
     )
-    """Access token for the user"""
+    """Access token for the SyftBox API Server"""
 
-    # WARN: we don't need `path` to be serialized, hence exclude=True
-    path: Path = Field(exclude=True, description="Path to the config file")
+    path: Path = Field(
+        exclude=True,  # WARN: we don't need `path` to be serialized, hence exclude=True
+        description="Path to the config file",
+    )
     """Path to the config file"""
 
     @field_validator("client_url", mode="before")
     def port_to_url(cls, val: Union[int, str, None]) -> Optional[str]:
         if isinstance(val, int):
-            return f"http://127.0.0.1:{val}"
+            return f"http://localhost:{val}"
         return val
-
-    @field_validator("token", mode="before")
-    def token_to_str(cls, v: Union[int, str, None]) -> Optional[str]:
-        if not v:
-            return None
-        elif isinstance(v, int):
-            return str(v)
-        return v
 
     def set_server_url(self, server: str) -> None:
         self.server_url = Url(server)
-
-    def set_port(self, port: int) -> None:
-        self.client_url = Url(f"http://127.0.0.1:{port}")
 
     @classmethod
     def from_env(cls, ignore_existing_config: bool = True) -> Self:
@@ -114,11 +113,13 @@ class SyftClientConfig(BaseModel):
         Required environment variables:
         - SYFTBOX_CLIENT_CONFIG_PATH: Path to store the configuration file
         - SYFTBOX_EMAIL: User's email address
-        - SYFTBOX_ACCESS_TOKEN: User's access token
 
         Optional environment variables:
         - SYFTBOX_DATA_DIR: Directory to store synced data
         - SYFTBOX_SERVER_URL: URL of the remote SyftBox server
+        - SYFTBOX_CLIENT_TOKEN: Client token for authentication
+        - SYFTBOX_ACCESS_TOKEN: Access token for the user
+        - SYFTBOX_REFRESH_TOKEN: Refresh token for the user
 
         Raises ValueError if required configuration is missing.
         """
@@ -143,8 +144,12 @@ class SyftClientConfig(BaseModel):
             config_args["client_timeout"] = float(os.environ[CLIENT_TIMEOUT_ENV])
         if EMAIL_ENV in os.environ:
             config_args["email"] = os.environ[EMAIL_ENV]
+        if CLIENT_TOKEN_ENV in os.environ:
+            config_args["client_token"] = os.environ[CLIENT_TOKEN_ENV]
         if ACCESS_TOKEN_ENV in os.environ:
             config_args["access_token"] = os.environ[ACCESS_TOKEN_ENV]
+        if REFRESH_TOKEN_ENV in os.environ:
+            config_args["refresh_token"] = os.environ[REFRESH_TOKEN_ENV]
         if PORT_ENV in os.environ:
             config_args["port"] = int(os.environ[PORT_ENV])
 
