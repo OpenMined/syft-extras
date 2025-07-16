@@ -3,7 +3,7 @@ name = "syft-core"
 version = "0.2.8"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.8"
 dependencies = [
     "pydantic[email]>=2.10.4",
     "typing-extensions>=4.12.2",

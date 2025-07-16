@@ -9,7 +9,7 @@ import sqlite3
 import traceback
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import wcmatch
 import yaml
@@ -285,7 +285,7 @@ class SyftPermission(BaseModel):
     def depth(self) -> int:
         return len(self.relative_filepath.parts)
 
-    def to_dict(self) -> list[dict]:
+    def to_dict(self) -> List[dict]:
         return [x.as_file_json() for x in self.rules]
 
     @staticmethod
@@ -366,7 +366,7 @@ class SyftPermission(BaseModel):
         self,
         path: str,
         user: str,
-        permission: Union[list[str], list[PermissionType]],
+        permission: Union[List[str], List[PermissionType]],
         allow: bool = True,
     ) -> None:
         priority = len(self.rules)
@@ -421,7 +421,7 @@ class SyftPermission(BaseModel):
 
     @classmethod
     def from_rule_dicts(
-        cls, permfile_file_path: PathLike, data: Union[dict, list]
+        cls, permfile_file_path: PathLike, data: Union[Dict, List]
     ) -> "SyftPermission":
         # Handle new format with terminal flag and rules array
         if isinstance(data, list):
@@ -501,7 +501,7 @@ class ComputedPermission(BaseModel):
     user: str
     file_path: RelativePath
 
-    perms: dict[PermissionType, bool] = {
+    perms: Dict[PermissionType, bool] = {
         PermissionType.READ: False,
         PermissionType.CREATE: False,
         PermissionType.WRITE: False,
