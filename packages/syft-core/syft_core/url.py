@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Any, Generator, Union
+from typing import Any, Dict, Generator, Union
 from urllib.parse import urlencode, urlparse
 
 from pydantic import GetJsonSchemaHandler, ValidationInfo
@@ -26,7 +26,7 @@ class SyftBoxURL(str):
         return bool(re.match(pattern, url))
 
     @property
-    def query(self) -> dict[str, str]:
+    def query(self) -> Dict[str, str]:
         """Returns the query parameters as a dictionary."""
         if not self.parsed.query:
             return {}
@@ -66,7 +66,7 @@ class SyftBoxURL(str):
         local_path = to_path(datasites_path) / self.host / self.path.lstrip("/")
         return local_path.resolve()
 
-    def as_http_params(self) -> dict[str, str]:
+    def as_http_params(self) -> Dict[str, str]:
         return {
             "method": "get",
             "datasite": self.host,
