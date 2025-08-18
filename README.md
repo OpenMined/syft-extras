@@ -29,7 +29,7 @@ The packages serve different layers of the SyftBox communication stack:
 │  • syft-event: Handles syft:// URLs with routing                │
 │  • syft-http-bridge: Bridges HTTP ↔ filesystem                  │
 │  • syft-rpc: Request/Response serialization                     │
-│  • syft-crypto: End-to-end encryption using X3DH               │
+│  • syft-crypto: End-to-end encryption using X3DH                │
 └─────────────────────────────────────────────────────────────────┘
                                │
 ┌─────────────────────────────────────────────────────────────────┐
