@@ -199,8 +199,6 @@ def test_key_signature_verification(alice_client: Client) -> None:
         pytest.fail("Signed prekey signature verification failed")
 
 
-
-
 def test_save_and_load_private_keys(unbootstrapped_client: Client) -> None:
     """Test saving and loading private keys"""
     from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
@@ -309,3 +307,42 @@ def test_get_did_document_not_found(unbootstrapped_client: Client) -> None:
     """Test error when DID document doesn't exist"""
     with pytest.raises(FileNotFoundError, match="No DID document found"):
         get_did_document(unbootstrapped_client, "nonexistent@example.com")
+
+
+def test_did_document_field_validation(alice_client: Client) -> None:
+    """Test that DID document fields are properly validated"""
+    did_doc = get_did_document(alice_client, alice_client.config.email)
+
+    # Test context validation
+    assert "@context" in did_doc
+    assert "https://www.w3.org/ns/did/v1" in did_doc["@context"]
+
+    # Test ID validation
+    assert did_doc["id"].startswith("did:web:")
+
+    # Test verification method validation
+    verification_method = did_doc["verificationMethod"][0]
+    required_vm_fields = ["id", "type", "controller", "publicKeyJwk"]
+    for field in required_vm_fields:
+        assert (
+            field in verification_method
+        ), f"Missing verification method field: {field}"
+
+    # Test key agreement validation
+    ka = did_doc["keyAgreement"][0]
+    required_ka_fields = ["id", "type", "controller", "publicKeyJwk"]
+    for field in required_ka_fields:
+        assert field in ka, f"Missing key agreement field: {field}"
+
+    # Test public key JWK structure
+    identity_jwk = verification_method["publicKeyJwk"]
+    spk_jwk = ka["publicKeyJwk"]
+
+    for jwk in [identity_jwk, spk_jwk]:
+        assert "kty" in jwk
+        assert "crv" in jwk
+        assert "x" in jwk
+        assert jwk["kty"] == "OKP"
+
+    # Verify signature in signed prekey
+    assert "signature" in spk_jwk

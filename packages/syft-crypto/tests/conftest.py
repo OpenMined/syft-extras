@@ -62,3 +62,11 @@ def bob_client(temp_workspace: Path) -> Client:
 def unbootstrapped_client(temp_workspace: Path) -> Client:
     """Create client without bootstrapped keys"""
     return create_temp_client("charlie@example.com", temp_workspace)
+
+
+@pytest.fixture
+def eve_client(temp_workspace: Path) -> Client:
+    """Create Eve client with bootstrapped keys. In the tests, Eve acts as a malicious party"""
+    client: Client = create_temp_client("eve@example.com", temp_workspace)
+    bootstrap_user(client)
+    return client

@@ -161,7 +161,7 @@ def test_missing_private_keys_fails(
     """Test that encryption fails if sender has no private keys"""
     with pytest.raises(
         FileNotFoundError,
-        match=f"Private keys not found",
+        match="Private keys not found",
     ):
         encrypt_message(
             "Test message", alice_client.config.email, unbootstrapped_client

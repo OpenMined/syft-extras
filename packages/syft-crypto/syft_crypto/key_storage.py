@@ -53,6 +53,10 @@ def save_private_keys(client: Client, identity_private_key, spk_private_key) -> 
 
     with open(pks_path, "w") as f:
         json.dump(private_keys, f, indent=2)
+    
+    # Set restrictive permissions (owner read/write only)
+    import os
+    os.chmod(pks_path, 0o600)
 
     return pks_path
 
@@ -68,6 +72,7 @@ def load_private_keys(client: Client) -> Tuple:
 
     Raises:
         FileNotFoundError: If private keys have not been generated
+        ValueError: If key file is invalid or corrupted
     """
     key_path = private_key_path(client)
     if not key_path.exists():
@@ -77,10 +82,31 @@ def load_private_keys(client: Client) -> Tuple:
 
     with open(key_path, "r") as f:
         keys_data = json.load(f)
+    
+    # Validate key structure
+    if not isinstance(keys_data, dict):
+        raise ValueError("Invalid key file: expected dictionary")
+    
+    if "identity_key" not in keys_data:
+        raise KeyError("Missing identity_key in key file")
+    
+    if "signed_prekey" not in keys_data:
+        raise KeyError("Missing signed_prekey in key file")
+    
+    # Validate each key is a dict with required fields
+    for key_name in ["identity_key", "signed_prekey"]:
+        key = keys_data[key_name]
+        if not isinstance(key, dict):
+            raise ValueError(f"{key_name} must be a dictionary")
+        if "kty" not in key:
+            raise KeyError(f"{key_name} missing required field 'kty'")
 
     # Reconstruct private keys from JWKs
-    identity_jwk = jwk.JWK.from_json(json.dumps(keys_data["identity_key"]))
-    spk_jwk = jwk.JWK.from_json(json.dumps(keys_data["signed_prekey"]))
+    try:
+        identity_jwk = jwk.JWK.from_json(json.dumps(keys_data["identity_key"]))
+        spk_jwk = jwk.JWK.from_json(json.dumps(keys_data["signed_prekey"]))
+    except (jwk.InvalidJWKType, jwk.InvalidJWKValue) as e:
+        raise ValueError(f"Invalid JWK format: {e}")
 
     # Convert back to cryptography objects using correct jwcrypto API
     identity_private_key = identity_jwk.get_op_key("sign")  # Ed25519 for signing

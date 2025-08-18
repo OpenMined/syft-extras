@@ -186,6 +186,8 @@ def decrypt_message(
     try:
         decrypted_bytes = decryptor.update(payload.ciphertext) + decryptor.finalize()
     except Exception as e:
+        if verbose:
+            logger.error(f"Decryption failed with error: {e}")
         raise ValueError(f"Decryption failed: {e}")
 
     message = decrypted_bytes.decode()
