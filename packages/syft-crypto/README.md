@@ -286,11 +286,19 @@ The simplified approach maintains core security properties while reducing comple
 ### Running Tests
 ```bash
 # Run all tests
-pytest packages/syft-crypto/tests/
+pytest tests/
 
-# Run specific test modules
-pytest packages/syft-crypto/tests/test_x3dh_encryption.py
-pytest packages/syft-crypto/tests/test_bootstrap.py
+# Run with coverage
+pytest tests/ -v --cov=syft_crypto --cov-report=term-missing
+
+# Run specific test categories
+pytest tests/x3dh_encryption_test.py  # Core encryption tests
+pytest tests/bootstrap_test.py         # Key bootstrapping tests
+pytest tests/crypto_security_test.py   # Security property tests
+pytest tests/key_management_test.py    # Key lifecycle tests
+pytest tests/message_integrity_test.py # Message integrity tests
+pytest tests/protocol_security_test.py # Protocol security tests
+pytest tests/attack_resilience_test.py # Attack resistance tests
 ```
 
 ### Project Structure
