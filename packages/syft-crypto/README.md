@@ -12,12 +12,12 @@ SyftCrypto enables secure message exchange in SyftBox using a custom implementat
 
 ## Key Features
 
-- **= Forward Secrecy**: Fresh ephemeral keys per message prevent retroactive decryption
-- **= Mutual Authentication**: Signed prekeys provide cryptographic proof of identity  
-- **=� Asynchronous Communication**: DID documents enable offline key exchange
-- **=� Deniability**: No permanent signatures on message contents (only on prekeys)
-- **=� Simplified Protocol**: 2 DH operations instead of 4 for better performance
-- **=� Standards-Based**: Uses W3C DID documents and JWK key formats
+- **Forward Secrecy**: Fresh ephemeral keys per message prevent retroactive decryption
+- **Mutual Authentication**: Signed prekeys provide cryptographic proof of identity  
+- **Asynchronous Communication**: DID documents enable offline key exchange
+- **Deniability**: No permanent signatures on message contents (only on prekeys)
+- **Simplified Protocol**: 2 DH operations instead of 4 for better performance
+- **Standards-Based**: Uses W3C DID documents and JWK key formats
 
 ## Architecture
 
@@ -264,10 +264,10 @@ The custom X3DH implementation uses:
 | Feature | Full X3DH | SyftCrypto |
 |---------|-----------|------------|
 | DH Operations | 4 | 2 |
-| One-time PreKeys |  | L |
-| Identity Key DH |  | L |
-| Forward Secrecy |  |  |
-| Mutual Authentication |  |  |
+| One-time PreKeys |  | L |
+| Identity Key DH |  | L |
+| Forward Secrecy |  |  |
+| Mutual Authentication |  |  |
 | Performance | Slower | Faster |
 | Key Management | Complex | Simplified |
 
@@ -303,16 +303,17 @@ pytest tests/attack_resilience_test.py # Attack resistance tests
 
 ### Project Structure
 ```
-packages/syft-crypto/
-   syft_crypto/
-      __init__.py           # Public API exports
-      x3dh.py              # Core X3DH encryption/decryption
-      x3dh_bootstrap.py    # Key generation and bootstrapping
-      did_utils.py         # DID document management
-      key_storage.py       # Secure key storage utilities
-   tests/                   # Test suite
-   docs/                    # Documentation and diagrams
-   README.md               # This file
+syft-crypto/
+  ├── docs/                                   # Documentation and diagrams
+  ├── syft_crypto/                           # Main package directory
+  │   ├── __init__.py                        # Package initialization and public API exports
+  │   ├── did_utils.py                       # DID document management and utilities
+  │   ├── key_storage.py                     # Secure private key storage and JWK handling
+  │   ├── x3dh_bootstrap.py                  # User key generation and bootstrapping
+  │   └── x3dh.py                           # Core X3DH encryption/decryption protocol
+  ├── tests/                                 # Test suite for all functionality
+  ├── pyproject.toml                         # Project configuration and dependencies
+  └── README.md                             # Documentation with API reference and examples
 ```
 
 ## Contributing
