@@ -11,6 +11,7 @@ These tests verify key management security properties:
 
 import base64
 import json
+import platform
 import stat
 import tempfile
 from pathlib import Path
@@ -98,11 +99,11 @@ def test_key_storage_security(alice_client: Client) -> None:
     assert key_file.exists()
 
     # Check file permissions are restrictive (Unix-like systems only)
-    file_mode = key_file.stat().st_mode
-
-    # Should not be readable/writable by others
-    assert not (file_mode & stat.S_IROTH), "Private keys should not be world-readable"
-    assert not (file_mode & stat.S_IWOTH), "Private keys should not be world-writable"
+    if platform.system() != "Windows":
+        file_mode = key_file.stat().st_mode
+        # Should not be readable/writable by others
+        assert not (file_mode & stat.S_IROTH), "Private keys should not be world-readable"
+        assert not (file_mode & stat.S_IWOTH), "Private keys should not be world-writable"
 
     # Verify key file structure
     with open(key_file, "r") as f:
