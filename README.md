@@ -6,6 +6,7 @@ Building blocks for SyftBox applications to communicate with each other and exte
 
 SyftBox Extras provides essential packages that enable:
 - 🔐 **Secure file permissions** with the new `syft.pub.yaml` format
+- 🔒 **End-to-end encryption** using the X3DH protocol
 - 🌐 **Inter-app communication** via `syft://` URLs
 - 🔌 **External API integration** through HTTP bridging
 - 📦 **Object serialization** for distributed communication
@@ -28,6 +29,7 @@ The packages serve different layers of the SyftBox communication stack:
 │  • syft-event: Handles syft:// URLs with routing                │
 │  • syft-http-bridge: Bridges HTTP ↔ filesystem                  │
 │  • syft-rpc: Request/Response serialization                     │
+│  • syft-crypto: End-to-end encryption using X3DH               │
 └─────────────────────────────────────────────────────────────────┘
                                │
 ┌─────────────────────────────────────────────────────────────────┐
@@ -75,6 +77,16 @@ Enables SyftBox apps to communicate with external HTTP APIs through filesystem t
 - 🔐 Host whitelisting for security
 - ⚡ Connection pooling and caching
 
+### [syft-crypto](packages/syft-crypto/README.md)
+End-to-end encryption utilities for SyftBox using a simplified X3DH protocol implementation.
+
+**Key Features:**
+- 🔒 Forward secrecy with ephemeral keys
+- 🔐 Mutual authentication via signed prekeys
+- 📡 Asynchronous communication through DID documents
+- 🚀 High performance with 2 DH operations instead of 4
+- 📄 W3C DID standards compliance
+
 ### [syft-proxy](docs/syft-proxy.md) (DEPRECATED)
 Previously provided HTTP → syft:// translation. This functionality is now integrated into the SyftBox Cache Server.
 
@@ -89,6 +101,7 @@ pip install syft-core
 pip install syft-event
 pip install syft-rpc
 pip install syft-http-bridge
+pip install syft-crypto
 
 ## Higher-Level Abstraction
 
@@ -101,6 +114,7 @@ For easier development, check out [FastSyftBox](https://github.com/OpenMined/fas
 - 📚 [syft-event Documentation](docs/syft-event.md)
 - 📚 [syft-rpc Documentation](docs/syft-rpc.md)
 - 📚 [syft-http-bridge Documentation](docs/syft-http-bridge.md)
+- 📚 [syft-crypto Documentation](packages/syft-crypto/README.md)
 - 📚 [syft-proxy Documentation](docs/syft-proxy.md) (Deprecated)
 
 ## Development
