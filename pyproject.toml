@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "syft-core",
+    "syft-crypto",
     "syft-event",
     "syft-rpc",
     "syft-proxy",
@@ -19,6 +20,7 @@ build-backend = "hatchling.build"
 
 [tool.uv.sources]
 syft-core = { workspace = true }
+syft-crypto = { workspace = true }
 syft-event = { workspace = true }
 syft-rpc = { workspace = true }
 syft-proxy = { workspace = true }

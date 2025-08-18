@@ -1,0 +1,37 @@
+[project]
+name = "syft-crypto"
+version = "0.1.0"
+description = "End-to-end encryption utilities for SyftBox using X3DH protocol"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "cryptography>=45.0.6",
+    "jwcrypto>=1.5.0",
+    "pydantic>=2.0.0",
+    "syft-core>=0.2.8",
+    "loguru>=0.7.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["syft_crypto"]
+only-include = ["syft_crypto"]
+exclude = ["syft_crypto/**/__pycache__"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["syft_crypto", "pyproject.toml", "README.md"]
+exclude = ["syft_crypto/**/__pycache__", "tests"]
+
+[tool.uv.sources]
+syft-core = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=1.1.0",
+    "pytest-cov>=6.2.1",
+    "pytest-mock>=3.12.0",
+]
