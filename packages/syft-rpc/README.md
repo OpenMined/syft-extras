@@ -1,486 +1,580 @@
-# SyftRPC: Request/Response Serialization Protocol
-
-SyftRPC provides low-level serialization and RPC (Remote Procedure Call) primitives for SyftBox applications. It enables asynchronous communication between distributed applications using filesystem-based transport with robust serialization support for Python objects.
+# Syft-RPC Package Documentation
 
 ## Overview
 
-SyftRPC implements a request/response pattern that works entirely through the filesystem, eliminating the need for direct network connections. It provides comprehensive serialization support for Python objects, including Pydantic models, dataclasses, and built-in types, with full UTF-8 support and type validation.
-
-## Key Features
-
-- **Asynchronous RPC**: Send requests and receive responses asynchronously via filesystem transport
-- **Rich Serialization**: Support for Pydantic models, dataclasses, dictionaries, and primitive types  
-- **Full UTF-8 Support**: Handle international text and special characters correctly
-- **Type Validation**: Built-in validation and error handling with Pydantic
-- **Expiration Management**: Automatic cleanup of expired requests and responses
-- **Bulk Operations**: Send requests to multiple endpoints simultaneously
-- **Request Caching**: Optional caching to avoid duplicate requests
-- **Futures Pattern**: Non-blocking operations with `.wait()` and `.resolve()` methods
+The `syft-rpc` package provides the foundational RPC (Remote Procedure Call) protocol and serialization mechanisms for the SyftBox ecosystem. It handles the low-level details of serializing Python objects, managing RPC communication, and ensuring data integrity across distributed systems.
 
 ## Architecture
 
-SyftRPC operates on a simple request/response model:
-
-1. **Client A** calls `send()` to create a request file
-2. **Client B** discovers and processes the request file  
-3. **Client B** calls `reply_to()` to create a response file
-4. **Client A** receives the response via the returned future
-
-## Installation
-
-```bash
-pip install syft-rpc
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                          syft-rpc                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐ │
+│  │   Protocol   │    │     RPC      │    │    RPC_DB        │ │
+│  │              │    │              │    │                  │ │
+│  │ - Serialize  │    │ - Server     │    │ - Store RPCs     │ │
+│  │ - Deserialize│    │ - Client     │    │ - Track status   │ │
+│  │ - Type map   │    │ - Handlers   │    │ - Query history  │ │
+│  │ - Rebuild    │    │              │    │                  │ │
+│  └──────────────┘    └──────────────┘    └──────────────────┘ │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                    Type System                            │  │
+│  │                                                           │  │
+│  │  Basic Types: int, str, float, bool, bytes, None        │  │
+│  │  Collections: list, tuple, dict, set                     │  │
+│  │  Complex: Pydantic models, dataclasses, custom objects   │  │
+│  │                                                           │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+## Serialization Protocol
 
-### Basic Request/Response
+The protocol handles serialization of Python objects into a format that can be transmitted and reconstructed:
 
-**Sending a Request:**
-```python
-from syft_rpc import send, SyftMethod
-
-# Send an asynchronous request
-future = send(
-    url="syft://user@domain.com/app_data/my_app/rpc/process_data",
-    method=SyftMethod.POST,
-    body={"data": "Hello World", "count": 42},
-    expiry="15m"
-)
-
-# Wait for response
-response = future.wait(timeout=30)
-print(f"Status: {response.status_code}")
-print(f"Response: {response.text()}")
+```
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│  Python Object  │      │  Serialized     │      │  Python Object  │
+│                 │      │  Representation │      │                 │
+│  - Native types │ ───► │  - Type info    │ ───► │  - Restored     │
+│  - Pydantic     │      │  - Data bytes   │      │  - Same type    │
+│  - Dataclasses  │      │  - Metadata     │      │  - Same value   │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
+     serialize()              transmit              deserialize()
 ```
 
-**Handling Requests:**
-```python
-from syft_rpc import reply_to, SyftStatus
-from syft_core import Client
-from pathlib import Path
+### Serialization Format
 
-def handle_request(request_path: Path):
-    # Load the request
-    from syft_rpc.protocol import SyftRequest
-    request = SyftRequest.load(request_path)
-    
-    # Process the request
-    data = request.json()
-    result = {"processed": data["data"], "double_count": data["count"] * 2}
-    
-    # Send response
-    response = reply_to(
-        request=request,
-        body=result,
-        status_code=SyftStatus.SYFT_200_OK
-    )
-    
-    return response
+Each serialized object contains:
+```python
+{
+    "__type__": "module.ClassName",      # Type identifier
+    "__version__": 1,                     # Protocol version
+    "data": {...},                        # Actual data
+    "__metadata__": {...}                 # Optional metadata
+}
 ```
 
-### Working with Pydantic Models
+## Core Components
+
+### 1. Protocol Module
+
+The protocol module handles the core serialization logic:
 
 ```python
-from pydantic import BaseModel
-from syft_rpc import send
+from syft_rpc.protocol import serialize, deserialize, rebuild
 
-class ProcessingRequest(BaseModel):
-    text: str
-    language: str = "en"
-    max_length: int = 100
+# Serialize any Python object
+data = {"users": ["alice", "bob"], "count": 2}
+serialized = serialize(data)  # Returns bytes
 
-class ProcessingResponse(BaseModel):
-    result: str
-    word_count: int
-    language: str
+# Deserialize back to Python object
+restored = deserialize(serialized)
+assert restored == data
 
-# Send structured request
-request_data = ProcessingRequest(
-    text="Hello, world!", 
-    language="en",
-    max_length=50
-)
-
-future = send(
-    url="syft://user@domain.com/app_data/nlp/rpc/process",
-    method="POST",
-    body=request_data,  # Automatically serialized
-    expiry="5m"
-)
-
-response = future.wait()
-if response.is_success:
-    # Parse response back to Pydantic model
-    result = response.model(ProcessingResponse)
-    print(f"Processed: {result.result}")
-    print(f"Word count: {result.word_count}")
-```
-
-### Broadcast to Multiple Endpoints
-
-```python
-from syft_rpc import broadcast
-
-# Send the same request to multiple endpoints
-bulk_future = broadcast(
-    urls=[
-        "syft://user1@domain.com/app_data/worker/rpc/task",
-        "syft://user2@domain.com/app_data/worker/rpc/task", 
-        "syft://user3@domain.com/app_data/worker/rpc/task"
-    ],
-    body={"task": "compute_stats", "dataset": "sample.csv"},
-    expiry="10m"
-)
-
-# Wait for all responses
-responses = bulk_future.gather_completed(timeout=60)
-
-# Process results
-successful = [r for r in responses if r.is_success]
-failed = [r for r in responses if not r.is_success]
-
-print(f"Successful: {len(successful)}, Failed: {len(failed)}")
-```
-
-## API Reference
-
-### Core Functions
-
-#### `send(url, method="GET", body=None, headers=None, expiry="15m", cache=False, client=None) -> SyftFuture`
-
-Send an asynchronous request to a SyftBox endpoint.
-
-**Parameters:**
-- `url`: Destination URL (SyftBoxURL or string)
-- `method`: HTTP method (GET, POST, PUT, DELETE, etc.)
-- `body`: Request body (str, bytes, dict, list, Pydantic model, etc.)
-- `headers`: Optional HTTP headers dictionary
-- `expiry`: Duration string ("15m", "1h", "1d")
-- `cache`: Enable request caching to avoid duplicates
-- `client`: SyftBox client (auto-loaded if not provided)
-
-**Returns:**
-- `SyftFuture`: Future object for tracking the response
-
-#### `broadcast(urls, body=None, headers=None, expiry="15m", cache=False, client=None) -> SyftBulkFuture`
-
-Send the same request to multiple endpoints simultaneously.
-
-**Parameters:**
-- `urls`: List of destination URLs
-- Other parameters same as `send()`
-
-**Returns:**
-- `SyftBulkFuture`: Bulk future for tracking multiple responses
-
-#### `reply_to(request, body=None, headers=None, status_code=200, client=None) -> SyftResponse`
-
-Create and store a response to a SyftRequest.
-
-**Parameters:**
-- `request`: Original SyftRequest to respond to
-- `body`: Response body (any serializable type)
-- `headers`: Optional HTTP headers dictionary  
-- `status_code`: HTTP status code (SyftStatus enum)
-- `client`: SyftBox client (auto-loaded if not provided)
-
-**Returns:**
-- `SyftResponse`: The created response object
-
-### Data Classes
-
-#### `SyftRequest`
-
-Represents an RPC request with full serialization support.
-
-**Key Properties:**
-- `id`: Unique request identifier
-- `sender`: Email of the sender
-- `url`: Target SyftBox URL
-- `method`: HTTP method
-- `body`: Serialized request body
-- `headers`: Request headers
-- `created`: Creation timestamp
-- `expires`: Expiration timestamp
-
-**Key Methods:**
-- `text()`: Decode body as string
-- `json()`: Parse body as JSON
-- `model(cls)`: Parse body into Pydantic model
-
-#### `SyftResponse`
-
-Represents an RPC response with status handling.
-
-**Key Properties:**
-- `id`: Request identifier (matches original request)
-- `sender`: Email of the responder
-- `url`: Original request URL
-- `status_code`: HTTP status code
-- `body`: Serialized response body
-- `headers`: Response headers
-
-**Key Methods:**
-- `is_success`: Check if response indicates success
-- `raise_for_status()`: Raise exception for error responses
-- `text()`: Decode body as string
-- `json()`: Parse body as JSON
-- `model(cls)`: Parse body into Pydantic model
-
-#### `SyftFuture`
-
-Represents a pending request with async resolution.
-
-**Key Methods:**
-- `wait(timeout=300, poll_interval=0.1)`: Block until response available
-- `resolve()`: Check for response without blocking (returns None if pending)
-- `is_expired`: Check if request has expired
-- `is_rejected`: Check if request was rejected
-
-#### `SyftBulkFuture`
-
-Manages multiple SyftFuture objects for bulk operations.
-
-**Key Methods:**
-- `gather_completed(timeout=300)`: Wait for all responses
-- `resolve()`: Check all futures for new responses
-- `pending`: List of unresolved futures
-- `successes`: List of successful responses
-- `failures`: List of failed responses
-
-### Serialization
-
-The `serialize()` function handles conversion of Python objects to bytes:
-
-**Supported Types:**
-- **Primitives**: `str`, `int`, `float`, `bool`, `None`
-- **Collections**: `dict`, `list`, `tuple`
-- **Pydantic Models**: Automatic JSON serialization
-- **Dataclasses**: Converted to dict then serialized
-- **Bytes**: Passed through unchanged
-
-```python
-from syft_rpc.rpc import serialize
-
-# Primitives
-assert serialize("hello") == b"hello"
-assert serialize(42) == b"42" 
-assert serialize([1, 2, 3]) == b"[1, 2, 3]"
-
-# Pydantic models
+# Rebuild with type information
 from pydantic import BaseModel
 
 class User(BaseModel):
     name: str
-    age: int
+    email: str
 
-user = User(name="Alice", age=30)
-data = serialize(user)  # b'{"name":"Alice","age":30}'
+user = User(name="Alice", email="alice@example.com")
+serialized = serialize(user)
+
+# On the receiving end
+rebuilt_user = rebuild(deserialize(serialized))
+assert isinstance(rebuilt_user, User)
+assert rebuilt_user.name == "Alice"
 ```
 
-### URL Construction
+### 2. Type Registration
 
-#### `make_url(datasite, app_name, endpoint) -> SyftBoxURL`
-
-Utility to construct SyftBox RPC URLs.
+The protocol maintains a registry of serializable types:
 
 ```python
-from syft_rpc.rpc import make_url
+from syft_rpc.protocol import register_type, get_type_string
 
-url = make_url(
-    datasite="user@domain.com",
-    app_name="my_app", 
-    endpoint="/process"
+# Register custom type
+@register_type
+class CustomData:
+    def __init__(self, value):
+        self.value = value
+    
+    def to_dict(self):
+        return {"value": self.value}
+    
+    @classmethod
+    def from_dict(cls, data):
+        return cls(data["value"])
+
+# Type string for serialization
+type_string = get_type_string(CustomData)  # "module.CustomData"
+```
+
+### 3. RPC Communication
+
+Basic RPC server and client implementation:
+
+```python
+from syft_rpc.rpc import RPCServer, RPCClient
+
+# Server side
+server = RPCServer()
+
+@server.register
+def add(a: int, b: int) -> int:
+    return a + b
+
+@server.register
+def get_user(user_id: str) -> dict:
+    return {"id": user_id, "name": "Alice"}
+
+# Start server
+server.serve(host="localhost", port=8000)
+
+# Client side
+client = RPCClient("localhost", 8000)
+
+# Call remote functions
+result = client.call("add", a=5, b=3)
+print(result)  # 8
+
+user = client.call("get_user", user_id="123")
+print(user)  # {"id": "123", "name": "Alice"}
+```
+
+## Serialization Examples
+
+### Basic Types
+
+```python
+from syft_rpc.protocol import serialize, deserialize
+
+# Numbers
+assert deserialize(serialize(42)) == 42
+assert deserialize(serialize(3.14)) == 3.14
+
+# Strings and bytes
+assert deserialize(serialize("Hello")) == "Hello"
+assert deserialize(serialize(b"Binary")) == b"Binary"
+
+# Collections
+data = {
+    "list": [1, 2, 3],
+    "tuple": (4, 5, 6),
+    "set": {7, 8, 9},
+    "dict": {"nested": True}
+}
+assert deserialize(serialize(data)) == data
+```
+
+### Pydantic Models
+
+```python
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+
+class Task(BaseModel):
+    id: str
+    title: str
+    completed: bool = False
+    tags: List[str] = []
+    due_date: Optional[datetime] = None
+
+# Create and serialize
+task = Task(
+    id="task-001",
+    title="Write documentation",
+    tags=["docs", "important"],
+    due_date=datetime.now()
 )
-# Returns: syft://user@domain.com/app_data/my_app/rpc/process
+
+serialized = serialize(task)
+restored_task = rebuild(deserialize(serialized))
+
+assert isinstance(restored_task, Task)
+assert restored_task.id == "task-001"
+assert restored_task.tags == ["docs", "important"]
+```
+
+### Dataclasses
+
+```python
+from dataclasses import dataclass
+from typing import List
+
+@dataclass
+class Product:
+    name: str
+    price: float
+    categories: List[str]
+    in_stock: bool = True
+
+product = Product(
+    name="Laptop",
+    price=999.99,
+    categories=["Electronics", "Computers"]
+)
+
+# Serialize and restore
+serialized = serialize(product)
+restored = rebuild(deserialize(serialized))
+
+assert isinstance(restored, Product)
+assert restored.price == 999.99
+```
+
+### Complex Nested Structures
+
+```python
+@dataclass
+class Address:
+    street: str
+    city: str
+    country: str
+
+class Person(BaseModel):
+    name: str
+    age: int
+    address: Address
+    friends: List['Person'] = []
+
+# Create complex structure
+alice_addr = Address("123 Main St", "Boston", "USA")
+alice = Person(name="Alice", age=30, address=alice_addr)
+
+bob_addr = Address("456 Oak Ave", "Seattle", "USA")
+bob = Person(name="Bob", age=28, address=bob_addr)
+
+alice.friends.append(bob)
+bob.friends.append(alice)
+
+# Serialize with circular references
+serialized = serialize(alice)
+restored_alice = rebuild(deserialize(serialized))
+
+assert restored_alice.name == "Alice"
+assert restored_alice.friends[0].name == "Bob"
+assert isinstance(restored_alice.address, Address)
+```
+
+## UTF-8 Support
+
+The protocol fully supports UTF-8 encoded data:
+
+```python
+from syft_rpc.protocol import serialize, deserialize
+
+# International characters
+data = {
+    "english": "Hello",
+    "spanish": "Hola",
+    "chinese": "你好",
+    "arabic": "مرحبا",
+    "emoji": "👋🌍"
+}
+
+serialized = serialize(data)
+restored = deserialize(serialized)
+
+for key, value in data.items():
+    assert restored[key] == value
+```
+
+## RPC Database
+
+Track and manage RPC calls with the database module:
+
+```python
+from syft_rpc.rpc_db import RPCDatabase
+
+# Initialize database
+db = RPCDatabase("rpc_history.db")
+
+# Log RPC call
+call_id = db.log_call(
+    method="get_user",
+    params={"user_id": "123"},
+    caller="alice@example.com"
+)
+
+# Update with result
+db.update_result(call_id, result={"name": "Alice", "id": "123"})
+
+# Query history
+recent_calls = db.get_recent_calls(limit=10)
+user_calls = db.get_calls_by_method("get_user")
 ```
 
 ## Error Handling
 
-SyftRPC provides comprehensive error handling:
+The protocol includes comprehensive error handling:
 
 ```python
-from syft_rpc import send, SyftTimeoutError, SyftError
-from syft_rpc.protocol import SyftStatus
+from syft_rpc.protocol import SerializationError, DeserializationError
 
 try:
-    future = send(url="syft://user@domain.com/app_data/app/rpc/endpoint")
-    response = future.wait(timeout=30)
-    
-    # Check for application-level errors
-    if not response.is_success:
-        if response.status_code == SyftStatus.SYFT_404_NOT_FOUND:
-            print("Endpoint not found")
-        elif response.status_code == SyftStatus.SYFT_403_FORBIDDEN:
-            print("Permission denied")
-        else:
-            print(f"Request failed: {response.status_code}")
-    
-except SyftTimeoutError:
-    print("Request timed out")
-except SyftError as e:
-    print(f"RPC error: {e}")
+    # Attempt to serialize non-serializable object
+    serialize(lambda x: x)  # Functions can't be serialized
+except SerializationError as e:
+    print(f"Serialization failed: {e}")
+
+try:
+    # Attempt to deserialize corrupted data
+    deserialize(b"corrupted data")
+except DeserializationError as e:
+    print(f"Deserialization failed: {e}")
+
+# Safe serialization with fallback
+def safe_serialize(obj, fallback=None):
+    try:
+        return serialize(obj)
+    except SerializationError:
+        if fallback is not None:
+            return serialize(fallback)
+        return serialize({"error": "Could not serialize object"})
 ```
 
-## Expiration and Cleanup
+## Performance Optimization
 
-Requests automatically expire based on the `expiry` parameter:
+### 1. Batch Operations
 
 ```python
-# Different expiry formats
-send(url="...", expiry="30s")   # 30 seconds
-send(url="...", expiry="5m")    # 5 minutes  
-send(url="...", expiry="2h")    # 2 hours
-send(url="...", expiry="1d")    # 1 day
+from syft_rpc.protocol import serialize_batch, deserialize_batch
+
+# Serialize multiple objects efficiently
+objects = [
+    {"id": 1, "data": "first"},
+    {"id": 2, "data": "second"},
+    {"id": 3, "data": "third"},
+]
+
+# Batch serialization
+serialized_batch = serialize_batch(objects)
+
+# Batch deserialization
+restored_objects = deserialize_batch(serialized_batch)
+assert len(restored_objects) == 3
 ```
 
-Expired requests are automatically cleaned up when accessed through futures.
-
-## Request Caching
-
-Enable caching to avoid duplicate requests:
+### 2. Compression
 
 ```python
-# First request creates and caches
-future1 = send(url="syft://user@domain.com/app_data/app/rpc/data", cache=True)
+import zlib
+from syft_rpc.protocol import serialize, deserialize
 
-# Second identical request reuses cached version
-future2 = send(url="syft://user@domain.com/app_data/app/rpc/data", cache=True)
+def compress_serialize(obj):
+    serialized = serialize(obj)
+    compressed = zlib.compress(serialized)
+    return compressed
 
-# Both futures reference the same request
-assert future1.id == future2.id
+def decompress_deserialize(compressed):
+    decompressed = zlib.decompress(compressed)
+    return deserialize(decompressed)
+
+# Large data structure
+large_data = {"items": [{"id": i, "data": "x" * 1000} for i in range(100)]}
+
+# Compare sizes
+normal = serialize(large_data)
+compressed = compress_serialize(large_data)
+print(f"Normal: {len(normal)} bytes")
+print(f"Compressed: {len(compressed)} bytes")
+print(f"Compression ratio: {len(compressed) / len(normal):.2%}")
 ```
 
-## File Locations
+### 3. Caching
 
-SyftRPC stores request/response files in the client's workspace:
+```python
+from functools import lru_cache
+import hashlib
 
+@lru_cache(maxsize=1000)
+def cached_serialize(obj_hash):
+    # Cache serialization results for repeated objects
+    return _do_serialize(obj_hash)
+
+def smart_serialize(obj):
+    # Create hash of object
+    obj_bytes = str(obj).encode()
+    obj_hash = hashlib.sha256(obj_bytes).hexdigest()
+    
+    # Use cached result if available
+    return cached_serialize(obj_hash)
 ```
-{workspace}/datasites/{user@domain.com}/app_data/{app_name}/rpc/{endpoint}/
-   {uuid}.request    # Request file
-   {uuid}.response   # Response file (when ready)
-   {uuid}.syftrejected.request  # Rejected marker (if rejected)
+
+## Security Considerations
+
+### 1. Type Validation
+
+```python
+from syft_rpc.protocol import set_allowed_types, SerializationError
+
+# Restrict allowed types for security
+set_allowed_types([
+    int, str, float, bool, list, dict,
+    "myapp.models.User",  # Specific allowed class
+    "myapp.models.Task",
+])
+
+# This will now fail
+try:
+    serialize(eval)  # Dangerous function
+except SerializationError as e:
+    print("Blocked dangerous type")
+```
+
+### 2. Size Limits
+
+```python
+from syft_rpc.protocol import set_size_limit
+
+# Set maximum serialized size (10MB)
+set_size_limit(10 * 1024 * 1024)
+
+# Large objects will be rejected
+huge_list = list(range(10_000_000))
+try:
+    serialize(huge_list)
+except SerializationError as e:
+    print("Object too large")
+```
+
+### 3. Sanitization
+
+```python
+def sanitize_before_deserialize(data: bytes) -> bytes:
+    # Check for suspicious patterns
+    if b"__import__" in data or b"eval" in data:
+        raise ValueError("Potentially malicious data")
+    return data
+
+# Safe deserialization
+def safe_deserialize(data: bytes):
+    sanitized = sanitize_before_deserialize(data)
+    return deserialize(sanitized)
+```
+
+## Integration with Other Packages
+
+### With syft-event
+
+```python
+from syft_event import Request, Response
+from syft_rpc.protocol import serialize, deserialize
+
+# Serialize request for transport
+request = Request(
+    id="123",
+    sender="alice@example.com",
+    url=SyftBoxURL("syft://bob@example.com/app_data/api/rpc/data"),
+    method="POST",
+    body=serialize({"action": "get_data", "filters": {"active": True}})
+)
+
+# On receiving end
+data = deserialize(request.body)
+# Process data...
+```
+
+### With syft-proxy
+
+```python
+from syft_proxy.models import RPCSendRequest
+from syft_rpc.protocol import serialize
+
+# Prepare RPC request with serialized data
+rpc_request = RPCSendRequest(
+    app_name="data_processor",
+    destination="carol@example.com",
+    params=serialize({
+        "operation": "aggregate",
+        "data": [1, 2, 3, 4, 5]
+    })
+)
 ```
 
 ## Best Practices
 
-### 1. Use Appropriate Expiry Times
-```python
-# Short for real-time operations
-send(url="...", expiry="30s")
+1. **Always validate deserialized data** - Don't trust external data
+2. **Use type hints** - Helps with serialization and documentation
+3. **Handle errors gracefully** - Network issues can corrupt data
+4. **Version your protocols** - For backward compatibility
+5. **Monitor performance** - Serialization can be CPU intensive
+6. **Implement timeouts** - For RPC calls
+7. **Log important operations** - For debugging and auditing
 
-# Medium for background tasks
-send(url="...", expiry="15m")
-
-# Long for batch processing
-send(url="...", expiry="1h")
-```
-
-### 2. Handle Timeouts Gracefully
-```python
-try:
-    response = future.wait(timeout=10)
-except SyftTimeoutError:
-    # Check if request is still pending
-    if future.resolve() is None:
-        print("Still waiting for response...")
-    else:
-        print("Response arrived just after timeout")
-```
-
-### 3. Use Structured Data
-```python
-# Prefer Pydantic models over raw dicts
-class TaskRequest(BaseModel):
-    task_id: str
-    parameters: dict
-    priority: int = 1
-
-request = TaskRequest(task_id="task_123", parameters={"key": "value"})
-future = send(url="...", body=request)
-```
-
-### 4. Validate Responses
-```python
-response = future.wait()
-if response.is_success:
-    try:
-        data = response.model(ExpectedResponseModel)
-        # Process structured data
-    except ValidationError:
-        # Handle malformed response
-        raw_data = response.json()
-```
-
-## Integration with SyftBox
-
-SyftRPC integrates seamlessly with other SyftBox packages:
+## Testing
 
 ```python
-from syft_core import Client
-from syft_event import EventRouter
-from syft_rpc import send, reply_to
+import pytest
+from syft_rpc.protocol import serialize, deserialize, rebuild
 
-# Use with syft-event for request handling
-router = EventRouter()
-
-@router.on_request("process")
-def handle_process(request):
-    # Process the request
-    result = {"status": "processed", "data": request.json()}
+def test_round_trip():
+    """Test that data survives serialization round trip."""
+    test_data = {
+        "string": "test",
+        "number": 42,
+        "float": 3.14,
+        "bool": True,
+        "none": None,
+        "list": [1, 2, 3],
+        "dict": {"nested": "value"}
+    }
     
-    # Send response
-    return reply_to(
-        request=request,
-        body=result,
-        status_code=200
-    )
+    serialized = serialize(test_data)
+    restored = deserialize(serialized)
+    
+    assert restored == test_data
+
+def test_pydantic_model():
+    """Test Pydantic model serialization."""
+    from pydantic import BaseModel
+    
+    class TestModel(BaseModel):
+        name: str
+        value: int
+    
+    model = TestModel(name="test", value=123)
+    serialized = serialize(model)
+    restored = rebuild(deserialize(serialized))
+    
+    assert isinstance(restored, TestModel)
+    assert restored.name == "test"
+    assert restored.value == 123
+
+def test_error_handling():
+    """Test error handling for invalid data."""
+    with pytest.raises(Exception):
+        deserialize(b"invalid data")
+    
+    with pytest.raises(Exception):
+        deserialize(b"")
 ```
 
-## Development
+## Troubleshooting
 
-### Running Tests
+Common issues and solutions:
 
-```bash
-# Run all tests
-pytest tests/
+1. **Import errors after deserialization**
+   - Ensure all custom classes are imported before deserializing
+   - Use `rebuild()` instead of raw `deserialize()`
 
-# Run specific test categories  
-pytest tests/serialize_test.py    # Serialization tests
-pytest tests/utf8_test.py         # UTF-8 handling tests
-```
+2. **Circular reference errors**
+   - The protocol handles most circular references
+   - For complex cases, implement custom serialization
 
-### Project Structure
+3. **Performance issues**
+   - Use batch operations for multiple objects
+   - Consider compression for large data
+   - Profile serialization bottlenecks
 
-```
-syft-rpc/
-  ├── syft_rpc/
-  │   ├── __init__.py        # Main exports: send, broadcast, reply_to, protocol classes
-  │   ├── protocol.py        # Core messaging protocol with request/response classes and futures
-  │   ├── py.typed           # Type annotations marker file
-  │   ├── rpc_db.py          # SQLite database for persistent future tracking and storage
-  │   ├── rpc.py             # Main RPC functions: send(), broadcast(), reply_to()
-  │   └── util.py            # Duration parsing utilities (1h, 3d, 30s format)
-  ├── tests/                 # Test suite directory
-  ├── pyproject.toml         # Python project configuration and dependencies
-  └── README.md              # Project documentation
-```
-
-## Dependencies
-
-- `pydantic>=2.9.2`: Data validation and serialization
-- `syft-core>=0.2.8`: SyftBox client and workspace management  
-- `typing-extensions>=4.12.2`: Enhanced type hints
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-## License
-
-This project is part of the OpenMined ecosystem. Please refer to the main repository for licensing information.
+4. **Type mismatch errors**
+   - Ensure sender and receiver have same class definitions
+   - Use version checking for protocol compatibility
