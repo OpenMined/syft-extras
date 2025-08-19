@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +10,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 from syft_core.client_shim import Client
 from syft_core.url import SyftBoxURL
+from syft_crypto import encrypt_message
+from syft_crypto.x3dh_bootstrap import ensure_bootstrap
 from typing_extensions import Any, Dict, List, Optional, Union
 
 from syft_rpc.protocol import (
@@ -28,6 +31,25 @@ BodyType = Union[str, bytes, dict, list, tuple, float, int, BaseModel, None]
 HeaderType = Optional[Dict[str, str]]
 
 
+class EncryptionParams(BaseModel):
+    """Parameters for message encryption in RPC calls."""
+
+    encrypt: bool = False
+    recipient: Optional[str] = None
+    client: Optional[Client] = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)  # Allow Client type
+
+    def validate_for_encryption(self) -> None:
+        """Validate parameters are sufficient for encryption."""
+        if self.encrypt and not self.recipient:
+            raise ValueError("recipient required for encryption")
+
+
+class GenericModel(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
 def make_url(datasite: str, app_name: str, endpoint: str) -> SyftBoxURL:
     """Create a Syft Box URL from a datasite, app name, and RPC endpoint."""
 
@@ -36,28 +58,64 @@ def make_url(datasite: str, app_name: str, endpoint: str) -> SyftBoxURL:
     )
 
 
-class GenericModel(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-
 def serialize(obj: Any, **kwargs: Any) -> Optional[bytes]:
-    """Serialize an object to bytes for sending over the network."""
+    """Serialize an object to bytes for sending over the network.
+
+    Args:
+        obj: The object to serialize
+        **kwargs: Additional serialization options including:
+            encrypt (bool): Whether to encrypt the serialized data
+            recipient (str): Email address of the encryption recipient (required if encrypt=True)
+            client (Client): Syft client for encryption (auto-loaded if not provided)
+            Other kwargs are passed to the underlying serialization methods
+
+    Returns:
+        Serialized (and optionally encrypted) bytes, or None if obj is None
+
+    Raises:
+        ValueError: If encrypt=True but recipient is not provided
+    """
 
     if obj is None:
         return None
-    elif isinstance(obj, bytes):
-        return obj
+
+    # Extract and validate encryption parameters
+    enc_params = EncryptionParams(
+        encrypt=kwargs.pop("encrypt", False),
+        recipient=kwargs.pop("recipient", None),
+        client=kwargs.pop("client", None),
+    )
+    enc_params.validate_for_encryption()
+
+    # Standard serialization
+    if isinstance(obj, bytes):
+        data = obj
     elif isinstance(obj, str):
-        return obj.encode()
+        data = obj.encode()
     elif isinstance(obj, BaseModel):
-        return obj.model_dump_json(**kwargs).encode()
+        data = obj.model_dump_json(**kwargs).encode()
     elif is_dataclass(obj) and not isinstance(obj, type):
-        return GenericModel(**asdict(obj)).model_dump_json(**kwargs).encode()
+        data = GenericModel(**asdict(obj)).model_dump_json(**kwargs).encode()
     elif isinstance(obj, dict):
-        return GenericModel(**obj).model_dump_json(**kwargs).encode()
+        data = GenericModel(**obj).model_dump_json(**kwargs).encode()
     else:
         # list, tuple, float, int
-        return json.dumps(obj).encode()
+        data = json.dumps(obj).encode()
+
+    # Apply encryption if requested
+    if enc_params.encrypt:
+        if not enc_params.client:
+            enc_params.client = Client.load()
+
+        # Ensure client has encryption keys
+        enc_params.client = ensure_bootstrap(enc_params.client)
+
+        encrypted_payload = encrypt_message(
+            data.decode(), enc_params.recipient, enc_params.client
+        )
+        return encrypted_payload.model_dump_json().encode()
+
+    return data
 
 
 def send(
@@ -66,10 +124,11 @@ def send(
     body: Optional[BodyType] = None,
     headers: Optional[HeaderType] = None,
     expiry: str = DEFAULT_EXPIRY,
-    cache: bool = False,
+    cache: Optional[bool] = None,
     client: Optional[Client] = None,
+    encrypt: bool = False,
 ) -> SyftFuture:
-    """Send an asynchronous request to a Syft Box endpoint and return a future for tracking the response.
+    """Send an asynchronous request to a SyftBox endpoint and return a future for tracking the response.
 
     This function creates a SyftRequest, writes it to the local filesystem under the client's workspace,
     and returns a SyftFuture object that can be used to track and retrieve the response.
@@ -86,30 +145,80 @@ def send(
         client: A Syft Client instance used to send the request. If not provided,
             the default client will be loaded.
         expiry: Duration string specifying how long the request is valid for.
-            Defaults to '24h' (24 hours).
-        cache: If True, cache the request on the local filesystem for future use.
+            Defaults to DEFAULT_EXPIRY.
+        cache: Optional[bool]. If True, cache the request for reuse. If None,
+            defaults to False when encrypt=True, True otherwise.
+            NOTE: Caching encrypted requests is ineffective as each encryption
+            uses different ephemeral keys, creating unique cache entries.
+        encrypt: If True, encrypt the request body using X3DH protocol.
+            Recipient is automatically extracted from the URL.
 
     Returns:
         SyftFuture: A future object that can be used to track and retrieve the response.
 
-    Example:
+    Examples:
+        Basic request:
         >>> future = send(
         ...     url="syft://data@domain.com/dataset1",
-        ...     expiry_secs="30s"
+        ...     expiry="30s"
         ... )
         >>> response = future.result()  # Wait for response
+
+        Encrypted request:
+        >>> future = send(
+        ...     url="syft://user@domain.com/app_data/myapp/rpc/compute",
+        ...     body={"data": "sensitive"},
+        ...     encrypt=True
+        ... )
+
+        Cached request (not recommended with encryption):
+        >>> future = send(
+        ...     url="syft://user@domain.com/app_data/myapp/rpc/public",
+        ...     body={"query": "status"},
+        ...     cache=True
+        ... )
+
+    Warning:
+        Using cache=True with encrypt=True is ineffective. Each encrypted request
+        uses different ephemeral keys, preventing cache hits and creating multiple
+        cache entries for identical requests.
     """
 
     # If client is not provided, load the default client
     client = Client.load() if client is None else client
 
+    # Smart cache defaults: disable caching for encrypted requests unless explicitly enabled
+    if cache is None:
+        cache = not encrypt  # Default to False when encrypting, True otherwise
+
+    # Warn when caching encrypted requests
+    if cache and encrypt:
+        warnings.warn(
+            "Caching encrypted requests is ineffective due to ephemeral keys. "
+            "Each encrypted request will generate a unique cache entry. "
+            "Consider cache=False for encrypted requests.",
+            UserWarning,
+            stacklevel=2,
+        )
+
     method = SyftMethod(method) if isinstance(method, str) else method
+
+    url_obj = url if isinstance(url, SyftBoxURL) else SyftBoxURL(url)
+    recipient = url_obj.host
+
+    if encrypt:
+        serialized_body = serialize(
+            body, encrypt=True, recipient=recipient, client=client
+        )
+    else:
+        serialized_body = serialize(body)
+
     syft_request = SyftRequest(
         sender=client.email,
         method=method,
-        url=url if isinstance(url, SyftBoxURL) else SyftBoxURL(url),
+        url=url_obj,
         headers=headers or {},
-        body=serialize(body),
+        body=serialized_body,
         expires=datetime.now(timezone.utc) + parse_duration(expiry),
     )
     local_path = syft_request.url.to_local_path(client.workspace.datasites)
@@ -157,8 +266,9 @@ def broadcast(
     body: Optional[BodyType] = None,
     headers: Optional[HeaderType] = None,
     expiry: str = DEFAULT_EXPIRY,
-    cache: bool = False,
+    cache: Optional[bool] = None,
     client: Optional[Client] = None,
+    encrypt: bool = False,
 ) -> SyftBulkFuture:
     """Broadcast an asynchronous request to multiple Syft Box endpoints and return a bulk future.
 
@@ -205,6 +315,7 @@ def broadcast(
                 client=client,
                 expiry=expiry,
                 cache=cache,
+                encrypt=encrypt,
             )
             for url in urls
         ]

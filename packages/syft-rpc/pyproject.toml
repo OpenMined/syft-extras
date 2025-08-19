@@ -1,6 +1,6 @@
 [project]
 name = "syft-rpc"
-version = "0.2.8"
+version = "0.3.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -8,6 +8,7 @@ dependencies = [
     "pydantic>=2.9.2",
     "syft-core>=0.2.8",
     "typing-extensions>=4.12.2",
+    "syft-crypto>=0.1.0",
 ]
 
 [build-system]

@@ -910,12 +910,13 @@ dev = [
 
 [[package]]
 name = "syft-event"
-version = "0.2.8"
+version = "0.3.0"
 source = { editable = "packages/syft-event" }
 dependencies = [
     { name = "loguru" },
     { name = "pathspec" },
     { name = "pydantic" },
+    { name = "syft-crypto" },
     { name = "syft-rpc" },
     { name = "watchdog" },
 ]
@@ -925,6 +926,7 @@ requires-dist = [
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "pathspec", specifier = ">=0.12.1" },
     { name = "pydantic", specifier = ">=2.10.4" },
+    { name = "syft-crypto", editable = "packages/syft-crypto" },
     { name = "syft-rpc", editable = "packages/syft-rpc" },
     { name = "watchdog", specifier = ">=6.0.0" },
 ]
@@ -1036,11 +1038,12 @@ requires-dist = [
 
 [[package]]
 name = "syft-rpc"
-version = "0.2.8"
+version = "0.3.0"
 source = { editable = "packages/syft-rpc" }
 dependencies = [
     { name = "pydantic" },
     { name = "syft-core" },
+    { name = "syft-crypto" },
     { name = "typing-extensions" },
 ]
 
@@ -1053,6 +1056,7 @@ dev = [
 requires-dist = [
     { name = "pydantic", specifier = ">=2.9.2" },
     { name = "syft-core", editable = "packages/syft-core" },
+    { name = "syft-crypto", editable = "packages/syft-crypto" },
     { name = "typing-extensions", specifier = ">=4.12.2" },
 ]
 
