@@ -38,16 +38,16 @@ def test_warning_when_cache_true_and_encrypt_true(
     body = {"message": "test"}
 
     # Should issue warning when explicitly setting cache=True with encrypt=True
-    with warnings.catch_warnings(record=True) as w:
+    with warnings.catch_warnings(record=True) as warns:
         warnings.simplefilter("always")
 
         send(url=url, body=body, encrypt=True, cache=True, client=alice_client)
 
         # Should have issued exactly one warning
-        assert len(w) == 1
-        assert issubclass(w[0].category, UserWarning)
-        assert "ineffective" in str(w[0].message).lower()
-        assert "ephemeral keys" in str(w[0].message).lower()
+        assert len(warns) == 1
+        assert issubclass(warns[0].category, UserWarning)
+        assert "ineffective" in str(warns[0].message).lower()
+        assert "ephemeral keys" in str(warns[0].message).lower()
 
 
 def test_no_warning_when_cache_false_and_encrypt_true(
@@ -58,13 +58,13 @@ def test_no_warning_when_cache_false_and_encrypt_true(
     body = {"message": "test"}
 
     # Should NOT issue warning when cache=False with encrypt=True
-    with warnings.catch_warnings(record=True) as w:
+    with warnings.catch_warnings(record=True) as warns:
         warnings.simplefilter("always")
 
         send(url=url, body=body, encrypt=True, cache=False, client=alice_client)
 
         # Should not have issued any warnings
-        assert len(w) == 0
+        assert len(warns) == 0
 
 
 def test_explicit_cache_true_overrides_default(alice_client: Client):

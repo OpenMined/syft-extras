@@ -111,7 +111,10 @@ def serialize(obj: Any, **kwargs: Any) -> Optional[bytes]:
         enc_params.client = ensure_bootstrap(enc_params.client)
 
         encrypted_payload = encrypt_message(
-            data.decode(), enc_params.recipient, enc_params.client
+            message=data.decode(),
+            to=enc_params.recipient,
+            client=enc_params.client,
+            verbose=True,
         )
         return encrypted_payload.model_dump_json().encode()
 
@@ -329,6 +332,7 @@ def reply_to(
     headers: Optional[HeaderType] = None,
     status_code: SyftStatus = SyftStatus.SYFT_200_OK,
     client: Optional[Client] = None,
+    encrypt: bool = False,
 ) -> SyftResponse:
     """Create and store a response to a Syft request.
 
@@ -346,6 +350,8 @@ def reply_to(
             the default client will be loaded.
         status_code: HTTP status code for the response. Should be a SyftStatus enum value.
             Defaults to SyftStatus.SYFT_200_OK.
+        encrypt: If True, encrypt the response body using X3DH protocol.
+            Recipient is automatically extracted from the request sender.
 
     Returns:
         SyftResponse: The created response object containing all response details.
@@ -357,17 +363,33 @@ def reply_to(
         ...     body="Request processed successfully",
         ...     status_code=SyftStatus.SYFT_200_OK
         ... )
+
+        Encrypted response:
+        >>> response = reply_to(
+        ...     request=incoming_request,
+        ...     body={"sensitive": "data"},
+        ...     encrypt=True
+        ... )
     """
 
     # If client is not provided, load the default client
     client = Client.load() if client is None else client
+
+    # Handle encryption of response body
+    if encrypt:
+        recipient = request.sender  # Reply to the original request sender
+        serialized_body = serialize(
+            body, encrypt=True, recipient=recipient, client=client
+        )
+    else:
+        serialized_body = serialize(body)
 
     response = SyftResponse(
         id=request.id,
         sender=client.email,
         url=request.url,
         headers=headers or {},
-        body=serialize(body),
+        body=serialized_body,
         expires=request.expires,
         status_code=status_code,
     )
