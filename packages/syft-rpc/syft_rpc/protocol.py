@@ -107,7 +107,7 @@ class Base(BaseModel):
             OSError: If there are I/O related errors.
             FileNotFoundError: If the parent directory doesn't exist.
         """
-        to_path(path).write_text(self.dumps())
+        to_path(path).write_text(self.dumps(), encoding="utf-8")
 
     @classmethod
     def loads(cls, data: JSON) -> Self:
@@ -145,7 +145,7 @@ class Base(BaseModel):
             OSError: If there are I/O related errors.
             UnicodeDecodeError: If content cannot be decoded as UTF-8.
         """
-        return cls.loads(to_path(path).read_text())
+        return cls.loads(to_path(path).read_text(encoding="utf-8"))
 
 
 class SyftMessage(Base):
