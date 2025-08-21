@@ -3,14 +3,16 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
 from typing import Any
-import traceback
 
 from loguru import logger
+from pydantic import ValidationError
 from syft_core import Client
+from syft_crypto import EncryptedPayload, decrypt_message
 from syft_rpc import rpc
 from syft_rpc.protocol import SyftRequest, SyftStatus
 from typing_extensions import Callable, List, Optional, Type, Union
@@ -80,7 +82,7 @@ class SyftEvents:
         self.app_dir = self.client.app_data(self.app_name)
         self.app_rpc_dir = self.app_dir / "rpc"
         self.obs = Observer()
-        self.__rpc: dict[Path, Callable] = {}
+        self.__rpc: dict[Path, dict] = {}
         self._stop_event = Event()
         self._thread_pool = ThreadPoolExecutor()
 
@@ -96,6 +98,61 @@ class SyftEvents:
         """
         self.debug_mode = enabled
         logger.info(f"Debug mode {'enabled' if enabled else 'disabled'}")
+
+    def _process_encrypted_request(
+        self, req: SyftRequest, auto_decrypt: bool = True
+    ) -> SyftRequest:
+        """Auto-detect encrypted requests and decrypt if possible.
+
+        Args:
+            req: The original SyftRequest
+            auto_decrypt: Whether to perform auto-decryption for this handler
+
+        Returns:
+            SyftRequest with decrypted body if encryption was detected and successful,
+            otherwise returns the original request unchanged
+        """
+        if not req.body:
+            return req
+
+        if not auto_decrypt:
+            logger.debug("Auto-decryption disabled for this handler")
+            return req
+
+        try:
+            # Try to parse as EncryptedPayload
+            encrypted_payload = EncryptedPayload.model_validate_json(req.body.decode())
+
+            # Auto-decrypt if we're the intended recipient
+            if encrypted_payload.receiver == self.client.email:
+                logger.debug(f"Auto-decrypting request from {encrypted_payload.sender}")
+
+                decrypted_data = decrypt_message(encrypted_payload, client=self.client)
+
+                # Create new request with decrypted body
+                req.body = decrypted_data.encode()
+
+                # Add metadata headers to indicate decryption occurred
+                req.headers = req.headers or {}
+                req.headers["X-Syft-Decrypted"] = "true"
+                req.headers["X-Syft-Original-Sender"] = encrypted_payload.sender
+
+                logger.debug(
+                    f"Successfully decrypted request from {encrypted_payload.sender}"
+                )
+            else:
+                logger.debug(
+                    f"Encrypted request not for us (intended for {encrypted_payload.receiver})"
+                )
+
+            return req
+
+        except (json.JSONDecodeError, ValidationError):
+            # Not encrypted, return original
+            return req
+        except Exception as e:
+            logger.warning(f"Failed to decrypt request: {e}")
+            return req  # Return original on decryption failure
 
     def init(self) -> None:
         # setup dirs
@@ -125,7 +182,13 @@ class SyftEvents:
 
     def publish_schema(self) -> None:
         schema = {}
-        for endpoint, handler in self.__rpc.items():
+        for endpoint, handler_info in self.__rpc.items():
+            # Extract handler function from the handler info dict
+            handler = (
+                handler_info.get("handler")
+                if isinstance(handler_info, dict)
+                else handler_info
+            )
             handler_schema = generate_schema(handler)
             ep_name = endpoint.relative_to(self.app_rpc_dir)
             ep_name = "/" + str(ep_name).replace("\\", "/")
@@ -141,7 +204,13 @@ class SyftEvents:
             if path.with_suffix(".response").exists():
                 continue
             if path.parent in self.__rpc:
-                handler = self.__rpc[path.parent]
+                handler_info = self.__rpc[path.parent]
+                # Extract handler function from the handler info dict
+                handler = (
+                    handler_info.get("handler")
+                    if isinstance(handler_info, dict)
+                    else handler_info
+                )
                 logger.debug(f"Processing pending request {path.name}")
                 self.__handle_rpc(path, handler)
 
@@ -172,13 +241,25 @@ class SyftEvents:
             endpoint_with_prefix = f"{prefix}{endpoint}"
             _ = self.on_request(endpoint_with_prefix)(func)
 
-    def on_request(self, endpoint: str) -> Callable:
-        """Bind function to RPC requests at an endpoint"""
+    def on_request(
+        self, endpoint: str, auto_decrypt: bool = True, encrypt_reply: bool = False
+    ) -> Callable:
+        """Bind function to RPC requests at an endpoint
+
+        Args:
+            endpoint: The RPC endpoint path
+            auto_decrypt: Whether to automatically decrypt encrypted requests (default: True)
+            encrypt_reply: Whether to encrypt replies (default: False)
+        """
 
         def register_rpc(func):
             epath = self.__to_endpoint_path(endpoint)
-            self.__register_rpc(epath, func)
-            logger.info(f"Register RPC: {endpoint}")
+            self.__register_rpc(
+                epath, func, auto_decrypt=auto_decrypt, encrypt_reply=encrypt_reply
+            )
+            logger.info(
+                f"Register RPC: {endpoint} (auto_decrypt={auto_decrypt}, encrypt_reply={encrypt_reply})"
+            )
             return func
 
         return register_rpc
@@ -217,8 +298,21 @@ class SyftEvents:
             # may happen =)
             if not path.exists():
                 return
+
+            # Look up handler info to get auto_decrypt and encrypt_reply preferences
+            endpoint_path = path.parent
+            handler_info = self.__rpc.get(endpoint_path)
+            auto_decrypt = True  # default
+            encrypt_reply = False  # default
+            if handler_info and isinstance(handler_info, dict):
+                auto_decrypt = handler_info.get("auto_decrypt", True)
+                encrypt_reply = handler_info.get("encrypt_reply", False)
+
             try:
                 req = SyftRequest.load(path)
+                processed_req = self._process_encrypted_request(
+                    req, auto_decrypt=auto_decrypt
+                )
             except Exception as e:
                 logger.error(f"Error loading request {path}", e)
                 # Request loading errors are safe to show in production
@@ -230,27 +324,45 @@ class SyftEvents:
                 )
                 return
 
-            if req.is_expired:
-                logger.debug(f"Request expired: {req}")
-                rpc.reply_to(
-                    req,
-                    body="Request expired",
-                    status_code=SyftStatus.SYFT_419_EXPIRED,
-                    client=self.client,
-                )
+            if processed_req.is_expired:
+                logger.debug(f"Request expired: {processed_req}")
+                if encrypt_reply:
+                    rpc.reply_to(
+                        processed_req,
+                        body="Request expired",
+                        status_code=SyftStatus.SYFT_419_EXPIRED,
+                        encrypt=True,
+                        client=self.client,
+                    )
+                else:
+                    rpc.reply_to(
+                        processed_req,
+                        body="Request expired",
+                        status_code=SyftStatus.SYFT_419_EXPIRED,
+                        client=self.client,
+                    )
                 return
 
             try:
-                kwargs = func_args_from_request(func, req, self)
+                kwargs = func_args_from_request(func, processed_req, self)
             except Exception as e:
-                logger.warning(f"Invalid request body schema {req.url}: {e}")
+                logger.warning(f"Invalid request body schema {processed_req.url}: {e}")
                 # Schema validation errors are safe to show in production
-                rpc.reply_to(
-                    req,
-                    body=f"Invalid request schema: {str(e)}",
-                    status_code=SyftStatus.SYFT_400_BAD_REQUEST,
-                    client=self.client,
-                )
+                if encrypt_reply:
+                    rpc.reply_to(
+                        processed_req,
+                        body=f"Invalid request schema: {str(e)}",
+                        status_code=SyftStatus.SYFT_400_BAD_REQUEST,
+                        encrypt=True,
+                        client=self.client,
+                    )
+                else:
+                    rpc.reply_to(
+                        processed_req,
+                        body=f"Invalid request schema: {str(e)}",
+                        status_code=SyftStatus.SYFT_400_BAD_REQUEST,
+                        client=self.client,
+                    )
                 return
 
             # call the function
@@ -301,17 +413,33 @@ class SyftEvents:
                 resp_code = SyftStatus.SYFT_200_OK
                 resp_headers = {}
 
-            rpc.reply_to(
-                req,
-                body=resp_data,
-                headers=resp_headers,
-                status_code=resp_code,
-                client=self.client,
-            )
+            if encrypt_reply:
+                rpc.reply_to(
+                    processed_req,
+                    body=resp_data,
+                    headers=resp_headers,
+                    status_code=resp_code,
+                    encrypt=True,
+                    client=self.client,
+                )
+            else:
+                rpc.reply_to(
+                    processed_req,
+                    body=resp_data,
+                    headers=resp_headers,
+                    status_code=resp_code,
+                    client=self.client,
+                )
         except Exception as e:
             raise e
 
-    def __register_rpc(self, endpoint: Path, handler: Callable) -> Callable:
+    def __register_rpc(
+        self,
+        endpoint: Path,
+        handler: Callable,
+        auto_decrypt: bool = True,
+        encrypt_reply: bool = False,
+    ) -> Callable:
         def rpc_callback(event: FileSystemEvent):
             return self.__handle_rpc(Path(event.src_path), handler)
 
@@ -327,7 +455,11 @@ class SyftEvents:
             event_filter=[FileCreatedEvent],
         )
         # this is used for processing pending requests + generating schema
-        self.__rpc[endpoint] = handler
+        self.__rpc[endpoint] = {
+            "handler": handler,
+            "auto_decrypt": auto_decrypt,
+            "encrypt_reply": encrypt_reply,
+        }
         return rpc_callback
 
     def __to_endpoint_path(self, endpoint: str) -> Path:
