@@ -8,7 +8,7 @@ from typing import Any
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import x25519
+from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from loguru import logger
@@ -49,6 +49,41 @@ class EncryptedPayload(BaseModel):
         raise ValueError(f"Expected bytes or base64 string, got {type(value)}")
 
 
+def _verify_signed_prekey(did_doc: dict, spk_public: x25519.X25519PublicKey) -> None:
+    """Verify the signed prekey signature from DID document
+
+    Args:
+        did_doc: The DID document containing the signature
+        spk_public: The signed prekey public key to verify
+
+    Raises:
+        ValueError: If signature verification fails
+    """
+    # Extract identity public key
+    identity_jwk = did_doc["verificationMethod"][0]["publicKeyJwk"]
+    identity_public = ed25519.Ed25519PublicKey.from_public_bytes(
+        base64.urlsafe_b64decode(identity_jwk["x"] + "===")
+    )
+
+    # Extract signature from signed prekey
+    spk_jwk = did_doc["keyAgreement"][0]["publicKeyJwk"]
+    if "signature" not in spk_jwk:
+        raise ValueError("No signature found on signed prekey")
+
+    signature_bytes = base64.urlsafe_b64decode(spk_jwk["signature"] + "===")
+
+    # Get the signed prekey public bytes
+    spk_public_bytes = spk_public.public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+
+    # Verify signature - will raise exception if invalid
+    try:
+        identity_public.verify(signature_bytes, spk_public_bytes)
+    except Exception as e:
+        raise ValueError(f"Signed prekey signature verification failed: {e}")
+
+
 def encrypt_message(
     message: str, to: str, client: Client, verbose: bool = False
 ) -> EncryptedPayload:
@@ -73,6 +108,9 @@ def encrypt_message(
     # Extract receiver's public key
     receiver_spk_public = get_public_key_from_did(receiver_did)
 
+    # Verify the signed prekey signature before proceeding
+    _verify_signed_prekey(receiver_did, receiver_spk_public)
+
     # Load our private keys
     _, spk_private_key = load_private_keys(client)
 
@@ -81,10 +119,10 @@ def encrypt_message(
     ephemeral_public = ephemeral_private.public_key()
 
     # Perform X3DH key agreement
-    # DH1 = DH(SPK_a, SPK_b) - our signed prekey with their signed prekey
+    # DH1 = DH(SPK_a, SPK_b) - our private signed prekey with their public signed prekey
     dh1 = spk_private_key.exchange(receiver_spk_public)
 
-    # DH2 = DH(EK_a, SPK_b) - our ephemeral key with their signed prekey
+    # DH2 = DH(EK_a, SPK_b) - our private ephemeral key with their public signed prekey
     dh2 = ephemeral_private.exchange(receiver_spk_public)
 
     # Derive shared secret using HKDF
@@ -98,7 +136,9 @@ def encrypt_message(
     ).derive(shared_key_material)
 
     # Encrypt the message using AES-GCM
-    iv = os.urandom(12)
+    iv = os.urandom(
+        12
+    )  # nonce to prevent replay attacks (each encryption uses fresh randomness)
     cipher = Cipher(
         algorithms.AES(shared_key), modes.GCM(iv), backend=default_backend()
     )
@@ -109,7 +149,7 @@ def encrypt_message(
     encrypted_payload = EncryptedPayload(
         ek=ephemeral_public.public_bytes(
             encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
-        ),
+        ),  # the public ephemeral key
         iv=iv,
         ciphertext=ciphertext,
         tag=encryptor.tag,
@@ -152,6 +192,9 @@ def decrypt_message(
     # Extract sender's public key
     sender_spk_public = get_public_key_from_did(sender_did)
 
+    # Verify the sender's signed prekey signature
+    _verify_signed_prekey(sender_did, sender_spk_public)
+
     # Reconstruct sender's ephemeral public key
     sender_ephemeral_public = x25519.X25519PublicKey.from_public_bytes(payload.ek)
 
@@ -165,7 +208,7 @@ def decrypt_message(
     # DH2 = DH(SPK_b, EK_a) - our signed prekey with their ephemeral key
     dh2 = spk_private_key.exchange(sender_ephemeral_public)
 
-    # Derive shared secret using HKDF
+    # Derive shared secret using HKDF (it's a symmetric secret key (32 bytes))
     shared_key_material = dh1 + dh2
     shared_key = HKDF(
         algorithm=hashes.SHA256(),
