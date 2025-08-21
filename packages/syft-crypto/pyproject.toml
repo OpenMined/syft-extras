@@ -1,6 +1,6 @@
 [project]
 name = "syft-crypto"
-version = "0.1.0"
+version = "0.1.1"
 description = "End-to-end encryption utilities for SyftBox using X3DH protocol"
 readme = "README.md"
 requires-python = ">=3.9"

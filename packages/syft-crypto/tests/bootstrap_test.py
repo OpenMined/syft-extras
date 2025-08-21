@@ -346,3 +346,95 @@ def test_did_document_field_validation(alice_client: Client) -> None:
 
     # Verify signature in signed prekey
     assert "signature" in spk_jwk
+
+
+def test_multiple_clients_have_different_private_keys(
+    alice_client: Client, bob_client: Client, eve_client: Client
+) -> None:
+    """Test that each client gets their own unique private keys even when sharing the same workspace"""
+
+    # Ensure all clients have been bootstrapped
+    assert keys_exist(alice_client), "Alice should have keys from fixture"
+    assert keys_exist(bob_client), "Bob should have keys from fixture"
+    assert keys_exist(eve_client), "Eve should have keys from fixture"
+
+    # Get private key storage paths for each client
+    alice_key_path = private_key_path(alice_client)
+    bob_key_path = private_key_path(bob_client)
+    eve_key_path = private_key_path(eve_client)
+
+    # Verify each client has a different private key file path
+    assert (
+        alice_key_path != bob_key_path
+    ), "Alice and Bob should have different private key paths"
+    assert (
+        alice_key_path != eve_key_path
+    ), "Alice and Eve should have different private key paths"
+    assert (
+        bob_key_path != eve_key_path
+    ), "Bob and Eve should have different private key paths"
+
+    # Verify all private key files exist
+    assert (
+        alice_key_path.exists()
+    ), f"Alice's private keys not found at {alice_key_path}"
+    assert bob_key_path.exists(), f"Bob's private keys not found at {bob_key_path}"
+    assert eve_key_path.exists(), f"Eve's private keys not found at {eve_key_path}"
+
+    # Load and compare the actual private key contents
+    with open(alice_key_path, "r") as f:
+        alice_keys = json.load(f)
+    with open(bob_key_path, "r") as f:
+        bob_keys = json.load(f)
+    with open(eve_key_path, "r") as f:
+        eve_keys = json.load(f)
+
+    # Verify each client has different identity keys
+    alice_identity = alice_keys["identity_key"]
+    bob_identity = bob_keys["identity_key"]
+    eve_identity = eve_keys["identity_key"]
+
+    assert (
+        alice_identity["x"] != bob_identity["x"]
+    ), "Alice and Bob should have different identity keys"
+    assert (
+        alice_identity["x"] != eve_identity["x"]
+    ), "Alice and Eve should have different identity keys"
+    assert (
+        bob_identity["x"] != eve_identity["x"]
+    ), "Bob and Eve should have different identity keys"
+
+    # Verify each client has different signed prekeys
+    alice_spk = alice_keys["signed_prekey"]
+    bob_spk = bob_keys["signed_prekey"]
+    eve_spk = eve_keys["signed_prekey"]
+
+    assert (
+        alice_spk["x"] != bob_spk["x"]
+    ), "Alice and Bob should have different signed prekeys"
+    assert (
+        alice_spk["x"] != eve_spk["x"]
+    ), "Alice and Eve should have different signed prekeys"
+    assert (
+        bob_spk["x"] != eve_spk["x"]
+    ), "Bob and Eve should have different signed prekeys"
+
+    # Verify the directory structure uses different hashes
+    alice_hash = alice_key_path.parent.name
+    bob_hash = bob_key_path.parent.name
+    eve_hash = eve_key_path.parent.name
+
+    assert (
+        alice_hash != bob_hash
+    ), f"Alice and Bob should have different directory hashes: {alice_hash} vs {bob_hash}"
+    assert (
+        alice_hash != eve_hash
+    ), f"Alice and Eve should have different directory hashes: {alice_hash} vs {eve_hash}"
+    assert (
+        bob_hash != eve_hash
+    ), f"Bob and Eve should have different directory hashes: {bob_hash} vs {eve_hash}"
+
+    # Verify each hash is 8 characters (from partitionHash[:8])
+    assert len(alice_hash) == 8, f"Alice's hash should be 8 characters: {alice_hash}"
+    assert len(bob_hash) == 8, f"Bob's hash should be 8 characters: {bob_hash}"
+    assert len(eve_hash) == 8, f"Eve's hash should be 8 characters: {eve_hash}"

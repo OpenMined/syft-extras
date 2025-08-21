@@ -57,4 +57,4 @@ __all__ = [
     "ensure_bootstrap",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

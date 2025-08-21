@@ -20,7 +20,7 @@ def create_temp_client(email: str, workspace_dir: Path) -> Client:
         data_dir=workspace_dir,
         server_url="http://localhost:8080",
         client_url="http://127.0.0.1:8082",
-        path=workspace_dir.parent / ".syftbox" / "config.yaml",
+        path=workspace_dir.parent / ".syftbox" / f"{email.split('@')[0]}_config.yaml",
     )
     return Client(config)
 
