@@ -161,6 +161,15 @@ run-crud-sqlite-client config="":
         uv run examples/crud_sqlite/crud_sql_client.py; \
     fi
 
+[group('test')]
+test package="":
+    #!/bin/bash
+    if [ -n "{{ package }}" ]; then \
+        ./test.sh "{{ package }}"; \
+    else \
+        ./test.sh; \
+    fi
+
 [group('js-sdk')]
 serve-static-files:
     cd js-sdk && python -m http.server 8000 --bind 127.0.0.1

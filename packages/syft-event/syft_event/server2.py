@@ -235,6 +235,20 @@ class SyftEvents:
         self.obs.join()
         self._thread_pool.shutdown(wait=True)
 
+    def get_handler(self, endpoint: Path) -> Optional[Callable]:
+        """Public API to get a handler function
+
+        Args:
+            endpoint: The endpoint path to get the handler for
+
+        Returns:
+            The handler function if found, None otherwise
+        """
+        handler_info = self.__rpc.get(endpoint)
+        if handler_info and isinstance(handler_info, dict):
+            return handler_info["handler"]
+        return handler_info if handler_info else None
+
     def include_router(self, router: EventRouter, *, prefix: str = "") -> None:
         """Include all routes from a router with an optional prefix."""
         for endpoint, func in router.routes.items():
