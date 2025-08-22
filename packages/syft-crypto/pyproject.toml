@@ -5,10 +5,10 @@ description = "End-to-end encryption utilities for SyftBox using X3DH protocol"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "cryptography>=45.0.6",
+    "syft-core>=0.2.8",
+    "cryptography>=44.0.1,<45.0.0",
     "jwcrypto>=1.5.0",
     "pydantic>=2.0.0",
-    "syft-core>=0.2.8",
     "loguru>=0.7.2",
 ]
 

@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "syft-rpc>=0.2.8",
-    "syft-crypto>=0.1.0",
     "pathspec>=0.12.1",
     "pydantic>=2.10.4",
     "watchdog>=6.0.0",
@@ -29,4 +28,3 @@ exclude = ["syft_event/**/__pycache__"]
 
 [tool.uv.sources]
 syft-rpc = { workspace = true }
-syft-crypto = { workspace = true }
