@@ -30,24 +30,27 @@ DEFAULT_WATCH_EVENTS: List[Type[FileSystemEvent]] = [
     FileModifiedEvent,
 ]
 
+
+# This is the default permissions for the app.
+# This grants read/write access to the sender/receiver of the request/response.
 PERMS = """
 rules:
 - pattern: rpc.schema.json
   access:
     read:
     - '*'
-- pattern: '**/*.request'
+- pattern: '**/{{.UserEmail}}/*.request'
   access:
     read:
-    - '*'
-    write:
-    - '*'
-- pattern: '**/*.response'
+    - 'USER'
+    write: 
+    - 'USER'
+- pattern: '**/{{.UserEmail}}/*.response'
   access:
-    read:
-    - '*'
-    write:
-    - '*'
+    read: 
+    - 'USER'
+    write: 
+    - 'USER'
 """
 
 
@@ -200,11 +203,11 @@ class SyftEvents:
 
     def process_pending_requests(self) -> None:
         # process all pending requests
-        for path in self.app_rpc_dir.glob("**/*.request"):
+        for path in self.app_rpc_dir.glob("**/**/*.request"):
             if path.with_suffix(".response").exists():
                 continue
-            if path.parent in self.__rpc:
-                handler_info = self.__rpc[path.parent]
+            if path.parent.parent in self.__rpc:
+                handler_info = self.__rpc[path.parent.parent]
                 # Extract handler function from the handler info dict
                 handler = (
                     handler_info.get("handler")
