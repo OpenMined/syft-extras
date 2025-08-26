@@ -82,15 +82,13 @@ def test_publish_schema_writes_schema(mock_generate, syft_events, tmp_path):
 @patch("syft_event.server2.SyftEvents._SyftEvents__handle_rpc")
 def test_process_pending_requests_calls_handle_rpc(mock_handle, syft_events, tmp_path):
     # Setup a fake .request file and handler
-    req_dir = syft_events.app_rpc_dir / "foo"
+    endpoint_dir = syft_events.app_rpc_dir / "foo"
+    req_dir = endpoint_dir / "test@example.com"
     req_dir.mkdir(parents=True, exist_ok=True)
     req_file = req_dir / "bar.request"
     req_file.write_text("{}")
 
-    def dummy_handler(req):
-        return Response(body={})
-
-    syft_events._SyftEvents__rpc[req_dir] = dummy_handler
+    syft_events._SyftEvents__rpc[endpoint_dir] = lambda req: Response(body={})
     # No .response file exists
     syft_events.process_pending_requests()
     mock_handle.assert_called_once()
