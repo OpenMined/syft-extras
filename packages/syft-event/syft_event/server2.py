@@ -96,7 +96,8 @@ class SyftEvents:
         publish_schema: bool = True,
         client: Optional[Client] = None,
         debug_mode: bool = False,
-        cleanup_interval: str = "30d",
+        cleanup_expiry: str = "30d",
+        cleanup_interval: str = "1h",
     ):
         self.app_name = app_name
         self.schema = publish_schema
@@ -116,6 +117,7 @@ class SyftEvents:
         self._periodic_cleanup = PeriodicCleanup(
             app_name=self.app_name,
             cleanup_interval=cleanup_interval,
+            cleanup_expiry=cleanup_expiry,
             client=self.client,
             on_cleanup_complete=create_cleanup_callback(self.app_name),
         )
@@ -192,7 +194,6 @@ class SyftEvents:
 
         # write perms
         perms = self.app_rpc_dir / "syft.pub.yaml"
-        perms.unlink(missing_ok=True)
         perms.write_text(PERMS)
 
         # publish schema

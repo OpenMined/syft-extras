@@ -114,6 +114,7 @@ class PeriodicCleanup:
         self,
         app_name: str,
         cleanup_interval: str = "1d",
+        cleanup_expiry: str = "30d",
         client: Optional[Client] = None,
         on_cleanup_complete: Optional[Callable[[CleanupStats], None]] = None,
     ):
@@ -124,6 +125,8 @@ class PeriodicCleanup:
             app_name: Name of the Syft application
             cleanup_interval: How often to run cleanup. Can be:
                 - String: Human-readable format (e.g., "1d", "2h", "30m", "1d2h30m")
+            cleanup_expiry: How long to keep files. Can be:
+                - String: Human-readable format (e.g., "1d", "2h", "30m", "1d2h30m")
             client: Syft client instance (auto-loaded if not provided)
             on_cleanup_complete: Optional callback function called after each cleanup
         """
@@ -132,6 +135,10 @@ class PeriodicCleanup:
         # Parse cleanup interval
         self.cleanup_interval_seconds = parse_time_interval(cleanup_interval)
         self.cleanup_interval_str = cleanup_interval
+
+        # Parse cleanup expiry
+        self.cleanup_expiry_seconds = parse_time_interval(cleanup_expiry)
+        self.cleanup_expiry_str = cleanup_expiry
 
         self.client = client or Client.load()
         self.on_cleanup_complete = on_cleanup_complete
@@ -148,10 +155,6 @@ class PeriodicCleanup:
         # Statistics
         self.stats = CleanupStats()
 
-        logger.info(
-            f"Initialized PeriodicCleanup for {app_name} "
-            f"(cleanup every {self.cleanup_interval_str})"
-        )
 
     def start(self) -> None:
         """Start the periodic cleanup in a background thread."""
@@ -167,10 +170,6 @@ class PeriodicCleanup:
         )
         self._cleanup_thread.start()
         self._is_running = True
-        logger.info(
-            f"Started periodic cleanup for {self.app_name} with interval "
-            f"{self.cleanup_interval_str}"
-        )
 
     def stop(self) -> None:
         """Stop the periodic cleanup."""
@@ -190,7 +189,11 @@ class PeriodicCleanup:
 
     def _cleanup_loop(self) -> None:
         """Main cleanup loop that runs in the background thread."""
-        logger.info(f"Cleanup loop started for {self.app_name}")
+        logger.info(
+            f"🧹 Started cleanup service for {self.app_name} - "
+            f"will run every {self.cleanup_interval_str} and delete files older than "
+            f"{self.cleanup_expiry_str}"
+        )
 
         while not self._stop_event.is_set():
             try:
@@ -212,7 +215,10 @@ class PeriodicCleanup:
         Returns:
             CleanupStats object with the results of the cleanup
         """
-        logger.info(f"Starting cleanup for {self.app_name}")
+        logger.info(
+            f"🧹 Cleaning up {self.app_name} - deleting files older than "
+            f"{self.cleanup_expiry_str}"
+        )
 
         # Reset statistics
         self.stats.reset()
@@ -224,7 +230,7 @@ class PeriodicCleanup:
 
         # Calculate cutoff date
         cutoff_date = datetime.now(timezone.utc) - timedelta(
-            seconds=self.cleanup_interval_seconds
+            seconds=self.cleanup_expiry_seconds
         )
 
         # Find and clean up request files
