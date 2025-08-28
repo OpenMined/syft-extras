@@ -228,7 +228,7 @@ class PeriodicCleanup:
         )
 
         # Find and clean up request files
-        for request_path in self.app_rpc_dir.glob("**/**/*.request"):
+        for request_path in self.app_rpc_dir.glob("**/*.request"):
             try:
                 self._cleanup_single_request(request_path, cutoff_date)
             except Exception as e:
