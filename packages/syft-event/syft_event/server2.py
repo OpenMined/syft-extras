@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
 from typing import Any
+from typing import Any, Callable, List, Optional, Type, Union
 
 from loguru import logger
 from pydantic import ValidationError
@@ -19,11 +20,16 @@ from typing_extensions import Callable, List, Optional, Type, Union
 from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileSystemEvent
 from watchdog.observers import Observer
 
+from syft_event.cleanup import PeriodicCleanup, create_cleanup_callback
 from syft_event.deps import func_args_from_request
 from syft_event.handlers import AnyPatternHandler, RpcRequestHandler
 from syft_event.router import EventRouter
 from syft_event.schema import generate_schema
 from syft_event.types import Response
+from syft_rpc import rpc
+from syft_rpc.protocol import SyftRequest, SyftStatus
+from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileSystemEvent
+from watchdog.observers import Observer
 
 DEFAULT_WATCH_EVENTS: List[Type[FileSystemEvent]] = [
     FileCreatedEvent,
@@ -77,6 +83,7 @@ class SyftEvents:
         publish_schema: bool = True,
         client: Optional[Client] = None,
         debug_mode: bool = False,
+        cleanup_interval: str = "1d",
     ):
         self.app_name = app_name
         self.schema = publish_schema
@@ -91,6 +98,14 @@ class SyftEvents:
 
         # Debug mode configuration - explicit boolean
         self.debug_mode = debug_mode
+
+        # Initialize periodic cleanup if enabled
+        self._periodic_cleanup = PeriodicCleanup(
+            app_name=self.app_name,
+            cleanup_interval=cleanup_interval,
+            client=self.client,
+            on_cleanup_complete=create_cleanup_callback(self.app_name),
+        )
 
     def set_debug_mode(self, enabled: bool) -> None:
         """
@@ -164,6 +179,7 @@ class SyftEvents:
 
         # write perms
         perms = self.app_rpc_dir / "syft.pub.yaml"
+        perms.unlink(missing_ok=True)
         perms.write_text(PERMS)
 
         # publish schema
@@ -182,6 +198,9 @@ class SyftEvents:
 
         # start Observer
         self.obs.start()
+
+        # start periodic cleanup if enabled
+        self._periodic_cleanup.start()
 
     def publish_schema(self) -> None:
         schema = {}
@@ -237,6 +256,8 @@ class SyftEvents:
         self.obs.stop()
         self.obs.join()
         self._thread_pool.shutdown(wait=True)
+        # stop periodic cleanup if running
+        self._periodic_cleanup.stop()
 
     def get_handler(self, endpoint: Path) -> Optional[Callable]:
         """Public API to get a handler function
@@ -496,6 +517,15 @@ class SyftEvents:
         if not path.startswith("**/"):
             path = f"**/{path}"
         return path
+
+    def is_cleanup_running(self) -> bool:
+        """
+        Check if periodic cleanup is currently running.
+
+        Returns:
+            True if periodic cleanup is enabled and running, False otherwise
+        """
+        return self._periodic_cleanup.is_running()
 
 
 if __name__ == "__main__":

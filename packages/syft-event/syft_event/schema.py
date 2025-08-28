@@ -4,9 +4,8 @@ import inspect
 from inspect import signature
 
 from pydantic import BaseModel
-from typing_extensions import Any, Callable, Dict, Union, get_type_hints
-
 from syft_event.types import Request, Response
+from typing_extensions import Any, Callable, Dict, Union, get_type_hints
 
 
 def get_type_schema(type_hint: Any) -> Union[str, Dict[str, Any]]:
