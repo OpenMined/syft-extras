@@ -2,6 +2,50 @@
 
 SyftCrypto provides cryptography utilities for SyftBox, implementing a simplified X3DH protocol for secure, asynchronous communication between federated computation participants.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Architecture](#architecture)
+  - [Phase 0: Keys Bootstrapping & Publishing](#phase-0-keys-bootstrapping--publishing)
+  - [Phase 1: Alice Sends Encrypted Message](#phase-1-alice-sends-encrypted-message)
+  - [Phase 2: Bob Decrypts Message](#phase-2-bob-decrypts-message)
+  - [Phase 3: Secure Bidirectional Communication](#phase-3-secure-bidirectional-communication)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+  - [1. Bootstrap User Keys](#1-bootstrap-user-keys)
+  - [2. Encrypt a Message](#2-encrypt-a-message)
+  - [3. Decrypt a Message](#3-decrypt-a-message)
+- [API Reference](#api-reference)
+  - [Core Functions](#core-functions)
+  - [Data Structures](#data-structures)
+  - [Utility Functions](#utility-functions)
+- [File Locations](#file-locations)
+  - [Private Keys](#private-keys)
+  - [Public Keys (DID Documents)](#public-keys-did-documents)
+- [Security Properties](#security-properties)
+  - [Cryptographic Guarantees](#cryptographic-guarantees)
+  - [Key Management](#key-management)
+  - [Protocol Security](#protocol-security)
+- [Simplified vs Full X3DH Trade-offs](#simplified-vs-full-x3dh-trade-offs)
+- [Dependencies](#dependencies)
+- [Development](#development)
+  - [Running Tests](#running-tests)
+  - [Project Structure](#project-structure)
+- [Contributing](#contributing)
+- [End-to-End Encryption Integration in SyftBox](#end-to-end-encryption-integration-in-syftbox)
+  - [Integration Overview](#integration-overview)
+  - [Integration Architecture](#integration-architecture)
+  - [How It Works](#how-it-works)
+  - [Key Integration Points](#key-integration-points)
+  - [Encryption Flow Example](#encryption-flow-example)
+  - [Security Features](#security-features)
+  - [Configuration Options](#configuration-options)
+  - [Best Practices](#best-practices)
+  - [Testing Encryption](#testing-encryption)
+  - [Integration Summary](#integration-summary)
+- [References](#references)
+
 ## Overview
 
 SyftCrypto enables secure message exchange in SyftBox using a custom implementation of the X3DH (Extended Triple Diffie-Hellman) protocol. This implementation provides forward secrecy, mutual authentication, and asynchronous communication capabilities tailored for federated computation use cases.
