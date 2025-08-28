@@ -191,6 +191,7 @@ class SyftEvents:
         # process pending requests
         try:
             if process_pending_requests:
+                self.__handle_legacy_requests()
                 self.process_pending_requests()
         except Exception as e:
             print("Error processing pending requests", e)
@@ -219,6 +220,16 @@ class SyftEvents:
         schema_path = self.app_rpc_dir / "rpc.schema.json"
         schema_path.write_text(json.dumps(schema, indent=2))
         logger.info(f"Published schema to {schema_path}")
+
+    def __handle_legacy_requests(self) -> None:
+        # move legacy requests to new path with sender suffix dir
+
+        for path in self.app_rpc_dir.glob("**/*.request"):
+            request = SyftRequest.load(path)
+            new_path = path.parent / request.sender / path.name
+            new_path.parent.mkdir(exist_ok=True, parents=True)
+            request.dump(new_path)
+            path.unlink()
 
     def process_pending_requests(self) -> None:
         # process all pending requests
