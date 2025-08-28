@@ -83,7 +83,7 @@ class SyftEvents:
         publish_schema: bool = True,
         client: Optional[Client] = None,
         debug_mode: bool = False,
-        cleanup_interval: str = "1d",
+        cleanup_interval: str = "30d",
     ):
         self.app_name = app_name
         self.schema = publish_schema
