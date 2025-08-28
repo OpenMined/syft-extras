@@ -28,7 +28,7 @@ class TestRequest:
         """Test creating a Request with headers and body."""
         headers = {"Content-Type": "application/json", "Authorization": "Bearer token"}
         body = b'{"message": "hello"}'
-        
+
         req = Request(
             id="test-456",
             sender="bob@example.com",
@@ -37,7 +37,7 @@ class TestRequest:
             headers=headers,
             body=body,
         )
-        
+
         assert req.headers == headers
         assert req.body == body
         assert req.method == "POST"
@@ -87,13 +87,13 @@ class TestResponse:
         """Test Response with all fields."""
         headers = {"Content-Type": "application/json", "X-Custom": "value"}
         body = {"message": "Created successfully"}
-        
+
         resp = Response(
             body=body,
             status_code=201,
             headers=headers,
         )
-        
+
         assert resp.body == body
         assert resp.status_code == 201
         assert resp.headers == headers
@@ -106,14 +106,14 @@ class TestResponse:
             status_code=400,
         )
         assert resp1.status_code == 400
-        
+
         # 404 Not Found
         resp2 = Response(
             body={"error": "Resource not found"},
             status_code=404,
         )
         assert resp2.status_code == 404
-        
+
         # 500 Internal Server Error
         resp3 = Response(
             body={"error": "Internal server error"},
@@ -126,15 +126,15 @@ class TestResponse:
         # String body
         resp1 = Response(body="Plain text response")
         assert resp1.body == "Plain text response"
-        
+
         # List body
         resp2 = Response(body=[1, 2, 3, 4, 5])
         assert resp2.body == [1, 2, 3, 4, 5]
-        
+
         # None body
         resp3 = Response(body=None)
         assert resp3.body is None
-        
+
         # Complex nested structure
         complex_body = {
             "users": [
@@ -161,13 +161,13 @@ def test_request_response_integration():
         headers={"Content-Type": "application/json"},
         body=b'{"echo": "Hello, World!"}',
     )
-    
+
     # Process request and create response
     response = Response(
         body={"echoed": "Hello, World!", "request_id": request.id},
         status_code=200,
         headers={"Content-Type": "application/json"},
     )
-    
+
     assert response.body["request_id"] == request.id
     assert response.headers["Content-Type"] == request.headers["Content-Type"]

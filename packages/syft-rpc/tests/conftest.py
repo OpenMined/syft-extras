@@ -1,5 +1,5 @@
 """
-Shared test fixtures for syft-crypto tests
+Shared test fixtures for syft-rpc tests
 """
 
 import shutil
@@ -61,12 +61,4 @@ def bob_client(temp_workspace: Path) -> Client:
 @pytest.fixture
 def unbootstrapped_client(temp_workspace: Path) -> Client:
     """Create client without bootstrapped keys"""
-    return create_temp_client("charlie@example.com", temp_workspace)
-
-
-@pytest.fixture
-def eve_client(temp_workspace: Path) -> Client:
-    """Create Eve client with bootstrapped keys. In the tests, Eve acts as a malicious party"""
-    client: Client = create_temp_client("eve@example.com", temp_workspace)
-    bootstrap_user(client)
-    return client
+    return create_temp_client("unbootstrapped@example.com", temp_workspace)

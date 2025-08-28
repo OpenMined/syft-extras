@@ -1,5 +1,5 @@
 """
-Shared test fixtures for syft-crypto tests
+Shared fixtures for syft-event tests
 """
 
 import shutil
@@ -11,6 +11,7 @@ import pytest
 from syft_core import Client
 from syft_core.config import SyftClientConfig
 from syft_crypto.x3dh_bootstrap import bootstrap_user
+from syft_event.server2 import SyftEvents
 
 
 def create_temp_client(email: str, workspace_dir: Path) -> Client:
@@ -65,8 +66,14 @@ def unbootstrapped_client(temp_workspace: Path) -> Client:
 
 
 @pytest.fixture
-def eve_client(temp_workspace: Path) -> Client:
-    """Create Eve client with bootstrapped keys. In the tests, Eve acts as a malicious party"""
-    client: Client = create_temp_client("eve@example.com", temp_workspace)
+def charlie_client(temp_workspace: Path) -> Client:
+    """Create Charlie client with bootstrapped keys"""
+    client: Client = create_temp_client("charlie@example.com", temp_workspace)
     bootstrap_user(client)
     return client
+
+
+@pytest.fixture
+def alice_events(alice_client) -> SyftEvents:
+    """Create SyftEvents instance for Alice"""
+    return SyftEvents("test_app", publish_schema=False, client=alice_client)
