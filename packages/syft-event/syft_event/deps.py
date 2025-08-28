@@ -6,10 +6,9 @@ from dataclasses import is_dataclass
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
+from syft_event.types import Request
 from syft_rpc.protocol import SyftRequest
 from typing_extensions import Any, Callable, Dict, Type, get_type_hints
-
-from syft_event.types import Request
 
 if TYPE_CHECKING:
     from syft_event.server2 import SyftEvents

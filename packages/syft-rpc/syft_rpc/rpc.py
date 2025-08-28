@@ -224,7 +224,7 @@ def send(
         body=serialized_body,
         expires=datetime.now(timezone.utc) + parse_duration(expiry),
     )
-    local_path = syft_request.url.to_local_path(client.workspace.datasites)
+    local_path = syft_request.url.to_local_path(client.workspace.datasites) / syft_request.sender
     local_path.mkdir(parents=True, exist_ok=True)
 
     # caching is enabled, generate a new request
@@ -394,7 +394,7 @@ def reply_to(
         status_code=status_code,
     )
 
-    local_path = response.url.to_local_path(client.workspace.datasites)
+    local_path = response.url.to_local_path(client.workspace.datasites) / request.sender
     file_path = local_path / f"{response.id}.response"
     local_path.mkdir(parents=True, exist_ok=True)
     response.dump(file_path)

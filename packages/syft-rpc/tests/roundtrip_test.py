@@ -44,6 +44,7 @@ def test_unencrypted_roundtrip(alice_client: Client, bob_client: Client):
     # Verify response file exists
     response_file = (
         response.url.to_local_path(bob_client.workspace.datasites)
+        / received_request.sender
         / f"{response.id}.response"
     )
     assert response_file.exists()
@@ -106,6 +107,7 @@ def test_encrypted_roundtrip(alice_client: Client, bob_client: Client):
     # Alice receives and decrypts the response
     response_file = (
         response.url.to_local_path(bob_client.workspace.datasites)
+        / received_request.sender
         / f"{response.id}.response"
     )
     assert response_file.exists()
@@ -157,6 +159,7 @@ def test_mixed_encryption_roundtrip(alice_client: Client, bob_client: Client):
     # Alice decrypts the sensitive response
     response_file = (
         response.url.to_local_path(bob_client.workspace.datasites)
+        / received_request.sender
         / f"{response.id}.response"
     )
     loaded_response = SyftResponse.load(response_file)
@@ -204,6 +207,7 @@ def test_nonencrypted_error_response_roundtrip(
     # Alice receives error response
     response_file = (
         response.url.to_local_path(bob_client.workspace.datasites)
+        / received_request.sender
         / f"{response.id}.response"
     )
     loaded_response = SyftResponse.load(response_file)
@@ -245,6 +249,7 @@ def test_encrypted_error_response_roundtrip(alice_client: Client, bob_client: Cl
     # Alice decrypts error response
     response_file = (
         response.url.to_local_path(bob_client.workspace.datasites)
+        / received_request.sender
         / f"{response.id}.response"
     )
     loaded_response = SyftResponse.load(response_file)
@@ -291,6 +296,7 @@ def test_multiple_roundtrips_same_clients(alice_client: Client, bob_client: Clie
         # Verify Alice can decrypt Bob's response
         response_file = (
             response.url.to_local_path(bob_client.workspace.datasites)
+            / received_request.sender
             / f"{response.id}.response"
         )
         loaded_response = SyftResponse.load(response_file)
@@ -352,6 +358,7 @@ def test_broadcast_roundtrip(
             response.url.to_local_path(
                 (bob_client if i == 0 else charlie_client).workspace.datasites
             )
+            / received_request.sender
             / f"{response.id}.response"
         )
         loaded_response = SyftResponse.load(response_file)

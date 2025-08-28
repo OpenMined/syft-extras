@@ -30,7 +30,9 @@ def create_server(client=None):
     """Create and return the SyftEvents server with the given client."""
     if client is None:
         client = Client.load()
-    return SyftEvents("pingpong", client=client)
+    return SyftEvents(
+        "pingpong", client=client, cleanup_expiry="1d", cleanup_interval="30m"
+    )
 
 
 def pong(ping: PingRequest, ctx: Request, box) -> PongResponse:
@@ -47,17 +49,15 @@ if __name__ == "__main__":
     # Parse command line arguments
     parser = arg_parser.ArgumentParser(description="Pong Server")
     parser.add_argument(
-        "--config", "-c", 
-        type=str, 
-        help="Path to a custom config.json file"
+        "--config", "-c", type=str, help="Path to a custom config.json file"
     )
     args = parser.parse_args()
-    
+
     # Initialize client and server
     client = Client.load(args.config)
     box = create_server(client)
     print(f"Running as user: {client.email}")
-    
+
     # Register the handler
     @box.on_request("/ping")
     def ping_handler(ping: PingRequest, ctx: Request) -> PongResponse:
