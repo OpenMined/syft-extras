@@ -206,12 +206,13 @@ def test_reply_encryption_settings(mock_reply_to, alice_events: SyftEvents):
         )
 
         alice_events.init()
-        request_dir = alice_events.app_rpc_dir / f"{endpoint_name}_{i}"
+        endpoint_dir = alice_events.app_rpc_dir / f"{endpoint_name}_{i}"
+        request_dir = endpoint_dir / "bob@example.com"
         request_dir.mkdir(parents=True, exist_ok=True)
         request_path = request_dir / f"{plain_req.id}.request"
         plain_req.dump(request_path)
 
-        handler_info = alice_events._SyftEvents__rpc[request_dir]
+        handler_info = alice_events._SyftEvents__rpc[endpoint_dir]
         alice_events._SyftEvents__handle_rpc(request_path, handler_info["handler"])
 
         # Verify encryption setting was passed to reply_to
@@ -242,12 +243,13 @@ def test_error_encryption(alice_events: SyftEvents, bob_client: Client):
     )
 
     alice_events.init()
-    request_dir = alice_events.app_rpc_dir / "actual_error"
+    endpoint_dir = alice_events.app_rpc_dir / "actual_error"
+    request_dir = endpoint_dir / bob_client.email
     request_dir.mkdir(parents=True, exist_ok=True)
     request_path = request_dir / f"{encrypted_req.id}.request"
     encrypted_req.dump(request_path)
 
-    handler_info = alice_events._SyftEvents__rpc[request_dir]
+    handler_info = alice_events._SyftEvents__rpc[endpoint_dir]
     alice_events._SyftEvents__handle_rpc(request_path, handler_info["handler"])
 
     # Check encrypted error response
@@ -290,7 +292,8 @@ def test_complete_encryption_roundtrip(alice_events: SyftEvents, bob_client: Cli
 
     # Setup and process request manually (without observer to avoid race conditions)
     alice_events.init()
-    request_dir = alice_events.app_rpc_dir / "roundtrip"
+    endpoint_dir = alice_events.app_rpc_dir / "roundtrip"
+    request_dir = endpoint_dir / bob_client.email
     request_dir.mkdir(parents=True, exist_ok=True)
     request_path = request_dir / f"{encrypted_req.id}.request"
     encrypted_req.dump(request_path)
@@ -299,7 +302,7 @@ def test_complete_encryption_roundtrip(alice_events: SyftEvents, bob_client: Cli
     assert request_path.exists(), f"Request file not created at {request_path}"
 
     # Process the request manually
-    handler_info = alice_events._SyftEvents__rpc[request_dir]
+    handler_info = alice_events._SyftEvents__rpc[endpoint_dir]
     alice_events._SyftEvents__handle_rpc(request_path, handler_info["handler"])
 
     # Verify encrypted response was created
@@ -387,24 +390,28 @@ def test_federated_learning_simulation(
 
     # Process both FL messages
     alice_events.init()
-    request_dir = alice_events.app_rpc_dir / "fl_messages"
-    request_dir.mkdir(parents=True, exist_ok=True)
+    endpoint_dir = alice_events.app_rpc_dir / "fl_messages"
+    endpoint_dir.mkdir(parents=True, exist_ok=True)
 
     # Process Bob's request
     bob_encrypted_req = create_encrypted_request(
         bob_client, alice_events.client.email, bob_fl_message, "fl_messages"
     )
-    bob_request_path = request_dir / f"{bob_encrypted_req.id}.request"
+    bob_request_dir = endpoint_dir / bob_client.email
+    bob_request_dir.mkdir(parents=True, exist_ok=True)
+    bob_request_path = bob_request_dir / f"{bob_encrypted_req.id}.request"
     bob_encrypted_req.dump(bob_request_path)
 
-    handler_info = alice_events._SyftEvents__rpc[request_dir]
+    handler_info = alice_events._SyftEvents__rpc[endpoint_dir]
     alice_events._SyftEvents__handle_rpc(bob_request_path, handler_info["handler"])
 
     # Process Charlie's request
+    charlie_request_dir = endpoint_dir / charlie_client.email
+    charlie_request_dir.mkdir(parents=True, exist_ok=True)
     charlie_encrypted_req = create_encrypted_request(
         charlie_client, alice_events.client.email, charlie_fl_message, "fl_messages"
     )
-    charlie_request_path = request_dir / f"{charlie_encrypted_req.id}.request"
+    charlie_request_path = charlie_request_dir / f"{charlie_encrypted_req.id}.request"
     charlie_encrypted_req.dump(charlie_request_path)
 
     alice_events._SyftEvents__handle_rpc(charlie_request_path, handler_info["handler"])

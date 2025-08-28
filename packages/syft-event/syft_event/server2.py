@@ -375,7 +375,7 @@ class SyftEvents:
                 return
 
             # Look up handler info to get auto_decrypt and encrypt_reply preferences
-            endpoint_path = path.parent
+            endpoint_path = path.parent.parent
             handler_info = self.__rpc.get(endpoint_path)
             auto_decrypt = True  # default
             encrypt_reply = False  # default
