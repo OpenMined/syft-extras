@@ -35,3 +35,15 @@ dev = [
     "pytest-cov>=6.2.1",
     "pytest-mock>=3.12.0",
 ]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "pep621"
+tag_format = "syft-crypto-$version"
+update_changelog_on_bump = true
+
+version_files = [
+    "pyproject.toml:^version\\s*=\\s*\"(?P<version>.*)\"$",
+    "syft_crypto/__init__.py:^__version__\\s*=\\s*\"(?P<version>.*)\"$",
+    "../syft-rpc/pyproject.toml:syft-crypto>=(?P<version>\\d+\\.\\d+\\.\\d+)"
+]

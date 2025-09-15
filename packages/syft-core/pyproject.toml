@@ -14,3 +14,16 @@ dependencies = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "pep621"
+tag_format = "syft-core-$version"
+update_changelog_on_bump = false
+
+version_files = [
+    "pyproject.toml:^version\\s*=\\s*\"(?P<version>.*)\"$",
+    "syft_core/__init__.py:^__version__\\s*=\\s*\"(?P<version>.*)\"$",
+    "../syft-rpc/pyproject.toml:syft-core>=(?P<version>\\d+\\.\\d+\\.\\d+)",
+    "../syft-crypto/pyproject.toml:syft-core>=(?P<version>\\d+\\.\\d+\\.\\d+)",
+]

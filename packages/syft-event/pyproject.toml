@@ -28,3 +28,14 @@ exclude = ["syft_event/**/__pycache__"]
 
 [tool.uv.sources]
 syft-rpc = { workspace = true }
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "pep621"
+tag_format = "syft-event-$version"
+update_changelog_on_bump = true
+
+version_files = [
+    "pyproject.toml:^version\\s*=\\s*\"(?P<version>.*)\"$",
+    "syft_event/__init__.py:^__version__\\s*=\\s*\"(?P<version>.*)\"$",
+]
