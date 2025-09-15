@@ -40,7 +40,7 @@ dev = [
 name = "cz_conventional_commits"
 version_provider = "pep621"
 tag_format = "syft-crypto-$version"
-update_changelog_on_bump = true
+update_changelog_on_bump = false
 
 version_files = [
     "pyproject.toml:^version\\s*=\\s*\"(?P<version>.*)\"$",

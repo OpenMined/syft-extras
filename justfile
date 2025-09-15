@@ -170,6 +170,175 @@ test package="":
         ./test.sh; \
     fi
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Package Management Commands
+
+# Show current versions of all packages
+package-versions:
+    @echo "{{ _cyan }}Current Package Versions:{{ _nc }}"
+    @echo "{{ _green }}syft-core:{{ _nc }}"
+    @grep '^version = ' packages/syft-core/pyproject.toml
+    @echo "{{ _green }}syft-crypto:{{ _nc }}"
+    @grep '^version = ' packages/syft-crypto/pyproject.toml
+    @echo "{{ _green }}syft-rpc:{{ _nc }}"
+    @grep '^version = ' packages/syft-rpc/pyproject.toml
+    @echo "{{ _green }}syft-event:{{ _nc }}"
+    @grep '^version = ' packages/syft-event/pyproject.toml
+
+# Show dependency relationships
+package-deps:
+    @echo "{{ _cyan }}Package Dependencies:{{ _nc }}"
+    @echo "{{ _green }}syft-core{{ _nc }} (base package)"
+    @echo "{{ _green }}syft-crypto{{ _nc }} → depends on syft-core"
+    @echo "{{ _green }}syft-rpc{{ _nc }} → depends on syft-core, syft-crypto"
+    @echo "{{ _green }}syft-event{{ _nc }} → depends on syft-rpc"
+    @echo "{{ _green }}syft-proxy{{ _nc }} → depends on syft-rpc"
+    @echo "{{ _green }}syft-http-bridge{{ _nc }} → depends on syft-core"
+
+# Universal bump command - handles all packages and their dependents
+bump package increment="patch":
+    #!/bin/bash
+    if [ -z "{{ package }}" ]; then \
+        echo -e "{{ _red }}Error: Package name required{{ _nc }}"; \
+        echo "Usage: just bump <package> [increment]"; \
+        echo "Packages: syft-core, syft-crypto, syft-rpc, syft-event"; \
+        echo "Increments: patch, minor, major"; \
+        echo "Example: just bump syft-core minor"; \
+        exit 1; \
+    fi
+    
+    # Check if package exists
+    case "{{ package }}" in \
+        "syft-core"|"syft-crypto"|"syft-rpc"|"syft-event") \
+            ;; \
+        *) \
+            echo -e "{{ _red }}Error: Unknown package '{{ package }}'{{ _nc }}"; \
+            echo "Available packages: syft-core, syft-crypto, syft-rpc, syft-event"; \
+            exit 1; \
+            ;; \
+    esac
+    
+    echo -e "{{ _cyan }}Bumping {{ package }} {{ increment }} version...{{ _nc }}"
+    
+    # Bump the main package
+    cd "packages/{{ package }}" && uv run cz bump --increment "{{ increment }}" --yes
+    echo -e "{{ _green }}✅ {{ package }} bumped{{ _nc }}"
+    
+    # Update dependency constraints for dependent packages
+    cd /home/shubham/repos/OpenMined/syft-extras
+    case "{{ package }}" in \
+        "syft-core") \
+            echo -e "{{ _yellow }}Updating dependency constraints...{{ _nc }}"; \
+            # Get the new version of syft-core \
+            NEW_VERSION=$(grep '^version = ' packages/syft-core/pyproject.toml | sed 's/version = "\(.*\)"/\1/'); \
+            echo -e "{{ _cyan }}Updating syft-crypto to depend on syft-core>=$NEW_VERSION{{ _nc }}"; \
+            sed -i "s/syft-core>=[0-9]\+\.[0-9]\+\.[0-9]\+/syft-core>=$NEW_VERSION/" packages/syft-crypto/pyproject.toml; \
+            echo -e "{{ _cyan }}Updating syft-rpc to depend on syft-core>=$NEW_VERSION{{ _nc }}"; \
+            sed -i "s/syft-core>=[0-9]\+\.[0-9]\+\.[0-9]\+/syft-core>=$NEW_VERSION/" packages/syft-rpc/pyproject.toml; \
+            echo -e "{{ _cyan }}Updating syft-http-bridge to depend on syft-core>=$NEW_VERSION{{ _nc }}"; \
+            sed -i "s/syft-core>=[0-9]\+\.[0-9]\+\.[0-9]\+/syft-core>=$NEW_VERSION/" packages/syft-http-bridge/pyproject.toml; \
+            echo ""; \
+            echo -e "{{ _yellow }}⚠️  Note: Dependent packages may need version bumps:{{ _nc }}"; \
+            echo -e "{{ _yellow }}   - syft-crypto (depends on syft-core){{ _nc }}"; \
+            echo -e "{{ _yellow }}   - syft-rpc (depends on syft-core){{ _nc }}"; \
+            echo -e "{{ _yellow }}   - syft-http-bridge (depends on syft-core){{ _nc }}"; \
+            echo -e "{{ _yellow }}   Run 'just bump <package> <increment>' for each if needed{{ _nc }}"; \
+            ;; \
+        "syft-crypto") \
+            echo -e "{{ _yellow }}Updating dependency constraints...{{ _nc }}"; \
+            # Get the new version of syft-crypto \
+            NEW_VERSION=$(grep '^version = ' packages/syft-crypto/pyproject.toml | sed 's/version = "\(.*\)"/\1/'); \
+            echo -e "{{ _cyan }}Updating syft-rpc to depend on syft-crypto>=$NEW_VERSION{{ _nc }}"; \
+            sed -i "s/syft-crypto>=[0-9]\+\.[0-9]\+\.[0-9]\+/syft-crypto>=$NEW_VERSION/" packages/syft-rpc/pyproject.toml; \
+            echo ""; \
+            echo -e "{{ _yellow }}⚠️  Note: Dependent packages may need version bumps:{{ _nc }}"; \
+            echo -e "{{ _yellow }}   - syft-rpc (depends on syft-crypto){{ _nc }}"; \
+            echo -e "{{ _yellow }}   Run 'just bump <package> <increment>' for each if needed{{ _nc }}"; \
+            ;; \
+        "syft-rpc") \
+            echo -e "{{ _yellow }}Updating dependency constraints...{{ _nc }}"; \
+            # Get the new version of syft-rpc \
+            NEW_VERSION=$(grep '^version = ' packages/syft-rpc/pyproject.toml | sed 's/version = "\(.*\)"/\1/'); \
+            echo -e "{{ _cyan }}Updating syft-event to depend on syft-rpc>=$NEW_VERSION{{ _nc }}"; \
+            sed -i "s/syft-rpc>=[0-9]\+\.[0-9]\+\.[0-9]\+/syft-rpc>=$NEW_VERSION/" packages/syft-event/pyproject.toml; \
+            echo -e "{{ _cyan }}Updating syft-proxy to depend on syft-rpc>=$NEW_VERSION{{ _nc }}"; \
+            sed -i "s/syft-rpc>=[0-9]\+\.[0-9]\+\.[0-9]\+/syft-rpc>=$NEW_VERSION/" packages/syft-proxy/pyproject.toml; \
+            echo ""; \
+            echo -e "{{ _yellow }}⚠️  Note: Dependent packages may need version bumps:{{ _nc }}"; \
+            echo -e "{{ _yellow }}   - syft-event (depends on syft-rpc){{ _nc }}"; \
+            echo -e "{{ _yellow }}   - syft-proxy (depends on syft-rpc){{ _nc }}"; \
+            echo -e "{{ _yellow }}   Run 'just bump <package> <increment>' for each if needed{{ _nc }}"; \
+            ;; \
+        "syft-event") \
+            echo -e "{{ _yellow }}syft-event has no dependents{{ _nc }}"; \
+            ;; \
+    esac
+    
+    echo ""
+    echo -e "{{ _green }}🎉 Package bumped and dependency constraints updated!{{ _nc }}"
+    echo -e "{{ _cyan }}Run 'just package-versions' to see new versions{{ _nc }}"
+
+# Dry run for any package bump
+bump-dry package increment="patch":
+    #!/bin/bash
+    if [ -z "{{ package }}" ]; then \
+        echo -e "{{ _red }}Error: Package name required{{ _nc }}"; \
+        echo "Usage: just bump-dry <package> [increment]"; \
+        echo "Packages: syft-core, syft-crypto, syft-rpc, syft-event"; \
+        echo "Increments: patch, minor, major"; \
+        echo "Example: just bump-dry syft-core minor"; \
+        exit 1; \
+    fi
+    
+    # Check if package exists
+    case "{{ package }}" in \
+        "syft-core"|"syft-crypto"|"syft-rpc"|"syft-event") \
+            ;; \
+        *) \
+            echo -e "{{ _red }}Error: Unknown package '{{ package }}'{{ _nc }}"; \
+            echo "Available packages: syft-core, syft-crypto, syft-rpc, syft-event"; \
+            exit 1; \
+            ;; \
+    esac
+    
+    echo -e "{{ _cyan }}DRY RUN: Bumping {{ package }} {{ increment }} version...{{ _nc }}"
+    echo ""
+    
+    # Show what packages will be affected
+    case "{{ package }}" in \
+        "syft-core") \
+            echo -e "{{ _yellow }}This will bump: syft-core ({{ increment }}){{ _nc }}"; \
+            echo -e "{{ _yellow }}And update their dependency requirements in: syft-crypto, syft-rpc, syft-http-bridge{{ _nc }}"; \
+            ;; \
+        "syft-crypto") \
+            echo -e "{{ _yellow }}This will bump: syft-crypto ({{ increment }}){{ _nc }}"; \
+            echo -e "{{ _yellow }}And update their dependency requirements in: syft-rpc{{ _nc }}"; \
+            ;; \
+        "syft-rpc") \
+            echo -e "{{ _yellow }}This will bump: syft-rpc ({{ increment }}){{ _nc }}"; \
+            echo -e "{{ _yellow }}And update their dependency requirements in: syft-event, syft-proxy{{ _nc }}"; \
+            ;; \
+        "syft-event") \
+            echo -e "{{ _yellow }}This will bump: syft-event ({{ increment }}) only{{ _nc }}"; \
+            ;; \
+    esac
+    echo ""
+    
+    # Show the main package bump
+    echo -e "{{ _green }}Main package bump:{{ _nc }}"
+    cd "packages/{{ package }}" && uv run cz bump --increment "{{ increment }}" --yes --dry-run
+    echo ""
+    
+    echo ""
+    echo -e "{{ _yellow }}⚠️  Note: Dependent packages will have their dependency requirements updated{{ _nc }}"
+    echo -e "{{ _yellow }}   You may want to bump their versions separately if they have changes{{ _nc }}"
+
+# Build all packages
+package-build:
+    @echo "{{ _cyan }}Building all packages...{{ _nc }}"
+    uv build --all-packages
+    @echo "{{ _green }}✅ All packages built successfully!{{ _nc }}"
+
 [group('js-sdk')]
 serve-static-files:
     cd js-sdk && python -m http.server 8000 --bind 127.0.0.1
