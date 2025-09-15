@@ -8,7 +8,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from loguru import logger
 
 
 class TestParseTimeInterval:
@@ -306,38 +305,27 @@ class TestPeriodicCleanup:
         # Calculate the cutoff date that the cleanup logic will use
         cutoff_date = now - timedelta(seconds=cleanup.cleanup_expiry_seconds)
 
-        logger.info(f"Debug: cleanup_expiry_seconds = {cleanup.cleanup_expiry_seconds}")
-        logger.info(f"Debug: now = {now}")
-        logger.info(f"Debug: cutoff_date = {cutoff_date}")
-
         # Mock SyftRequest.load to return controlled timestamps
         # This tests the actual time-based logic
         def mock_load(path):
             # Create a simple object with a real datetime attribute
+            path = Path(path)
+
             class MockRequest:
                 def __init__(self, created_time):
                     self.created = created_time
 
-            logger.info(f"Debug: path = {path}")
-            logger.info(f"Debug: cutoff_date = {cutoff_date}")
-            if "old" in str(path):
+            if "old" in str(path.name):
                 # Old file: definitely older than cutoff (should be deleted)
                 old_time = cutoff_date - timedelta(hours=2)
-                logger.info(f"Debug: old_time = {old_time}")
                 return MockRequest(old_time)
             else:
                 # New file: definitely newer than cutoff (should NOT be deleted)
                 new_time = cutoff_date + timedelta(hours=2)
-                logger.info(f"Debug: new_time = {new_time}")
                 return MockRequest(new_time)
 
         with patch("syft_rpc.protocol.SyftRequest.load", side_effect=mock_load):
-            logger.info(
-                f"Debug: Performing cleanup, old_request = {old_request}, new_request = {new_request}"
-            )
             stats = cleanup.perform_cleanup()
-
-            logger.info(f"Debug: Stats = {stats}")
 
             # Only old file should be deleted (cleanup_expiry="1d")
             assert (

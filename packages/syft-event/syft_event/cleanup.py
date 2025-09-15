@@ -258,15 +258,11 @@ class PeriodicCleanup:
 
         try:
             # Load the request to check its creation date
-            logger.info(f"Loading request from {request_path}")
             req = SyftRequest.load(request_path)
 
             created = req.created
             created = created.astimezone(timezone.utc)
-            logger.info(f"Created={created}")
             cutoff_date = cutoff_date.astimezone(timezone.utc)
-            logger.info(f"Cutoff_date={cutoff_date}")
-            logger.info(f"Comparing created={created} to cutoff_date={cutoff_date}")
 
             if created < cutoff_date:
                 # Delete request file
