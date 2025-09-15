@@ -59,7 +59,14 @@ just bump-dry syft-rpc patch
 
 ```bash
 # Build all packages
-just package-build
+just package-build-all
+
+# Build a specific package
+just package-build <package>
+# Examples:
+just package-build syft-core
+just package-build syft-rpc
+just package-build syft-event
 ```
 
 ## Version Increment Types

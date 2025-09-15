@@ -334,10 +334,42 @@ bump-dry package increment="patch":
     echo -e "{{ _yellow }}   You may want to bump their versions separately if they have changes{{ _nc }}"
 
 # Build all packages
-package-build:
+package-build-all:
     @echo "{{ _cyan }}Building all packages...{{ _nc }}"
     uv build --all-packages
     @echo "{{ _green }}✅ All packages built successfully!{{ _nc }}"
+
+# Build a specific package
+package-build package:
+    #!/bin/bash
+    if [ -z "{{ package }}" ]; then \
+        echo -e "{{ _red }}Error: Package name required{{ _nc }}"; \
+        echo "Usage: just package-build-single <package>"; \
+        echo "Available packages: syft-core, syft-crypto, syft-rpc, syft-event"; \
+        exit 1; \
+    fi
+    
+    # Check if package exists
+    case "{{ package }}" in \
+        "syft-core"|"syft-crypto"|"syft-rpc"|"syft-event") \
+            ;; \
+        *) \
+            echo -e "{{ _red }}Error: Unknown package '{{ package }}'{{ _nc }}"; \
+            echo "Available packages: syft-core, syft-crypto, syft-rpc, syft-event"; \
+            exit 1; \
+            ;; \
+    esac
+    
+    echo -e "{{ _cyan }}Building {{ package }}...{{ _nc }}"
+    cd "packages/{{ package }}" && uv build
+    echo -e "{{ _green }}✅ {{ package }} built successfully!{{ _nc }}"
+
+# TODO: Automate build/deploy step for package using uv in justfile
+# This would include:
+# - Building packages with uv build
+# - Publishing to PyPI or private registry
+# - Tagging and releasing
+# - CI/CD integration
 
 [group('js-sdk')]
 serve-static-files:
