@@ -15,6 +15,8 @@ A distributed event-driven RPC framework for SyftBox that enables file-based com
 - ⚡ **Async Support**: Handle both synchronous and asynchronous request handlers
 - 📊 **Schema Generation**: Automatic API schema generation and publishing
 - 🔌 **Router Support**: Organize endpoints with modular routers
+- 🧹 **Automatic Cleanup**: Periodic cleanup of old request/response files with configurable retention
+- 📂 **Organized File Structure**: User-specific directory organization for better request management
 
 ## Installation
 
@@ -114,6 +116,55 @@ async def async_handler(task_id: str) -> dict:
 box.run_forever()
 ```
 
+### Automatic Cleanup Configuration
+
+SyftEvent now includes automatic cleanup of old request and response files to prevent disk space issues:
+
+```python
+from syft_event import SyftEvents
+
+# Create with custom cleanup settings
+box = SyftEvents(
+    "my_app",
+    cleanup_expiry="7d",    # Keep files for 7 days (default: 30d)
+    cleanup_interval="1h"   # Run cleanup every hour (default: 1d)
+)
+
+# Check if cleanup is running
+if box.is_cleanup_running():
+    print("Cleanup service is active")
+
+# Get cleanup statistics
+stats = box.get_cleanup_stats()
+print(f"Deleted {stats.requests_deleted} requests and {stats.responses_deleted} responses")
+```
+
+### Standalone Cleanup Utility
+
+You can also run the cleanup utility independently:
+
+```python
+from syft_event.cleanup import PeriodicCleanup
+
+# Create a standalone cleanup instance
+cleanup = PeriodicCleanup(
+    app_name="my_app",
+    cleanup_interval="1d",      # How often to run cleanup
+    cleanup_expiry="30d",       # How long to keep files
+    on_cleanup_complete=lambda stats: print(f"Cleaned up {stats.requests_deleted} files")
+)
+
+# Start cleanup in background
+cleanup.start()
+
+# Or run cleanup immediately
+stats = cleanup.cleanup_now()
+print(f"Immediate cleanup: {stats.requests_deleted} files deleted")
+
+# Stop cleanup
+cleanup.stop()
+```
+
 ## API Reference
 
 ### SyftEvents
@@ -123,12 +174,20 @@ The main class for creating event-driven applications.
 #### Constructor
 
 ```python
-SyftEvents(app_name: str, publish_schema: bool = True, client: Optional[Client] = None)
+SyftEvents(
+    app_name: str, 
+    publish_schema: bool = True, 
+    client: Optional[Client] = None,
+    cleanup_expiry: str = "30d",
+    cleanup_interval: str = "1d"
+)
 ```
 
 - `app_name`: Name of your application
 - `publish_schema`: Whether to automatically generate and publish API schemas
 - `client`: Optional SyftBox client instance
+- `cleanup_expiry`: How long to keep request/response files (e.g., "30d", "7d", "2h")
+- `cleanup_interval`: How often to run cleanup (e.g., "1d", "1h", "30m")
 
 #### Methods
 
@@ -164,6 +223,22 @@ Start the event loop and run until interrupted.
 
 Start or stop the service programmatically.
 
+##### `is_cleanup_running()`
+
+Check if the automatic cleanup service is currently running.
+
+##### `get_cleanup_stats()`
+
+Get statistics about the cleanup operations.
+
+```python
+stats = box.get_cleanup_stats()
+print(f"Requests deleted: {stats.requests_deleted}")
+print(f"Responses deleted: {stats.responses_deleted}")
+print(f"Errors: {stats.errors}")
+print(f"Last cleanup: {stats.last_cleanup}")
+```
+
 ### EventRouter
 
 Helper class for organizing related endpoints.
@@ -178,6 +253,40 @@ def handler():
     return "response"
 ```
 
+### PeriodicCleanup
+
+Utility class for managing automatic cleanup of old request and response files.
+
+#### Constructor
+
+```python
+PeriodicCleanup(
+    app_name: str,
+    cleanup_interval: str = "1d",
+    cleanup_expiry: str = "30d",
+    client: Optional[Client] = None,
+    on_cleanup_complete: Optional[Callable[[CleanupStats], None]] = None
+)
+```
+
+#### Methods
+
+##### `start()` / `stop()`
+
+Start or stop the periodic cleanup service.
+
+##### `cleanup_now()`
+
+Perform cleanup immediately without waiting for the next interval.
+
+##### `get_stats()`
+
+Get current cleanup statistics.
+
+##### `is_running()`
+
+Check if the cleanup service is currently running.
+
 ## File Structure
 
 When you create a SyftEvents app, it sets up the following directory structure:
@@ -189,9 +298,16 @@ When you create a SyftEvents app, it sets up the following directory structure:
 │   ├── rpc.schema.json        # Generated API schema
 │   └── {endpoint}/            # Endpoint directories
 │       ├── .syftkeep         # Directory marker
-│       ├── *.request         # Incoming requests
-│       └── *.response        # Generated responses
+│       └── {sender-email}/    # User-specific subdirectories
+│           ├── *.request     # Incoming requests from this user
+│           └── *.response    # Generated responses for this user
 ```
+
+### Directory Organization
+
+- **User-Specific Structure**: Requests are now organized by sender email address, providing better isolation and organization
+- **Legacy Support**: The system automatically migrates old request files to the new structure
+- **Automatic Cleanup**: Old request/response files are automatically cleaned up based on configurable retention policies
 
 ## Configuration
 
@@ -213,6 +329,20 @@ rules:
     read: ['*']
     write: ['*']
 ```
+
+### Time Interval Format
+
+The cleanup utility supports human-readable time intervals:
+
+- **Single units**: `"1d"`, `"2h"`, `"30m"`, `"45s"`
+- **Combined units**: `"1d2h30m"`, `"2h15m30s"`, `"1d12h30m45s"`
+- **Case insensitive**: `"1D"` is equivalent to `"1d"`
+
+Examples:
+- `"1d"` = 1 day (86400 seconds)
+- `"2h"` = 2 hours (7200 seconds)
+- `"30m"` = 30 minutes (1800 seconds)
+- `"1d2h30m"` = 1 day, 2 hours, 30 minutes (95400 seconds)
 
 ## Advanced Usage
 
@@ -255,3 +385,13 @@ def increment():
 - pydantic >= 2.10.4
 - watchdog >= 6.0.0
 - loguru >= 0.7.3
+
+## Changelog
+
+### Version 0.2.7+
+
+- **🧹 Automatic Cleanup**: Added periodic cleanup utility for old request/response files
+- **📂 User-Specific Organization**: Requests are now organized by sender email address
+- **🔄 Legacy Migration**: Automatic migration of old request files to new structure
+- **⚙️ Configurable Retention**: Customizable cleanup intervals and file retention periods
+- **📊 Cleanup Statistics**: Track cleanup operations with detailed statistics
