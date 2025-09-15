@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `syft-event` package provides an event-driven RPC (Remote Procedure Call) system for SyftBox applications. It enables applications to communicate with each other through a request-response pattern using SyftBox URLs and a simple routing mechanism.
+The `syft-event` package provides an event-driven RPC (Remote Procedure Call) system for SyftBox applications. It enables applications to communicate with each other through a request-response pattern using SyftBox URLs and a simple routing mechanism. The package includes automatic cleanup utilities for managing old request/response files and user-specific directory organization for better request management.
 
 ## Architecture
 
@@ -28,6 +28,14 @@ The `syft-event` package provides an event-driven RPC (Remote Procedure Call) sy
 │  │ - Type info  │    │ - Server     │    │ - File watch     │ │
 │  │ - Generate   │    │ - Process    │    │ - Process req    │ │
 │  │ - Validate   │    │ - Lifecycle  │    │ - Send response  │ │
+│  └──────────────┘    └──────────────┘    └──────────────────┘ │
+│                                                                 │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐ │
+│  │   Cleanup    │    │   File       │    │   Migration      │ │
+│  │              │    │   System     │    │                  │ │
+│  │ - Periodic   │    │ - User dirs  │    │ - Legacy files   │ │
+│  │ - Statistics │    │ - Organized  │    │ - Auto migrate   │ │
+│  │ - Config     │    │ - Structure  │    │ - Backward comp  │ │
 │  └──────────────┘    └──────────────┘    └──────────────────┘ │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -159,6 +167,38 @@ print(schema)
 #     "returns": "any"
 # }
 ```
+
+### 4. Cleanup System
+
+The cleanup system provides automatic management of old request and response files:
+
+```python
+from syft_event.cleanup import PeriodicCleanup, CleanupStats
+
+# Create cleanup instance
+cleanup = PeriodicCleanup(
+    app_name="my_app",
+    cleanup_interval="1d",    # Run cleanup daily
+    cleanup_expiry="7d"       # Keep files for 7 days
+)
+
+# Start automatic cleanup
+cleanup.start()
+
+# Get statistics
+stats = cleanup.get_stats()
+print(f"Deleted {stats.requests_deleted} requests")
+
+# Stop cleanup
+cleanup.stop()
+```
+
+**Key Features:**
+- **Automatic cleanup** of old request/response files
+- **Configurable retention** periods and cleanup intervals
+- **Statistics tracking** for monitoring cleanup operations
+- **Background operation** with graceful shutdown
+- **Error handling** and logging for robust operation
 
 ## Usage Patterns
 
@@ -337,20 +377,31 @@ url3 = SyftBoxURL("syft://carol@example.com/app_data/store/rpc/products/123")
 
 ### File-based Communication
 
-Events in SyftBox are communicated through the filesystem:
+Events in SyftBox are communicated through the filesystem with user-specific organization:
 
 ```
 datasites/
 └── bob@example.com/
     └── app_data/
         └── my_app/
-            └── requests/
-                ├── request_123.json    # Incoming request
-                └── request_456.json    # Another request
-            └── responses/
-                ├── response_123.json   # Outgoing response
-                └── response_456.json   # Another response
+            └── rpc/
+                ├── syft.pub.yaml          # Permission configuration
+                ├── rpc.schema.json        # Generated API schema
+                └── {endpoint}/            # Endpoint directories
+                    ├── .syftkeep         # Directory marker
+                    └── {sender-email}/    # User-specific subdirectories
+                        ├── request_123.request    # Incoming request
+                        ├── request_456.request    # Another request
+                        ├── request_123.response   # Outgoing response
+                        └── request_456.response   # Another response
 ```
+
+#### Directory Organization Benefits
+
+- **User Isolation**: Requests are organized by sender email address
+- **Better Organization**: Clear separation of requests from different users
+- **Automatic Cleanup**: Old files are automatically cleaned up based on configurable retention
+- **Legacy Support**: Automatic migration of old request files to new structure
 
 ### Watching for Events
 
@@ -371,6 +422,93 @@ app = SyftEvents(
     router=router,
     poll_interval=1.0  # Check for new requests every second
 )
+```
+
+### Automatic Cleanup System
+
+The SyftEvents server includes an automatic cleanup system to manage old request and response files:
+
+#### Basic Cleanup Configuration
+
+```python
+from syft_event import SyftEvents
+
+# Create with custom cleanup settings
+app = SyftEvents(
+    app_name="my_service",
+    cleanup_expiry="7d",    # Keep files for 7 days (default: 30d)
+    cleanup_interval="1h"   # Run cleanup every hour (default: 1d)
+)
+
+# Check if cleanup is running
+if app.is_cleanup_running():
+    print("Cleanup service is active")
+
+# Get cleanup statistics
+stats = app.get_cleanup_stats()
+print(f"Deleted {stats.requests_deleted} requests and {stats.responses_deleted} responses")
+```
+
+#### Standalone Cleanup Utility
+
+For more control, you can use the cleanup utility independently:
+
+```python
+from syft_event.cleanup import PeriodicCleanup, CleanupStats
+
+# Create a standalone cleanup instance
+cleanup = PeriodicCleanup(
+    app_name="my_service",
+    cleanup_interval="1d",      # How often to run cleanup
+    cleanup_expiry="30d",       # How long to keep files
+    on_cleanup_complete=lambda stats: print(f"Cleaned up {stats.requests_deleted} files")
+)
+
+# Start cleanup in background
+cleanup.start()
+
+# Or run cleanup immediately
+stats = cleanup.cleanup_now()
+print(f"Immediate cleanup: {stats.requests_deleted} files deleted")
+
+# Stop cleanup
+cleanup.stop()
+```
+
+#### Time Interval Format
+
+The cleanup utility supports human-readable time intervals:
+
+```python
+# Single units
+"1d"    # 1 day
+"2h"    # 2 hours  
+"30m"   # 30 minutes
+"45s"   # 45 seconds
+
+# Combined units
+"1d2h30m"     # 1 day, 2 hours, 30 minutes
+"2h15m30s"    # 2 hours, 15 minutes, 30 seconds
+"1d12h30m45s" # 1 day, 12 hours, 30 minutes, 45 seconds
+
+# Case insensitive
+"1D" == "1d"  # True
+```
+
+#### Cleanup Statistics
+
+Track cleanup operations with detailed statistics:
+
+```python
+stats = cleanup.get_stats()
+
+print(f"Requests deleted: {stats.requests_deleted}")
+print(f"Responses deleted: {stats.responses_deleted}")
+print(f"Errors encountered: {stats.errors}")
+print(f"Last cleanup: {stats.last_cleanup}")
+
+# Reset statistics
+stats.reset()
 ```
 
 ## Best Practices
@@ -436,7 +574,46 @@ def create_handler(request: Request) -> Response:
     # Process valid request...
 ```
 
-### 4. Async Patterns
+### 4. Cleanup Management
+
+Configure cleanup settings based on your application needs:
+
+```python
+# For high-traffic applications
+app = SyftEvents(
+    app_name="high_traffic_app",
+    cleanup_expiry="1d",     # Keep files for 1 day
+    cleanup_interval="1h"    # Clean up every hour
+)
+
+# For low-traffic applications
+app = SyftEvents(
+    app_name="low_traffic_app", 
+    cleanup_expiry="30d",    # Keep files for 30 days
+    cleanup_interval="1d"    # Clean up daily
+)
+
+# For debugging/development
+app = SyftEvents(
+    app_name="debug_app",
+    cleanup_expiry="7d",     # Keep files for 7 days
+    cleanup_interval="1d"    # Clean up daily
+)
+```
+
+Monitor cleanup operations:
+
+```python
+# Check cleanup status
+if app.is_cleanup_running():
+    stats = app.get_cleanup_stats()
+    print(f"Cleanup active - Last run: {stats.last_cleanup}")
+    print(f"Files deleted: {stats.requests_deleted + stats.responses_deleted}")
+else:
+    print("Cleanup service not running")
+```
+
+### 5. Async Patterns
 
 For long-running operations:
 
@@ -538,6 +715,9 @@ def test_router_integration():
 3. **Use efficient serialization** - JSON for compatibility, MessagePack for performance
 4. **Implement request throttling** - Prevent overwhelming the system
 5. **Monitor resource usage** - Track memory and CPU usage
+6. **Configure cleanup appropriately** - Balance file retention with disk space usage
+7. **Monitor cleanup statistics** - Track cleanup performance and adjust intervals as needed
+8. **Use user-specific directories** - Leverage the new directory structure for better organization
 
 ## Security
 
@@ -565,3 +745,96 @@ def auth_required(handler):
 def secure_handler(request: Request) -> Response:
     return Response(body={"secure": "data"})
 ```
+
+## Cleanup Utility API Reference
+
+### PeriodicCleanup Class
+
+The `PeriodicCleanup` class provides automatic cleanup of old request and response files.
+
+#### Constructor
+
+```python
+PeriodicCleanup(
+    app_name: str,
+    cleanup_interval: str = "1d",
+    cleanup_expiry: str = "30d", 
+    client: Optional[Client] = None,
+    on_cleanup_complete: Optional[Callable[[CleanupStats], None]] = None
+)
+```
+
+**Parameters:**
+- `app_name`: Name of the Syft application
+- `cleanup_interval`: How often to run cleanup (e.g., "1d", "2h", "30m")
+- `cleanup_expiry`: How long to keep files (e.g., "30d", "7d", "2h")
+- `client`: Optional SyftBox client instance
+- `on_cleanup_complete`: Optional callback function called after each cleanup
+
+#### Methods
+
+##### `start() -> None`
+Start the periodic cleanup in a background thread.
+
+##### `stop() -> None`
+Stop the periodic cleanup service.
+
+##### `cleanup_now() -> CleanupStats`
+Perform cleanup immediately without waiting for the next interval.
+
+##### `get_stats() -> CleanupStats`
+Get current cleanup statistics.
+
+##### `is_running() -> bool`
+Check if the cleanup service is currently running.
+
+### CleanupStats Class
+
+Statistics for cleanup operations.
+
+#### Properties
+
+- `requests_deleted: int` - Number of request files deleted
+- `responses_deleted: int` - Number of response files deleted  
+- `errors: int` - Number of errors encountered during cleanup
+- `last_cleanup: Optional[datetime]` - Timestamp of last cleanup operation
+
+#### Methods
+
+##### `reset() -> None`
+Reset all statistics to zero.
+
+##### `__str__() -> str`
+String representation of the statistics.
+
+### Time Interval Parsing
+
+The `parse_time_interval()` function converts human-readable time strings to seconds:
+
+```python
+from syft_event.cleanup import parse_time_interval
+
+# Single units
+parse_time_interval("1d")    # 86400 seconds
+parse_time_interval("2h")    # 7200 seconds
+parse_time_interval("30m")   # 1800 seconds
+parse_time_interval("45s")   # 45 seconds
+
+# Combined units
+parse_time_interval("1d2h30m")  # 95400 seconds
+parse_time_interval("2h15m30s") # 8130 seconds
+
+# Case insensitive
+parse_time_interval("1D") == parse_time_interval("1d")  # True
+```
+
+**Supported Units:**
+- `d` - Days
+- `h` - Hours
+- `m` - Minutes
+- `s` - Seconds
+
+**Error Handling:**
+- Raises `ValueError` for invalid formats
+- Raises `ValueError` for empty strings
+- Raises `ValueError` for unknown time units

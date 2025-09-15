@@ -36,7 +36,7 @@ def test_reply_to_without_encryption(alice_client: Client, bob_client: Client):
 
     # Verify the response file is written
     response_file = (
-        response.url.to_local_path(bob_client.workspace.datasites)
+        response.url.to_local_path(bob_client.workspace.datasites) / request.sender
         / f"{response.id}.response"
     )
     assert response_file.exists(), f"Response file should exist at {response_file}"
