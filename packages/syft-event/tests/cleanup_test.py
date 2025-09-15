@@ -188,10 +188,18 @@ class TestPeriodicCleanup:
 
         # Start the service
         cleanup.start()
+
+        # Give the thread a moment to start
+        import time
+
+        time.sleep(0.1)
         assert cleanup.is_running()
 
         # Stop the service
         cleanup.stop()
+
+        # Give the thread a moment to stop
+        time.sleep(0.1)
         assert not cleanup.is_running()
 
     def test_cleanup_now_with_no_files(self, cleanup):
@@ -215,14 +223,16 @@ class TestPeriodicCleanup:
 
         # Create old request file
         request_path = sender_dir / "test.request"
-        old_time = datetime.now(timezone.utc) - timedelta(days=2)
+        # Use fixed time to avoid flakiness
+        base_time = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        old_time = base_time - timedelta(days=2)
 
         # Mock SyftRequest.load to return a request with old timestamp
         mock_request = MagicMock()
         mock_request.created = old_time
 
-        with patch("syft_event.cleanup.SyftRequest.load", return_value=mock_request):
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=1)
+        with patch("syft_rpc.protocol.SyftRequest.load", return_value=mock_request):
+            cutoff_date = base_time - timedelta(days=1)
             cleanup._cleanup_single_request(request_path, cutoff_date)
 
             # File should be deleted
@@ -239,14 +249,16 @@ class TestPeriodicCleanup:
         request_path = sender_dir / "test.request"
         request_path.touch()
 
-        new_time = datetime.now(timezone.utc) - timedelta(hours=1)
+        # Use fixed time to avoid flakiness
+        base_time = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        new_time = base_time - timedelta(hours=1)
 
         # Mock SyftRequest.load to return a request with new timestamp
         mock_request = MagicMock()
         mock_request.created = new_time
 
-        with patch("syft_event.cleanup.SyftRequest.load", return_value=mock_request):
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=1)
+        with patch("syft_rpc.protocol.SyftRequest.load", return_value=mock_request):
+            cutoff_date = base_time - timedelta(days=1)
             cleanup._cleanup_single_request(request_path, cutoff_date)
 
             # File should still exist
@@ -267,22 +279,33 @@ class TestPeriodicCleanup:
         new_request.touch()
 
         # Mock SyftRequest.load to return different timestamps
+        # Use current time as base to ensure consistency with cleanup logic
+        now = datetime.now(timezone.utc)
+
         def mock_load(path):
             mock_request = MagicMock()
             if "old" in str(path):
-                mock_request.created = datetime.now(timezone.utc) - timedelta(days=2)
+                # Old file: 2 days old (should be deleted)
+                mock_request.created = now - timedelta(days=2)
             else:
-                mock_request.created = datetime.now(timezone.utc) - timedelta(hours=1)
+                # New file: 1 hour old (should NOT be deleted)
+                mock_request.created = now - timedelta(hours=1)
             return mock_request
 
-        with patch("syft_event.cleanup.SyftRequest.load", side_effect=mock_load):
+        with patch("syft_rpc.protocol.SyftRequest.load", side_effect=mock_load):
             stats = cleanup.perform_cleanup()
 
-            # Only old file should be deleted
-            assert not old_request.exists()
-            assert new_request.exists()
-            assert stats.requests_deleted == 1
-            assert stats.errors == 0
+            # Only old file should be deleted (cleanup_expiry="1d")
+            assert (
+                not old_request.exists()
+            ), f"Old file should be deleted. Path: {old_request}"
+            assert (
+                new_request.exists()
+            ), f"New file should still exist. Path: {new_request}"
+            assert (
+                stats.requests_deleted == 1
+            ), f"Expected 1 request deleted, got {stats.requests_deleted}"
+            assert stats.errors == 0, f"Expected 0 errors, got {stats.errors}"
 
     def test_get_stats(self, cleanup):
         """Test getting cleanup statistics."""
