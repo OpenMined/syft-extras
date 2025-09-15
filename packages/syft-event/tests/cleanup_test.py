@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from loguru import logger
 
 
 class TestParseTimeInterval:
@@ -223,16 +224,27 @@ class TestPeriodicCleanup:
 
         # Create old request file
         request_path = sender_dir / "test.request"
-        # Use fixed time to avoid flakiness
-        base_time = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        old_time = base_time - timedelta(days=2)
+        request_path.touch()
 
-        # Mock SyftRequest.load to return a request with old timestamp
-        mock_request = MagicMock()
-        mock_request.created = old_time
+        # Use current time as base to ensure consistency with cleanup logic
+        now = datetime.now(timezone.utc)
+        cutoff_date = now - timedelta(seconds=cleanup.cleanup_expiry_seconds)
 
-        with patch("syft_rpc.protocol.SyftRequest.load", return_value=mock_request):
-            cutoff_date = base_time - timedelta(days=1)
+        def mock_load(path):
+            class MockRequest:
+                def __init__(self, created_time):
+                    # Ensure timezone-aware datetime
+                    self.created = (
+                        created_time.replace(tzinfo=timezone.utc)
+                        if created_time.tzinfo is None
+                        else created_time
+                    )
+
+            # File is older than cutoff (should be deleted)
+            old_time = cutoff_date - timedelta(hours=1)
+            return MockRequest(old_time)
+
+        with patch("syft_rpc.protocol.SyftRequest.load", side_effect=mock_load):
             cleanup._cleanup_single_request(request_path, cutoff_date)
 
             # File should be deleted
@@ -249,16 +261,25 @@ class TestPeriodicCleanup:
         request_path = sender_dir / "test.request"
         request_path.touch()
 
-        # Use fixed time to avoid flakiness
-        base_time = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        new_time = base_time - timedelta(hours=1)
+        # Use current time as base to ensure consistency with cleanup logic
+        now = datetime.now(timezone.utc)
+        cutoff_date = now - timedelta(seconds=cleanup.cleanup_expiry_seconds)
 
-        # Mock SyftRequest.load to return a request with new timestamp
-        mock_request = MagicMock()
-        mock_request.created = new_time
+        def mock_load(path):
+            class MockRequest:
+                def __init__(self, created_time):
+                    # Ensure timezone-aware datetime
+                    self.created = (
+                        created_time.replace(tzinfo=timezone.utc)
+                        if created_time.tzinfo is None
+                        else created_time
+                    )
 
-        with patch("syft_rpc.protocol.SyftRequest.load", return_value=mock_request):
-            cutoff_date = base_time - timedelta(days=1)
+            # File is newer than cutoff (should NOT be deleted)
+            new_time = cutoff_date + timedelta(hours=1)
+            return MockRequest(new_time)
+
+        with patch("syft_rpc.protocol.SyftRequest.load", side_effect=mock_load):
             cleanup._cleanup_single_request(request_path, cutoff_date)
 
             # File should still exist
@@ -282,25 +303,48 @@ class TestPeriodicCleanup:
         # Use current time as base to ensure consistency with cleanup logic
         now = datetime.now(timezone.utc)
 
+        # Calculate the cutoff date that the cleanup logic will use
+        cutoff_date = now - timedelta(seconds=cleanup.cleanup_expiry_seconds)
+
+        logger.info(f"Debug: cleanup_expiry_seconds = {cleanup.cleanup_expiry_seconds}")
+        logger.info(f"Debug: now = {now}")
+        logger.info(f"Debug: cutoff_date = {cutoff_date}")
+
+        # Mock SyftRequest.load to return controlled timestamps
+        # This tests the actual time-based logic
         def mock_load(path):
-            mock_request = MagicMock()
+            # Create a simple object with a real datetime attribute
+            class MockRequest:
+                def __init__(self, created_time):
+                    self.created = created_time
+
+            logger.info(f"Debug: path = {path}")
+            logger.info(f"Debug: cutoff_date = {cutoff_date}")
             if "old" in str(path):
-                # Old file: 2 days old (should be deleted)
-                mock_request.created = now - timedelta(days=2)
+                # Old file: definitely older than cutoff (should be deleted)
+                old_time = cutoff_date - timedelta(hours=2)
+                logger.info(f"Debug: old_time = {old_time}")
+                return MockRequest(old_time)
             else:
-                # New file: 1 hour old (should NOT be deleted)
-                mock_request.created = now - timedelta(hours=1)
-            return mock_request
+                # New file: definitely newer than cutoff (should NOT be deleted)
+                new_time = cutoff_date + timedelta(hours=2)
+                logger.info(f"Debug: new_time = {new_time}")
+                return MockRequest(new_time)
 
         with patch("syft_rpc.protocol.SyftRequest.load", side_effect=mock_load):
+            logger.info(
+                f"Debug: Performing cleanup, old_request = {old_request}, new_request = {new_request}"
+            )
             stats = cleanup.perform_cleanup()
+
+            logger.info(f"Debug: Stats = {stats}")
 
             # Only old file should be deleted (cleanup_expiry="1d")
             assert (
                 not old_request.exists()
             ), f"Old file should be deleted. Path: {old_request}"
             assert (
-                new_request.exists()
+                new_request.exists() is True
             ), f"New file should still exist. Path: {new_request}"
             assert (
                 stats.requests_deleted == 1

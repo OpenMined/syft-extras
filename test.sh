@@ -64,7 +64,7 @@ run_package_tests() {
     # Run tests if they exist
     if [ -d "tests" ]; then
         echo "Running tests..."
-        if python -m pytest tests/ -v --cov="${package_name//-/_}" --cov-report=term-missing; then
+        if python -m pytest -s tests/ -v --cov="${package_name//-/_}" --cov-report=term-missing; then
             echo -e "\033[0;32mTests PASSED for $package_name\033[0m"
         else
             echo -e "\033[0;31mTests FAILED for $package_name\033[0m"

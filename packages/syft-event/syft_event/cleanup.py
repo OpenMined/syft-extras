@@ -155,7 +155,6 @@ class PeriodicCleanup:
         # Statistics
         self.stats = CleanupStats()
 
-
     def start(self) -> None:
         """Start the periodic cleanup in a background thread."""
         if self._is_running:
@@ -259,9 +258,17 @@ class PeriodicCleanup:
 
         try:
             # Load the request to check its creation date
+            logger.info(f"Loading request from {request_path}")
             req = SyftRequest.load(request_path)
 
-            if req.created < cutoff_date:
+            created = req.created
+            created = created.astimezone(timezone.utc)
+            logger.info(f"Created={created}")
+            cutoff_date = cutoff_date.astimezone(timezone.utc)
+            logger.info(f"Cutoff_date={cutoff_date}")
+            logger.info(f"Comparing created={created} to cutoff_date={cutoff_date}")
+
+            if created < cutoff_date:
                 # Delete request file
                 request_path.unlink(missing_ok=True)
                 self.stats.requests_deleted += 1
