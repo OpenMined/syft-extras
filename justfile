@@ -174,7 +174,8 @@ test package="":
 # Package Management Commands
 
 # Show current versions of all packages
-package-versions:
+[group('build')]
+show-versions:
     @echo "{{ _cyan }}Current Package Versions:{{ _nc }}"
     @echo "{{ _green }}syft-core:{{ _nc }}"
     @grep '^version = ' packages/syft-core/pyproject.toml
@@ -186,7 +187,8 @@ package-versions:
     @grep '^version = ' packages/syft-event/pyproject.toml
 
 # Show dependency relationships
-package-deps:
+[group('build')]
+show-deps:
     @echo "{{ _cyan }}Package Dependencies:{{ _nc }}"
     @echo "{{ _green }}syft-core{{ _nc }} (base package)"
     @echo "{{ _green }}syft-crypto{{ _nc }} → depends on syft-core"
@@ -196,6 +198,7 @@ package-deps:
     @echo "{{ _green }}syft-http-bridge{{ _nc }} → depends on syft-core"
 
 # Universal bump command - handles all packages and their dependents
+[group('build')]
 bump package increment="patch":
     #!/bin/bash
     if [ -z "{{ package }}" ]; then \
@@ -276,9 +279,10 @@ bump package increment="patch":
     
     echo ""
     echo -e "{{ _green }}🎉 Package bumped and dependency constraints updated!{{ _nc }}"
-    echo -e "{{ _cyan }}Run 'just package-versions' to see new versions{{ _nc }}"
+    echo -e "{{ _cyan }}Run 'just show-versions' to see new versions{{ _nc }}"
 
 # Dry run for any package bump
+[group('build')]
 bump-dry package increment="patch":
     #!/bin/bash
     if [ -z "{{ package }}" ]; then \
@@ -333,18 +337,14 @@ bump-dry package increment="patch":
     echo -e "{{ _yellow }}⚠️  Note: Dependent packages will have their dependency requirements updated{{ _nc }}"
     echo -e "{{ _yellow }}   You may want to bump their versions separately if they have changes{{ _nc }}"
 
-# Build all packages
-package-build-all:
-    @echo "{{ _cyan }}Building all packages...{{ _nc }}"
-    uv build --all-packages
-    @echo "{{ _green }}✅ All packages built successfully!{{ _nc }}"
 
 # Build a specific package
-package-build package:
+[group('build')]
+build package:
     #!/bin/bash
     if [ -z "{{ package }}" ]; then \
         echo -e "{{ _red }}Error: Package name required{{ _nc }}"; \
-        echo "Usage: just package-build-single <package>"; \
+        echo "Usage: just build <package>"; \
         echo "Available packages: syft-core, syft-crypto, syft-rpc, syft-event"; \
         exit 1; \
     fi
@@ -365,12 +365,13 @@ package-build package:
     echo -e "{{ _green }}✅ {{ package }} built successfully!{{ _nc }}"
 
 # Revert a package bump (delete tag and revert version changes)
-package-revert package version:
+[group('build')]
+revert package version:
     #!/bin/bash
     if [ -z "{{ package }}" ] || [ -z "{{ version }}" ]; then \
         echo -e "{{ _red }}Error: Package name and version required{{ _nc }}"; \
-        echo "Usage: just package-revert <package> <version>"; \
-        echo "Example: just package-revert syft-core 0.3.0"; \
+        echo "Usage: just revert <package> <version>"; \
+        echo "Example: just revert syft-core 0.3.0"; \
         exit 1; \
     fi
     
@@ -433,7 +434,7 @@ package-revert package version:
     echo -e "{{ _yellow }}  3. Revert dependency requirements in dependent packages{{ _nc }}"
     echo -e "{{ _yellow }}  4. Commit the changes{{ _nc }}"
     echo ""
-    echo -e "{{ _cyan }}Use 'just package-versions' to check current versions{{ _nc }}"
+    echo -e "{{ _cyan }}Use 'just show-versions' to check current versions{{ _nc }}"
 
 # TODO: Automate build/deploy step for package using uv in justfile
 # This would include:

@@ -23,10 +23,10 @@ syft-core (base package)
 
 ```bash
 # Show current versions of all packages
-just package-versions
+just show-versions
 
 # Show dependency relationships
-just package-deps
+just show-deps
 ```
 
 ### Package Bumping Commands
@@ -59,24 +59,24 @@ just bump-dry syft-rpc patch
 
 ```bash
 # Build all packages
-just package-build-all
+just build-all
 
 # Build a specific package
-just package-build <package>
+just build <package>
 # Examples:
-just package-build syft-core
-just package-build syft-rpc
-just package-build syft-event
+just build syft-core
+just build syft-rpc
+just build syft-event
 ```
 
 ### Revert Commands
 
 ```bash
 # Revert a package bump (delete tag and guide through manual reversion)
-just package-revert <package> <version>
+just revert <package> <version>
 # Examples:
-just package-revert syft-core 0.3.0
-just package-revert syft-rpc 0.4.1
+just revert syft-core 0.3.0
+just revert syft-rpc 0.4.1
 ```
 
 ## Version Increment Types
@@ -98,7 +98,7 @@ git commit -m "feat: add new API to syft-core"
 just bump syft-core minor
 
 # 3. Check the results
-just package-versions
+just show-versions
 ```
 
 ### 2. Fixing a Bug in syft-rpc
@@ -112,7 +112,7 @@ git commit -m "fix: resolve RPC connection issue"
 just bump syft-rpc patch
 
 # 3. Check the results
-just package-versions
+just show-versions
 ```
 
 ### 3. Making Breaking Changes to syft-crypto
@@ -126,7 +126,7 @@ git commit -m "feat!: change encryption API"
 just bump syft-crypto major
 
 # 3. Check the results
-just package-versions
+just show-versions
 ```
 
 ### 4. Testing Before Release
@@ -177,8 +177,8 @@ just bump syft-rpc patch     # if syft-rpc has changes
 
 ```bash
 # 1. Check current state
-just package-versions
-just package-deps
+just show-versions
+just show-deps
 
 # 2. Make changes and commit
 git add .
@@ -191,10 +191,10 @@ just bump-dry syft-core minor
 just bump syft-core minor
 
 # 5. Verify results
-just package-versions
+just show-versions
 
 # 6. Build packages
-just package-build
+just build syft-core
 
 # 7. Push tags
 git push --tags
@@ -217,9 +217,9 @@ Examples:
    - `patch` for bug fixes
    - `minor` for new features
    - `major` for breaking changes
-3. **Check dependencies**: Use `just package-deps` to understand impact
-4. **Verify after bumping**: Use `just package-versions` to confirm changes
-5. **Build after bumping**: Use `just package-build` to ensure everything works
+3. **Check dependencies**: Use `just show-deps` to understand impact
+4. **Verify after bumping**: Use `just show-versions` to confirm changes
+5. **Build after bumping**: Use `just build` to ensure everything works
 
 ## Troubleshooting
 
@@ -230,8 +230,8 @@ Examples:
 4. Check for any syntax errors in pyproject.toml files
 
 ### If dependencies are out of sync:
-1. Use `just package-versions` to check current state
-2. Use `just package-deps` to understand relationships
+1. Use `just show-versions` to check current state
+2. Use `just show-deps` to understand relationships
 3. Consider running a full dependency chain bump
 
 ### If you need to revert a committed tag and bump:
@@ -261,8 +261,8 @@ just bump <package> patch
 #### Option 3: Use the justfile revert command
 ```bash
 # Use the automated revert command
-just package-revert <package> <version>
-# Example: just package-revert syft-core 0.3.0
+just revert <package> <version>
+# Example: just revert syft-core 0.3.0
 
 # This will:
 # 1. Delete the git tag
