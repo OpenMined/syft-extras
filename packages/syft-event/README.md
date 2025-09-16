@@ -319,15 +319,20 @@ SyftEvent automatically creates a `syft.pub.yaml` file with appropriate permissi
 rules:
 - pattern: rpc.schema.json
   access:
-    read: ['*']
-- pattern: '**/*.request'
+    read:
+    - '*'
+- pattern: '**/{{.UserEmail}}/*.request'
   access:
-    read: ['*']
-    write: ['*']
-- pattern: '**/*.response'
+    read:
+    - 'USER'
+    write: 
+    - 'USER'
+- pattern: '**/{{.UserEmail}}/*.response'
   access:
-    read: ['*']
-    write: ['*']
+    read: 
+    - 'USER'
+    write: 
+    - 'USER'
 ```
 
 ### Time Interval Format
