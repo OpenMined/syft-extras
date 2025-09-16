@@ -69,6 +69,16 @@ just package-build syft-rpc
 just package-build syft-event
 ```
 
+### Revert Commands
+
+```bash
+# Revert a package bump (delete tag and guide through manual reversion)
+just package-revert <package> <version>
+# Examples:
+just package-revert syft-core 0.3.0
+just package-revert syft-rpc 0.4.1
+```
+
 ## Version Increment Types
 
 - **patch**: Bug fixes, small improvements (0.2.8 → 0.2.9)
@@ -223,6 +233,48 @@ Examples:
 1. Use `just package-versions` to check current state
 2. Use `just package-deps` to understand relationships
 3. Consider running a full dependency chain bump
+
+### If you need to revert a committed tag and bump:
+
+Sometimes you may need to undo a bump that has already been committed and tagged. Here are your options:
+
+#### Option 1: Revert the commit and delete the tag
+```bash
+# 1. Delete the git tag (if not pushed to remote)
+git tag -d <package-name>-<version>
+# Example: git tag -d syft-core-0.3.0
+
+# 2. Revert the commit that did the bump
+git revert <commit-hash>
+
+# 3. Manually revert version changes in pyproject.toml and __init__.py
+# Edit the files to restore previous version numbers
+```
+
+#### Option 2: Create a new patch version to fix issues
+```bash
+# Instead of reverting, create a new patch version with fixes
+just bump <package> patch
+# This creates a new version that fixes any issues
+```
+
+#### Option 3: Use the justfile revert command
+```bash
+# Use the automated revert command
+just package-revert <package> <version>
+# Example: just package-revert syft-core 0.3.0
+
+# This will:
+# 1. Delete the git tag
+# 2. Guide you through manual version reversion steps
+# 3. Show you what files need to be edited
+```
+
+### Best Practices for Avoiding Reverts:
+1. **Always use dry-run first**: `just bump-dry <package> <increment>`
+2. **Test thoroughly**: Build and test packages before committing bumps
+3. **Review changes**: Check what files will be modified before bumping
+4. **Use appropriate increments**: Don't use major bumps for minor changes
 
 ## Integration with CI/CD
 

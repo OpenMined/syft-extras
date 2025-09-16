@@ -364,6 +364,77 @@ package-build package:
     cd "packages/{{ package }}" && uv build
     echo -e "{{ _green }}✅ {{ package }} built successfully!{{ _nc }}"
 
+# Revert a package bump (delete tag and revert version changes)
+package-revert package version:
+    #!/bin/bash
+    if [ -z "{{ package }}" ] || [ -z "{{ version }}" ]; then \
+        echo -e "{{ _red }}Error: Package name and version required{{ _nc }}"; \
+        echo "Usage: just package-revert <package> <version>"; \
+        echo "Example: just package-revert syft-core 0.3.0"; \
+        exit 1; \
+    fi
+    
+    # Check if package exists
+    case "{{ package }}" in \
+        "syft-core"|"syft-crypto"|"syft-rpc"|"syft-event") \
+            ;; \
+        *) \
+            echo -e "{{ _red }}Error: Unknown package '{{ package }}'{{ _nc }}"; \
+            echo "Available packages: syft-core, syft-crypto, syft-rpc, syft-event"; \
+            exit 1; \
+            ;; \
+    esac
+    
+    TAG_NAME="{{ package }}-{{ version }}"
+    
+    echo -e "{{ _yellow }}⚠️  WARNING: This will revert {{ package }} version {{ version }}{{ _nc }}"
+    echo -e "{{ _yellow }}This will:{{ _nc }}"
+    echo -e "{{ _yellow }}  1. Delete git tag: {{ package }}-{{ version }}{{ _nc }}"
+    echo -e "{{ _yellow }}  2. Revert version in pyproject.toml and __init__.py{{ _nc }}"
+    echo -e "{{ _yellow }}  3. Revert dependency requirements in dependent packages{{ _nc }}"
+    echo ""
+    read -p "Are you sure you want to continue? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then \
+        echo -e "{{ _cyan }}Operation cancelled{{ _nc }}"; \
+        exit 0; \
+    fi
+    
+    echo -e "{{ _cyan }}Reverting {{ package }} version {{ version }}...{{ _nc }}"
+    
+    # Delete the git tag
+    if git tag -l | grep -q "^{{ package }}-{{ version }}$"; then \
+        git tag -d "{{ package }}-{{ version }}"; \
+        echo -e "{{ _green }}✅ Deleted git tag: {{ package }}-{{ version }}{{ _nc }}"; \
+    else \
+        echo -e "{{ _yellow }}⚠️  Git tag {{ package }}-{{ version }} not found{{ _nc }}"; \
+    fi
+    
+    # Note: Manual version reversion required
+    echo -e "{{ _yellow }}⚠️  Manual steps required:{{ _nc }}"
+    echo -e "{{ _yellow }}  1. Revert version in packages/{{ package }}/pyproject.toml{{ _nc }}"
+    
+    # Show the correct __init__.py path based on package name
+    case "{{ package }}" in \
+        "syft-core") \
+            echo -e "{{ _yellow }}  2. Revert version in packages/{{ package }}/syft_core/__init__.py{{ _nc }}"; \
+            ;; \
+        "syft-crypto") \
+            echo -e "{{ _yellow }}  2. Revert version in packages/{{ package }}/syft_crypto/__init__.py{{ _nc }}"; \
+            ;; \
+        "syft-rpc") \
+            echo -e "{{ _yellow }}  2. Revert version in packages/{{ package }}/syft_rpc/__init__.py{{ _nc }}"; \
+            ;; \
+        "syft-event") \
+            echo -e "{{ _yellow }}  2. Revert version in packages/{{ package }}/syft_event/__init__.py{{ _nc }}"; \
+            ;; \
+    esac
+    
+    echo -e "{{ _yellow }}  3. Revert dependency requirements in dependent packages{{ _nc }}"
+    echo -e "{{ _yellow }}  4. Commit the changes{{ _nc }}"
+    echo ""
+    echo -e "{{ _cyan }}Use 'just package-versions' to check current versions{{ _nc }}"
+
 # TODO: Automate build/deploy step for package using uv in justfile
 # This would include:
 # - Building packages with uv build
