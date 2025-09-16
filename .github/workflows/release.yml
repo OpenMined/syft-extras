@@ -204,7 +204,7 @@ jobs:
           exit 1
         fi
 
-        - name: Upload to PyPI
+    - name: Upload to PyPI
       env:
         OM_PYPI_TOKEN: ${{ secrets.OM_PYPI_TOKEN }}
       run: |
