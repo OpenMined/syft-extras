@@ -30,3 +30,16 @@ syft-crypto = { workspace = true }
 
 [dependency-groups]
 dev = ["pytest>=8.3.4"]
+
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "pep621"
+tag_format = "syft-rpc-$version"
+update_changelog_on_bump = false
+
+version_files = [
+    "pyproject.toml:^version\\s*=\\s*\"(?P<version>.*)\"$",
+    "syft_rpc/__init__.py:^__version__\\s*=\\s*\"(?P<version>.*)\"$",
+    "../syft-event/pyproject.toml:syft-rpc>=(?P<version>\\d+\\.\\d+\\.\\d+)",
+]

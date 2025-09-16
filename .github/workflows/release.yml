@@ -1,0 +1,233 @@
+name: Release Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to release'
+        required: true
+        type: choice
+        options:
+          - syft-core
+          - syft-crypto
+          - syft-rpc
+          - syft-event
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      branch:
+        description: 'Branch name to checkout'
+        required: true
+        type: string
+        default: 'main'
+
+jobs:
+  release:
+    name: Release ${{ inputs.package }}
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.branch }}
+        fetch-depth: 0  # Fetch all history for tags
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+    
+    - name: Setup git config
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        git config user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+        git config user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to setup git config"
+          exit 1
+        fi
+
+    - name: Pull latest tags
+      run: |
+        git fetch --tags
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to fetch tags"
+          exit 1
+        fi
+    
+    - name: Install just
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to install just"
+          exit 1
+        fi
+        
+        # Verify just is installed
+        just --version || { echo "Error: just not found after installation"; exit 1; }
+    
+    - name: Bump version and update dependencies
+      id: version_bump
+      run: |
+        echo "Bumping ${{ inputs.package }} ${{ inputs.bump_type }} version using just..."
+        just bump ${{ inputs.package }} ${{ inputs.bump_type }}
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Version bump failed"
+          exit 1
+        fi
+        
+        # Get the new version for later use
+        NEW_VERSION=$(git describe --tags --abbrev=0)
+        
+        if [ -z "$NEW_VERSION" ]; then
+          echo "Error: Failed to get new version from git tags"
+          exit 1
+        fi
+        
+        echo "New version: $NEW_VERSION"
+        echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+    
+    - name: Commit and push changes
+      run: |
+        # Push changes
+        git push origin ${{ inputs.branch }}
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to push changes to branch"
+          exit 1
+        fi
+        
+        git push origin --tags
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to push tags"
+          exit 1
+        fi
+    
+    - name: Build package
+      run: |
+        echo "Checking current directory: $(pwd)"
+        rm -rf dist
+        
+        echo "Building ${{ inputs.package }} using just..."
+        just build ${{ inputs.package }}
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Package build failed!"
+          exit 1
+        fi
+        
+        echo "Package built successfully!"
+    
+    - name: Test built package
+      run: |
+        echo "Testing built package..."
+        
+        # Get the expected version (remove the package prefix from tag)
+        EXPECTED_VERSION="${{ steps.version_bump.outputs.version }}"
+        EXPECTED_VERSION=${EXPECTED_VERSION#${{ inputs.package }}-}  # Remove package prefix if present
+        echo "Expected version: $EXPECTED_VERSION"
+        
+        # Get the package name for import
+        case "${{ inputs.package }}" in
+          "syft-core")
+            PACKAGE_NAME="syft_core"
+            ;;
+          "syft-crypto")
+            PACKAGE_NAME="syft_crypto"
+            ;;
+          "syft-rpc")
+            PACKAGE_NAME="syft_rpc"
+            ;;
+          "syft-event")
+            PACKAGE_NAME="syft_event"
+            ;;
+        esac
+        
+        # Find the wheel file in dist directory
+        WHEEL_FILE=$(ls dist/$PACKAGE_NAME-$EXPECTED_VERSION*.whl 2>/dev/null | head -n1)
+        
+        if [ -z "$WHEEL_FILE" ]; then
+          echo "Error: No wheel file found in dist/"
+          exit 1
+        fi
+        
+        echo "Testing wheel: $WHEEL_FILE"
+        
+        # Test the package import from the wheel and capture version
+        ACTUAL_VERSION=$(uv run --with "$WHEEL_FILE" --no-project -- python -c "import $PACKAGE_NAME; print($PACKAGE_NAME.__version__)" 2>&1)
+        EXIT_CODE=$?
+        
+        if [ $EXIT_CODE -ne 0 ]; then
+          echo "Error: Failed to import package from wheel"
+          echo "Output: $ACTUAL_VERSION"
+          exit 1
+        fi
+        
+        echo "Imported $PACKAGE_NAME version: $ACTUAL_VERSION"
+        
+        # Verify the version matches
+        if [ "$ACTUAL_VERSION" != "$EXPECTED_VERSION" ]; then
+          echo "Error: Version mismatch!"
+          echo "  Expected: $EXPECTED_VERSION"
+          echo "  Actual: $ACTUAL_VERSION"
+          exit 1
+        fi
+        
+        echo "Package test passed! Version $ACTUAL_VERSION matches expected version."
+    
+    - name: Upload to PyPI
+      env:
+        OM_PYPI_TOKEN: ${{ secrets.OM_PYPI_TOKEN }}
+      run: |
+        echo "Uploading ${{ inputs.package }} to PyPI..."
+        
+        # Verify token is set
+        if [ -z "$OM_PYPI_TOKEN" ]; then
+          echo "Error: PyPI token not set"
+          exit 1
+        fi
+        
+        # Install twine
+        uvx twine --version
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to install/verify twine"
+          exit 1
+        fi
+        
+        # Find wheel files to upload
+        WHEEL_FILES=$(ls dist/*.whl 2>/dev/null)
+        
+        if [ -z "$WHEEL_FILES" ]; then
+          echo "Error: No wheel files found in dist/"
+          exit 1
+        fi
+        
+        echo "Found wheel files to upload: $WHEEL_FILES"
+        
+        # Upload the built package
+        uvx twine upload dist/* --username __token__ --password "$OM_PYPI_TOKEN"
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to upload package to PyPI"
+          exit 1
+        fi
+        
+        echo "Package uploaded to PyPI successfully!"

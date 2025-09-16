@@ -12,6 +12,7 @@ dependencies = [
     "syft-proxy",
     "syft-http-bridge",
     "syft-high-low",
+    "commitizen>=4.9.1",
 ]
 
 [build-system]
