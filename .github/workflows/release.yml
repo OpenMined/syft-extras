@@ -80,6 +80,18 @@ jobs:
         
         # Verify just is installed
         just --version || { echo "Error: just not found after installation"; exit 1; }
+
+    - name: Install commitizen
+      run: |
+        uv pip install commitizen
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to install commitizen"
+          exit 1;
+        fi
+
+        # Verify commitizen is installed
+        cz --version || { echo "Error: commitizen not found after installation"; exit 1; }
     
     - name: Bump version and update dependencies
       id: version_bump
