@@ -92,7 +92,7 @@ jobs:
         fi
 
         # Verify commitizen is installed
-        cz --version || { echo "Error: commitizen not found after installation"; exit 1; }
+        uv run cz --version || { echo "Error: commitizen not found after installation"; exit 1; }
  
     - name: Bump version and update dependencies
       id: version_bump
