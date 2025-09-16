@@ -167,7 +167,7 @@ jobs:
         echo "Testing wheel: $WHEEL_FILE"
         
         # Test the package import from the wheel and capture version
-        ACTUAL_VERSION=$(uv run --with "$WHEEL_FILE" --no-project -- python -c "import $PACKAGE_NAME; print($PACKAGE_NAME.__version__)" 2>&1)
+        ACTUAL_VERSION=$(uv run --with "$WHEEL_FILE" --no-project -- python -c "import $PACKAGE_NAME; print($PACKAGE_NAME.__version__)" 2>/dev/null)
         EXIT_CODE=$?
         
         if [ $EXIT_CODE -ne 0 ]; then
