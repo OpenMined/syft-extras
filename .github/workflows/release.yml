@@ -83,6 +83,7 @@ jobs:
 
     - name: Install commitizen
       run: |
+        uv sync
         uv pip install commitizen
         
         if [ $? -ne 0 ]; then
