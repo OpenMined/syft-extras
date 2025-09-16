@@ -54,14 +54,32 @@ jobs:
       run: |
         git config user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
         git config user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to setup git config"
+          exit 1
+        fi
 
     - name: Pull latest tags
       run: |
         git fetch --tags
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to fetch tags"
+          exit 1
+        fi
     
     - name: Install just
       run: |
         curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to install just"
+          exit 1
+        fi
+        
+        # Verify just is installed
+        just --version || { echo "Error: just not found after installation"; exit 1; }
     
     - name: Bump version and update dependencies
       id: version_bump
@@ -69,8 +87,19 @@ jobs:
         echo "Bumping ${{ inputs.package }} ${{ inputs.bump_type }} version using just..."
         just bump ${{ inputs.package }} ${{ inputs.bump_type }}
         
+        if [ $? -ne 0 ]; then
+          echo "Error: Version bump failed"
+          exit 1
+        fi
+        
         # Get the new version for later use
         NEW_VERSION=$(git describe --tags --abbrev=0)
+        
+        if [ -z "$NEW_VERSION" ]; then
+          echo "Error: Failed to get new version from git tags"
+          exit 1
+        fi
+        
         echo "New version: $NEW_VERSION"
         echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
     
@@ -78,7 +107,18 @@ jobs:
       run: |
         # Push changes
         git push origin ${{ inputs.branch }}
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to push changes to branch"
+          exit 1
+        fi
+        
         git push origin --tags
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to push tags"
+          exit 1
+        fi
     
     - name: Build package
       run: |
@@ -158,11 +198,36 @@ jobs:
       run: |
         echo "Uploading ${{ inputs.package }} to PyPI..."
         
+        # Verify token is set
+        if [ -z "$OM_PYPI_TOKEN" ]; then
+          echo "Error: PyPI token not set"
+          exit 1
+        fi
+        
         # Install twine
         uvx twine --version
         
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to install/verify twine"
+          exit 1
+        fi
+        
+        # Find wheel files to upload
+        WHEEL_FILES=$(ls dist/*.whl 2>/dev/null)
+        
+        if [ -z "$WHEEL_FILES" ]; then
+          echo "Error: No wheel files found in dist/"
+          exit 1
+        fi
+        
+        echo "Found wheel files to upload: $WHEEL_FILES"
+        
         # Upload the built package
-        cd packages/${{ inputs.package }}
         uvx twine upload dist/* --username __token__ --password "$OM_PYPI_TOKEN"
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to upload package to PyPI"
+          exit 1
+        fi
         
         echo "Package uploaded to PyPI successfully!"
