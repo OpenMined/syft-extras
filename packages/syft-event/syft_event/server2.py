@@ -271,7 +271,7 @@ class SyftEvents:
             self.__register_rpc(
                 epath, func, auto_decrypt=auto_decrypt, encrypt_reply=encrypt_reply
             )
-            logger.info(
+            logger.debug(
                 f"Register RPC: {endpoint} (auto_decrypt={auto_decrypt}, encrypt_reply={encrypt_reply})"
             )
             return func
