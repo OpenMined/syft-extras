@@ -92,7 +92,7 @@ jobs:
 
         # Verify commitizen is installed
         cz --version || { echo "Error: commitizen not found after installation"; exit 1; }
-    
+ 
     - name: Bump version and update dependencies
       id: version_bump
       run: |
@@ -114,24 +114,7 @@ jobs:
         
         echo "New version: $NEW_VERSION"
         echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
-    
-    - name: Commit and push changes
-      run: |
-        # Push changes
-        git push origin ${{ inputs.branch }}
-        
-        if [ $? -ne 0 ]; then
-          echo "Error: Failed to push changes to branch"
-          exit 1
-        fi
-        
-        git push origin --tags
-        
-        if [ $? -ne 0 ]; then
-          echo "Error: Failed to push tags"
-          exit 1
-        fi
-    
+
     - name: Build package
       run: |
         echo "Checking current directory: $(pwd)"
@@ -146,7 +129,7 @@ jobs:
         fi
         
         echo "Package built successfully!"
-    
+
     - name: Test built package
       run: |
         echo "Testing built package..."
@@ -203,8 +186,25 @@ jobs:
         fi
         
         echo "Package test passed! Version $ACTUAL_VERSION matches expected version."
-    
-    - name: Upload to PyPI
+
+    - name: Commit and push changes
+      run: |
+        # Push changes
+        git push origin ${{ inputs.branch }}
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to push changes to branch"
+          exit 1
+        fi
+        
+        git push origin --tags
+        
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to push tags"
+          exit 1
+        fi
+
+        - name: Upload to PyPI
       env:
         OM_PYPI_TOKEN: ${{ secrets.OM_PYPI_TOKEN }}
       run: |
