@@ -193,6 +193,12 @@ jobs:
 
     - name: Commit and push changes
       run: |
+        # Add any changes (e.g., dependency updates)
+        git add .
+
+        # Commit version bump changes
+        git commit --amend --no-edit || echo "No changes to commit"
+
         # Push changes
         git push origin ${{ inputs.branch }}
         
