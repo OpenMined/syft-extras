@@ -189,13 +189,23 @@ show-versions:
 # Show dependency relationships
 [group('build')]
 show-deps:
-    @echo "{{ _cyan }}Package Dependencies:{{ _nc }}"
-    @echo "{{ _green }}syft-core{{ _nc }} (base package)"
-    @echo "{{ _green }}syft-crypto{{ _nc }} → depends on syft-core"
-    @echo "{{ _green }}syft-rpc{{ _nc }} → depends on syft-core, syft-crypto"
-    @echo "{{ _green }}syft-event{{ _nc }} → depends on syft-rpc"
-    @echo "{{ _green }}syft-proxy{{ _nc }} → depends on syft-rpc"
-    @echo "{{ _green }}syft-http-bridge{{ _nc }} → depends on syft-core"
+    #!/bin/bash
+    echo -e "{{ _cyan }}Package Dependencies:{{ _nc }}"
+
+    # Extract versions
+    CORE_VER=$(grep '^version = ' packages/syft-core/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+    CRYPTO_VER=$(grep '^version = ' packages/syft-crypto/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+    RPC_VER=$(grep '^version = ' packages/syft-rpc/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+    EVENT_VER=$(grep '^version = ' packages/syft-event/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+    PROXY_VER=$(grep '^version = ' packages/syft-proxy/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+    BRIDGE_VER=$(grep '^version = ' packages/syft-http-bridge/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+
+    echo -e "{{ _green }}syft-core{{ _nc }} v$CORE_VER (base package)"
+    echo -e "{{ _green }}syft-crypto{{ _nc }} v$CRYPTO_VER → depends on syft-core v$CORE_VER"
+    echo -e "{{ _green }}syft-rpc{{ _nc }} v$RPC_VER → depends on syft-core v$CORE_VER, syft-crypto v$CRYPTO_VER"
+    echo -e "{{ _green }}syft-event{{ _nc }} v$EVENT_VER → depends on syft-rpc v$RPC_VER"
+    echo -e "{{ _green }}syft-proxy{{ _nc }} v$PROXY_VER → depends on syft-rpc v$RPC_VER"
+    echo -e "{{ _green }}syft-http-bridge{{ _nc }} v$BRIDGE_VER → depends on syft-core v$CORE_VER"
 
 # Universal bump command - handles all packages and their dependents
 [group('build')]
@@ -209,7 +219,7 @@ bump package increment="patch":
         echo "Example: just bump syft-core minor"; \
         exit 1; \
     fi
-    
+
     # Check if package exists
     case "{{ package }}" in \
         "syft-core"|"syft-crypto"|"syft-rpc"|"syft-event") \
@@ -220,13 +230,13 @@ bump package increment="patch":
             exit 1; \
             ;; \
     esac
-    
+
     echo -e "{{ _cyan }}Bumping {{ package }} {{ increment }} version...{{ _nc }}"
-    
+
     # Bump the main package
     cd "packages/{{ package }}" && uv run cz bump --increment "{{ increment }}" --yes
     echo -e "{{ _green }}✅ {{ package }} bumped{{ _nc }}"
-    
+
     # Update dependency constraints for dependent packages
     cd /home/shubham/repos/OpenMined/syft-extras
     case "{{ package }}" in \
@@ -276,7 +286,7 @@ bump package increment="patch":
             echo -e "{{ _yellow }}syft-event has no dependents{{ _nc }}"; \
             ;; \
     esac
-    
+
     echo ""
     echo -e "{{ _green }}🎉 Package bumped and dependency constraints updated!{{ _nc }}"
     echo -e "{{ _cyan }}Run 'just show-versions' to see new versions{{ _nc }}"
@@ -293,7 +303,7 @@ bump-dry package increment="patch":
         echo "Example: just bump-dry syft-core minor"; \
         exit 1; \
     fi
-    
+
     # Check if package exists
     case "{{ package }}" in \
         "syft-core"|"syft-crypto"|"syft-rpc"|"syft-event") \
@@ -304,10 +314,10 @@ bump-dry package increment="patch":
             exit 1; \
             ;; \
     esac
-    
+
     echo -e "{{ _cyan }}DRY RUN: Bumping {{ package }} {{ increment }} version...{{ _nc }}"
     echo ""
-    
+
     # Show what packages will be affected
     case "{{ package }}" in \
         "syft-core") \
@@ -327,12 +337,12 @@ bump-dry package increment="patch":
             ;; \
     esac
     echo ""
-    
+
     # Show the main package bump
     echo -e "{{ _green }}Main package bump:{{ _nc }}"
     cd "packages/{{ package }}" && uv run cz bump --increment "{{ increment }}" --yes --dry-run
     echo ""
-    
+
     echo ""
     echo -e "{{ _yellow }}⚠️  Note: Dependent packages will have their dependency requirements updated{{ _nc }}"
     echo -e "{{ _yellow }}   You may want to bump their versions separately if they have changes{{ _nc }}"
@@ -348,7 +358,7 @@ build package:
         echo "Available packages: syft-core, syft-crypto, syft-rpc, syft-event"; \
         exit 1; \
     fi
-    
+
     # Check if package exists
     case "{{ package }}" in \
         "syft-core"|"syft-crypto"|"syft-rpc"|"syft-event") \
@@ -359,7 +369,7 @@ build package:
             exit 1; \
             ;; \
     esac
-    
+
     echo -e "{{ _cyan }}Building {{ package }}...{{ _nc }}"
     cd "packages/{{ package }}" && uv build
     echo -e "{{ _green }}✅ {{ package }} built successfully!{{ _nc }}"
@@ -374,7 +384,7 @@ revert package version:
         echo "Example: just revert syft-core 0.3.0"; \
         exit 1; \
     fi
-    
+
     # Check if package exists
     case "{{ package }}" in \
         "syft-core"|"syft-crypto"|"syft-rpc"|"syft-event") \
@@ -385,9 +395,9 @@ revert package version:
             exit 1; \
             ;; \
     esac
-    
+
     TAG_NAME="{{ package }}-{{ version }}"
-    
+
     echo -e "{{ _yellow }}⚠️  WARNING: This will revert {{ package }} version {{ version }}{{ _nc }}"
     echo -e "{{ _yellow }}This will:{{ _nc }}"
     echo -e "{{ _yellow }}  1. Delete git tag: {{ package }}-{{ version }}{{ _nc }}"
@@ -400,9 +410,9 @@ revert package version:
         echo -e "{{ _cyan }}Operation cancelled{{ _nc }}"; \
         exit 0; \
     fi
-    
+
     echo -e "{{ _cyan }}Reverting {{ package }} version {{ version }}...{{ _nc }}"
-    
+
     # Delete the git tag
     if git tag -l | grep -q "^{{ package }}-{{ version }}$"; then \
         git tag -d "{{ package }}-{{ version }}"; \
@@ -410,11 +420,11 @@ revert package version:
     else \
         echo -e "{{ _yellow }}⚠️  Git tag {{ package }}-{{ version }} not found{{ _nc }}"; \
     fi
-    
+
     # Note: Manual version reversion required
     echo -e "{{ _yellow }}⚠️  Manual steps required:{{ _nc }}"
     echo -e "{{ _yellow }}  1. Revert version in packages/{{ package }}/pyproject.toml{{ _nc }}"
-    
+
     # Show the correct __init__.py path based on package name
     case "{{ package }}" in \
         "syft-core") \
@@ -430,7 +440,7 @@ revert package version:
             echo -e "{{ _yellow }}  2. Revert version in packages/{{ package }}/syft_event/__init__.py{{ _nc }}"; \
             ;; \
     esac
-    
+
     echo -e "{{ _yellow }}  3. Revert dependency requirements in dependent packages{{ _nc }}"
     echo -e "{{ _yellow }}  4. Commit the changes{{ _nc }}"
     echo ""
