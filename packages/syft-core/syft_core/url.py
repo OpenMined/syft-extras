@@ -1,10 +1,11 @@
 import re
 from pathlib import Path
-from typing import Any, Dict, Generator, Union
+from typing import Any, Dict, Union
 from urllib.parse import urlencode, urlparse
 
-from pydantic import GetJsonSchemaHandler, ValidationInfo
+from pydantic import GetCoreSchemaHandler, GetJsonSchemaHandler, ValidationInfo
 from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import core_schema
 from typing_extensions import Self
 
 from syft_core.types import PathLike, to_path
@@ -88,11 +89,6 @@ class SyftBoxURL(str):
         return cls(f"syft://{rel_path}")
 
     @classmethod
-    def __get_validators__(cls) -> Generator:
-        """Pydantic validators for custom type."""
-        yield cls.validate
-
-    @classmethod
     def validate(
         cls, value: Union["SyftBoxURL", str], info: ValidationInfo
     ) -> "SyftBoxURL":
@@ -104,6 +100,18 @@ class SyftBoxURL(str):
         if not cls.is_valid(value):
             raise ValueError(f"Invalid SyftBoxURL: {value}")
         return cls(value)
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        source_type: Any,
+        handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        """Pydantic V2 core schema for custom type validation."""
+        return core_schema.with_info_after_validator_function(
+            cls.validate,
+            handler(str),
+        )
 
     @classmethod
     def __get_pydantic_json_schema__(

@@ -111,7 +111,7 @@ class TestNewPermissionFormat:
                 saved = yaml.safe_load(f)
 
             # Terminal flag is only saved when True
-            assert "terminal" not in saved or saved["terminal"] == False
+            assert "terminal" not in saved or not saved["terminal"]
             assert len(saved["rules"]) == 1
             assert saved["rules"][0]["pattern"] == "**"
             assert "owner@example.com" in saved["rules"][0]["access"]["admin"]
@@ -318,7 +318,7 @@ class TestOldFormatConversion:
             set_auto_convert_permissions(True)
 
             # Load permission file (should trigger conversion)
-            perm = SyftPermission.from_file(new_file, datasites)
+            SyftPermission.from_file(new_file, datasites)
 
             # Check old file is deleted
             assert not old_file.exists()
@@ -410,7 +410,7 @@ class TestOldFormatConversion:
             set_auto_convert_permissions(True)
 
             # Load and convert
-            perm = SyftPermission.from_file(new_file, datasites)
+            SyftPermission.from_file(new_file, datasites)
 
             # Verify conversion
             assert not old_file.exists()
