@@ -18,7 +18,13 @@ class PatternMatchingHandler(FileSystemEventHandler):
     def dispatch(self, event: FileSystemEvent) -> None:
         if self.ignore_directory and event.is_directory:
             return
-        if self.spec.match_file(event.src_path):
+
+        # For moved events, check the destination path
+        if hasattr(event, "dest_path") and event.dest_path:
+            if self.spec.match_file(event.dest_path):
+                super().dispatch(event)
+        # For other events, check the source path
+        elif self.spec.match_file(event.src_path):
             super().dispatch(event)
 
 
@@ -28,7 +34,13 @@ class RpcRequestHandler(PatternMatchingHandler):
         self.handler = handler
 
     def on_any_event(self, event: FileSystemEvent):
-        logger.debug(f"FSEvent - {event.event_type} - {event.src_path}")
+        # For moved events, log both source and destination paths
+        if hasattr(event, "dest_path") and event.dest_path:
+            logger.debug(
+                f"FSEvent - {event.event_type} - {event.src_path} -> {event.dest_path}"
+            )
+        else:
+            logger.debug(f"FSEvent - {event.event_type} - {event.src_path}")
         self.handler(event)
 
 
