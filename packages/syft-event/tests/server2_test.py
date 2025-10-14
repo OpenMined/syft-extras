@@ -194,7 +194,7 @@ def test_handle_rpc_happy_path(mock_args, mock_rpc, mock_req, syft_events):
     mock_req.load.return_value = MagicMock(is_expired=False)
     mock_args.return_value = {}
     # Use patch.object on the Path class instead of instance
-    with patch.object(Path, "exists", return_value=True):
+    with patch.object(Path, "exists", new=lambda self: self == path):
         syft_events._SyftEvents__handle_rpc(path, func)
     mock_rpc.reply_to.assert_called()
 
@@ -207,7 +207,7 @@ def test_handle_rpc_request_load_error(mock_rpc, mock_req, syft_events):
     mock_req.load.side_effect = Exception("fail load")
     # Use patch.object on the Path class instead of instance
     with (
-        patch.object(Path, "exists", return_value=True),
+        patch.object(Path, "exists", new=lambda self: self == path),
         patch("loguru.logger.error") as mock_logger,
     ):  # Capture the error log
         syft_events._SyftEvents__handle_rpc(path, func)
@@ -224,7 +224,7 @@ def test_handle_rpc_expired(mock_rpc, mock_req, syft_events):
     req = MagicMock(is_expired=True, url="/expired")
     mock_req.load.return_value = req
     # Use patch.object on the Path class instead of instance
-    with patch.object(Path, "exists", return_value=True):
+    with patch.object(Path, "exists", new=lambda self: self == path):
         syft_events._SyftEvents__handle_rpc(path, func)
     mock_rpc.reply_to.assert_called_with(
         req,
@@ -244,7 +244,7 @@ def test_handle_rpc_invalid_schema(mock_args, mock_rpc, mock_req, syft_events):
     mock_req.load.return_value = req
     mock_args.side_effect = Exception("bad schema")
     # Use patch.object on the Path class instead of instance
-    with patch.object(Path, "exists", return_value=True):
+    with patch.object(Path, "exists", new=lambda self: self == path):
         syft_events._SyftEvents__handle_rpc(path, func)
     mock_rpc.reply_to.assert_called_with(
         req,
@@ -269,7 +269,7 @@ def test_handle_rpc_async_func(mock_args, mock_rpc, mock_req, syft_events):
 
     # Use patch.object on the Path class instead of instance
     with (
-        patch.object(Path, "exists", return_value=True),
+        patch.object(Path, "exists", new=lambda self: self == path),
         patch.object(syft_events._thread_pool, "submit") as mock_submit,
     ):
         future = MagicMock()
@@ -299,7 +299,7 @@ def test_handle_rpc_sync_func_returns_dict(mock_args, mock_rpc, mock_req, syft_e
     mock_req.load.return_value = MagicMock(is_expired=False)
     mock_args.return_value = {}
     # Use patch.object on the Path class instead of instance
-    with patch.object(Path, "exists", return_value=True):
+    with patch.object(Path, "exists", new=lambda self: self == path):
         syft_events._SyftEvents__handle_rpc(path, func)
     # Should call reply_to with the dict as body and default status code
     mock_rpc.reply_to.assert_called()
@@ -322,7 +322,7 @@ def test_handle_rpc_sync_exception_in_handler(
 
     # Use patch.object on the Path class instead of instance
     with (
-        patch.object(Path, "exists", return_value=True),
+        patch.object(Path, "exists", new=lambda self: self == path),
         patch("loguru.logger.error") as mock_logger,
     ):
         syft_events._SyftEvents__handle_rpc(path, func)
@@ -356,7 +356,7 @@ def test_handle_rpc_async_exception_in_handler(
 
     # Use patch.object on the Path class instead of instance
     with (
-        patch.object(Path, "exists", return_value=True),
+        patch.object(Path, "exists", new=lambda self: self == path),
         patch.object(syft_events._thread_pool, "submit") as mock_submit,
         patch("loguru.logger.error") as mock_logger,
     ):
