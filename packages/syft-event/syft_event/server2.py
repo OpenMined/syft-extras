@@ -37,6 +37,7 @@ from syft_event.types import Response
 
 DEFAULT_WATCH_EVENTS: List[Type[FileSystemEvent]] = [
     FileCreatedEvent,
+    FileMovedEvent,
     FileModifiedEvent,
 ]
 

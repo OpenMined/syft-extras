@@ -34,13 +34,6 @@ class RpcRequestHandler(PatternMatchingHandler):
         self.handler = handler
 
     def on_any_event(self, event: FileSystemEvent):
-        # For moved events, log both source and destination paths
-        if hasattr(event, "dest_path") and event.dest_path:
-            logger.debug(
-                f"FSEvent - {event.event_type} - {event.src_path} -> {event.dest_path}"
-            )
-        else:
-            logger.debug(f"FSEvent - {event.event_type} - {event.src_path}")
         self.handler(event)
 
 
