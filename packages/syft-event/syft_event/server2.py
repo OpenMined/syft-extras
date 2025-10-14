@@ -375,7 +375,7 @@ class SyftEvents:
             if not path.exists():
                 return
 
-            # check if the request has already been processed, if so, skip
+            # this is preventive measure, to avoid processing the same request multiple times
             if path.with_suffix(".response").exists():
                 return
 
