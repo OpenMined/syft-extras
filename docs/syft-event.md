@@ -405,16 +405,17 @@ datasites/
 
 ### Watching for Events
 
-The SyftEvents server uses file system watchers to detect new requests:
+The SyftEvents server uses file system watchers to detect new requests with enhanced event handling:
 
 ```python
 from syft_event import SyftEvents
 
 # The server automatically:
-# 1. Watches for new .json files in the requests directory
+# 1. Watches for new request files using both FileCreatedEvent and FileMovedEvent
 # 2. Parses the request
 # 3. Routes to appropriate handler
 # 4. Writes response to responses directory
+# 5. Prevents duplicate processing of the same request
 
 app = SyftEvents(
     app_name="my_service",
@@ -423,6 +424,15 @@ app = SyftEvents(
     poll_interval=1.0  # Check for new requests every second
 )
 ```
+
+#### Request File Delivery Mechanisms
+
+The system monitors both `FileCreatedEvent` and `FileMovedEvent` for RPC endpoints because request files can arrive through two different delivery mechanisms:
+
+- **WebSocket Delivery**: Files delivered through websockets are initially stored as temporary files and then renamed to the target request file location (triggering a `FileMovedEvent`)
+- **Blob Store Download**: Files downloaded directly from the blob store are created directly as request files (triggering a `FileCreatedEvent`)
+
+This dual-event monitoring ensures reliable request detection regardless of the delivery mechanism used.
 
 ### Automatic Cleanup System
 
@@ -718,6 +728,7 @@ def test_router_integration():
 6. **Configure cleanup appropriately** - Balance file retention with disk space usage
 7. **Monitor cleanup statistics** - Track cleanup performance and adjust intervals as needed
 8. **Use user-specific directories** - Leverage the new directory structure for better organization
+9. **Built-in duplicate prevention** - The system automatically prevents processing the same request multiple times by checking for existing response files
 
 ## Security
 
