@@ -4,36 +4,32 @@ import asyncio
 import inspect
 import json
 import traceback
-
 from concurrent.futures import ThreadPoolExecutor
-import pathspec
 from pathlib import Path
-
 from threading import Event
-from typing import Any
 from typing import Any, Callable, List, Optional, Type, Union
 
+import pathspec
 from loguru import logger
 from pydantic import ValidationError
 from syft_core import Client
 from syft_crypto import EncryptedPayload, decrypt_message
-from syft_rpc import rpc
-from syft_rpc.protocol import SyftRequest, SyftStatus
-from typing_extensions import Callable, List, Optional, Type, Union
-from watchdog.events import (
-    FileCreatedEvent,
-    FileMovedEvent,
-    FileModifiedEvent,
-    FileSystemEvent,
-)
-from watchdog.observers import Observer
-
 from syft_event.cleanup import PeriodicCleanup, create_cleanup_callback
 from syft_event.deps import func_args_from_request
 from syft_event.handlers import AnyPatternHandler, RpcRequestHandler
 from syft_event.router import EventRouter
 from syft_event.schema import generate_schema
 from syft_event.types import Response
+from syft_rpc import rpc
+from syft_rpc.protocol import SyftRequest, SyftStatus
+from typing_extensions import Callable, List, Optional, Type, Union
+from watchdog.events import (
+    FileCreatedEvent,
+    FileModifiedEvent,
+    FileMovedEvent,
+    FileSystemEvent,
+)
+from watchdog.observers import Observer
 
 DEFAULT_WATCH_EVENTS: List[Type[FileSystemEvent]] = [
     FileCreatedEvent,
