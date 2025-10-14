@@ -53,23 +53,33 @@ def calculate_handler(a: int, b: int, operation: str = "add") -> int:
 box.run_forever()
 ```
 
+> **Note**: RPC endpoints automatically monitor both `FileCreatedEvent` and `FileMovedEvent` for request files. This is because request files can arrive via two different mechanisms: files delivered through websockets are initially stored as temporary files and then renamed to the target request file (triggering a move event), while files downloaded directly from the blob store are created directly (triggering a create event).
+
 ### File System Monitoring
 
 ```python
 from syft_event import SyftEvents
-from watchdog.events import FileCreatedEvent, FileModifiedEvent
+from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileMovedEvent
 
 box = SyftEvents("file_monitor")
 
-# Watch for JSON files in your datasite
+# Watch for JSON files in your datasite (responds to create, modify, and move events by default)
 @box.watch("{datasite}/**/*.json")
 def on_json_change(event):
-    print(f"JSON file changed: {event.src_path}")
+    if hasattr(event, 'dest_path') and event.dest_path:
+        print(f"JSON file moved: {event.src_path} -> {event.dest_path}")
+    else:
+        print(f"JSON file changed: {event.src_path}")
 
-# Watch for specific file patterns
+# Watch for specific file patterns with custom event filtering
 @box.watch(["**/*.txt", "**/*.md"], event_filter=[FileCreatedEvent])
 def on_text_files_created(event):
     print(f"Text file created: {event.src_path}")
+
+# Watch for file moves specifically
+@box.watch("**/*.log", event_filter=[FileMovedEvent])
+def on_log_files_moved(event):
+    print(f"Log file moved: {event.src_path} -> {event.dest_path}")
 
 box.run_forever()
 ```
@@ -203,12 +213,15 @@ def handler(param1: str, param2: int = 10) -> dict:
 
 ##### `watch(glob_path, event_filter=None)`
 
-Decorator to register file system watchers.
+Decorator to register file system watchers. By default, watches for `FileCreatedEvent`, `FileModifiedEvent`, and `FileMovedEvent`.
 
 ```python
 @box.watch("**/*.json")
 def on_json_change(event):
-    print(f"File changed: {event.src_path}")
+    if hasattr(event, 'dest_path') and event.dest_path:
+        print(f"File moved: {event.src_path} -> {event.dest_path}")
+    else:
+        print(f"File changed: {event.src_path}")
 ```
 
 ##### `include_router(router: EventRouter, prefix: str = "")`
