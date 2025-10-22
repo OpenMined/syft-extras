@@ -160,6 +160,9 @@ class SyftEvents:
             # Auto-decrypt if we're the intended recipient
             if encrypted_payload.receiver == self.client.email:
                 logger.debug(f"Auto-decrypting request from {encrypted_payload.sender}")
+                logger.debug(f"  Receiver: {encrypted_payload.receiver}")
+                logger.debug(f"  Sender: {encrypted_payload.sender}")
+                logger.debug(f"  Version: {encrypted_payload.version}")
 
                 decrypted_data = decrypt_message(encrypted_payload, client=self.client)
 
@@ -185,7 +188,14 @@ class SyftEvents:
             # Not encrypted, return original
             return req
         except Exception as e:
-            logger.warning(f"Failed to decrypt request: {e}")
+            error_type = type(e).__name__
+            error_msg = str(e) if str(e) else "(empty error message)"
+            logger.warning(f"Failed to decrypt request: {error_type}: {error_msg}")
+            logger.debug("Decryption error details:", exc_info=True)
+            if "encrypted_payload" in locals():
+                logger.debug(f"  Payload sender: {encrypted_payload.sender}")
+                logger.debug(f"  Expected receiver: {self.client.email}")
+                logger.debug(f"  Payload version: {encrypted_payload.version}")
             return req  # Return original on decryption failure
 
     def init(self) -> None:
