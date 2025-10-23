@@ -484,13 +484,13 @@ def test_ensure_bootstrap_fails_when_did_exists_but_keys_missing(
     assert "force_recreate_crypto_keys=True" in error_message
 
 
-def test_ensure_bootstrap_force_recreate_archives_old_did(
+def test_ensure_bootstrap_force_recreate_deletes_old_did(
     temp_workspace: Path,
 ) -> None:
-    """Test that force_recreate_crypto_keys archives old DID and creates new identity
+    """Test that force_recreate_crypto_keys deletes old DID and creates new identity
 
     Scenario: User explicitly chooses to recreate identity after key loss
-    Expected: Old DID archived, new keys created, data loss acknowledged
+    Expected: Old DID deleted, new keys created, data loss acknowledged
     """
     # Create client and bootstrap
     client: Client = create_temp_client("test@example.com", temp_workspace)
@@ -511,21 +511,15 @@ def test_ensure_bootstrap_force_recreate_archives_old_did(
     # Verify new keys were created
     assert keys_exist(client)
 
-    # Verify new DID was created with different SPK
+    # Verify new DID was created with different SPK (completely new identity)
     new_did: Dict[str, Any] = get_did_document(client, client.config.email)
     new_spk: str = new_did["keyAgreement"][0]["publicKeyJwk"]["x"]
     assert new_spk != original_spk, "New SPK should be different from original"
 
-    # Verify old DID was archived (not deleted)
+    # Verify no archived DID files exist (old DID should be deleted, not archived)
     did_dir: Path = did_file.parent
     archived_files: list[Path] = list(did_dir.glob("did.retired.*.json"))
-    assert len(archived_files) >= 1, "Old DID should be archived"
-
-    # Verify archived DID contains original SPK
-    with open(archived_files[0], "r") as f:
-        archived_did: Dict[str, Any] = json.load(f)
-    archived_spk: str = archived_did["keyAgreement"][0]["publicKeyJwk"]["x"]
-    assert archived_spk == original_spk, "Archived DID should contain original SPK"
+    assert len(archived_files) == 0, "Old DID should be deleted, not archived"
 
 
 def test_ensure_bootstrap_detects_did_conflict(temp_workspace: Path) -> None:
@@ -738,10 +732,10 @@ def test_force_recreate_allows_successful_encryption_decryption(
     # Verify SPK changed (new cryptographic identity)
     assert new_spk != original_spk, "New SPK should be different from original"
 
-    # Verify old DID was archived
+    # Verify old DID was deleted
     did_dir: Path = did_path(do_client).parent
     archived_files: list[Path] = list(did_dir.glob("did.retired.*.json"))
-    assert len(archived_files) >= 1, "Old DID should be archived"
+    assert len(archived_files) == 0, "Old DID should be deleted"
 
     # ==================== PHASE 4: Test New Keys Work ====================
     # Validate complete recovery - new crypto system functional

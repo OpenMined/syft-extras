@@ -3,7 +3,6 @@
 X3DH bootstrap module for generating keys and DID documents for SyftBox users
 """
 
-from datetime import datetime
 from typing import Optional
 
 from cryptography.hazmat.primitives import serialization
@@ -115,14 +114,20 @@ def ensure_bootstrap(
 
     # Check for DID conflicts first
     if did_conflict_file.exists():
-        raise RuntimeError(
-            f"❌ DID conflict detected: {did_conflict_file}\n"
-            f"\n"
-            f"Multiple versions of your identity exist.\n"
-            f"Manual resolution required:\n"
-            f"  1. Check which DID matches your private keys\n"
-            f"  2. Keep the correct version, delete the other\n"
-        )
+        if force_recreate_crypto_keys:
+            # Delete conflict file when forcing recreation (new identity will be created anyway)
+            did_conflict_file.unlink()
+            logger.warning(f"🗑️  DID conflict file deleted: {did_conflict_file}")
+        else:
+            raise RuntimeError(
+                f"❌ DID conflict detected: {did_conflict_file}\n"
+                f"\n"
+                f"Multiple versions of your identity exist.\n"
+                f"Manual resolution required:\n"
+                f"  1. Check which DID matches your private keys\n"
+                f"  2. Keep the correct version, delete the other\n"
+                f"  3. Or use force_recreate_crypto_keys=True to recreate identity\n"
+            )
 
     # Auto-recovery: Keys exist but DID doesn't (safe to regenerate)
     if keys_exist(client) and not did_file.exists():
@@ -140,11 +145,10 @@ def ensure_bootstrap(
                 "⚠️  RECREATING CRYPTO KEYS (force_recreate_crypto_keys=True)\n"
                 "Old encrypted messages will become UNRECOVERABLE!"
             )
-            # Archive old DID
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            archive_file = did_file.parent / f"did.retired.{timestamp}.json"
-            did_file.rename(archive_file)
-            logger.info(f"📦 Old DID archived to: {archive_file}")
+            # Delete old DID (new identity will be created)
+            if did_file.exists():
+                did_file.unlink()
+                logger.info(f"🗑️  Old DID deleted: {did_file}")
 
             # Generate new keys and DID
             bootstrap_user(client, force=True)
