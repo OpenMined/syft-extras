@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from syft_core import Client
 from syft_crypto.did_utils import (
     did_path,
@@ -787,3 +788,152 @@ def test_force_recreate_allows_successful_encryption_decryption(
     # ✅ Force recreation succeeded
     # ✅ New keys work perfectly
     # ✅ Complete recovery validated - no InvalidTag errors!
+
+
+def test_regenerate_did_when_missing_but_keys_exist(temp_workspace: Path) -> None:
+    """Test that DID is automatically regenerated if keys exist but DID is missing
+
+    Scenario: Private keys preserved but DID (public and identity keys) deleted
+    Expected: Auto-regenerate DID from existing private keys (safe operation)
+    """
+    # Bootstrap normally
+    client: Client = create_temp_client("test@example.com", temp_workspace)
+    bootstrap_user(client)
+
+    # Save original DID for comparison
+    original_did: Dict[str, Any] = get_did_document(client, client.config.email)
+    original_spk: str = original_did["keyAgreement"][0]["publicKeyJwk"]["x"]
+    original_identity_key: str = original_did["verificationMethod"][0]["publicKeyJwk"][
+        "x"
+    ]
+
+    # Delete DID but keep keys
+    did_file: Path = did_path(client)
+    did_file.unlink()
+
+    # Verify keys exist but DID doesn't
+    assert keys_exist(client), "Keys should exist"
+    assert not did_file.exists(), "DID should be deleted"
+
+    # Call ensure_bootstrap - should auto-regenerate DID
+    ensure_bootstrap(client)
+
+    # Verify DID was regenerated
+    assert did_file.exists(), "DID should be regenerated"
+    regenerated_did: Dict[str, Any] = get_did_document(client, client.config.email)
+    regenerated_spk: str = regenerated_did["keyAgreement"][0]["publicKeyJwk"]["x"]
+    regenerated_identity_key: str = regenerated_did["verificationMethod"][0][
+        "publicKeyJwk"
+    ]["x"]
+
+    # Verify regenerated DID matches original (deterministic)
+    assert (
+        regenerated_spk == original_spk
+    ), "Regenerated SPK should match original (deterministic)"
+    assert (
+        regenerated_identity_key == original_identity_key
+    ), "Regenerated identity key should match original"
+    assert regenerated_did["id"] == original_did["id"], "DID ID should match"
+
+    # Verify encryption still works with regenerated DID
+    test_client: Client = create_temp_client("test2@example.com", temp_workspace)
+    bootstrap_user(test_client)
+
+    # Test bidirectional encryption
+    encrypted: EncryptedPayload = encrypt_message(
+        "test message", client.config.email, test_client
+    )
+    decrypted: str = decrypt_message(encrypted, client)
+    assert decrypted == "test message", "Encryption should work with regenerated DID"
+
+    # Reverse direction
+    encrypted_reverse: EncryptedPayload = encrypt_message(
+        "reverse test", test_client.config.email, client
+    )
+    decrypted_reverse: str = decrypt_message(encrypted_reverse, test_client)
+    assert decrypted_reverse == "reverse test", "Reverse encryption should also work"
+
+
+def test_cryptobug_detection_keys_dont_match(temp_workspace: Path):
+    """CRYPTOBUG: Keys exist, DID exists, but they don't match → Should FAIL proactively"""
+
+    # ==================== PHASE 1: Normal Bootstrap ====================
+    client = create_temp_client("user@example.com", temp_workspace)
+    bootstrap_user(client)
+
+    # Verify normal state
+    assert keys_exist(client), "Keys should exist"
+    assert did_path(client).exists(), "DID should exist"
+
+    # ensure_bootstrap should succeed (keys match DID)
+    ensure_bootstrap(client)
+
+    # ==================== PHASE 2: Simulate Keys Replaced ====================
+    # Replace private keys with NEW keys while keeping the OLD DID
+    # This simulates the scenario where keys were regenerated but old DID still exists
+
+    # Generate NEW keys (different from the ones in DID)
+    new_identity_private = ed25519.Ed25519PrivateKey.generate()
+    new_spk_private = x25519.X25519PrivateKey.generate()
+
+    # Overwrite the private keys file with NEW keys
+    save_private_keys(client, new_identity_private, new_spk_private)
+
+    # ==================== PHASE 3: Verify Cryptobug Detection ====================
+    # ensure_bootstrap should now FAIL because keys don't match DID
+    with pytest.raises(RuntimeError) as exc_info:
+        ensure_bootstrap(client)
+
+    # Verify error message
+    error_msg = str(exc_info.value)
+    assert "CRYPTOBUG DETECTED" in error_msg, "Should detect cryptobug"
+    assert "Private keys don't match DID document" in error_msg
+    assert "SOLUTIONS" in error_msg, "Should provide solutions"
+
+
+def test_key_did_verification_with_encryption(temp_workspace: Path):
+    """Verify that key-DID mismatch causes encryption to fail (validates our detection logic)"""
+
+    # ==================== PHASE 1: Normal Setup ====================
+    sender = create_temp_client("sender@example.com", temp_workspace)
+    receiver = create_temp_client("receiver@example.com", temp_workspace)
+
+    bootstrap_user(sender)
+    bootstrap_user(receiver)
+
+    # Test that encryption works with matching keys
+    test_message = "test message"
+    encrypted = encrypt_message(test_message, receiver.config.email, sender)
+    decrypted = decrypt_message(encrypted, receiver)
+    assert decrypted == test_message, "Encryption should work with matching keys"
+
+    # ==================== PHASE 2: Create Key-DID Mismatch for Receiver ====================
+    from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
+    from syft_crypto.key_storage import save_private_keys
+
+    # Replace receiver's keys (but keep old DID)
+    new_identity_private = ed25519.Ed25519PrivateKey.generate()
+    new_spk_private = x25519.X25519PrivateKey.generate()
+    save_private_keys(receiver, new_identity_private, new_spk_private)
+
+    # ==================== PHASE 3: Verify Detection at Bootstrap ====================
+    # ensure_bootstrap should fail before we even try encryption
+    with pytest.raises(RuntimeError) as exc_info:
+        ensure_bootstrap(receiver)
+
+    assert "Crypto keys mismatch detected" in str(exc_info.value)
+
+    # ==================== PHASE 4: Verify Encryption Would Also Fail ====================
+    # Even if we skip the verification, decryption would fail
+    # (This validates that our detection is catching a real problem)
+    encrypted_after_mismatch = encrypt_message(
+        "another message", receiver.config.email, sender
+    )
+
+    # Decryption should fail because receiver has wrong keys
+    with pytest.raises(ValueError) as decrypt_exc:
+        decrypt_message(encrypted_after_mismatch, receiver)
+
+    assert "Decryption failed" in str(
+        decrypt_exc.value
+    ), "Decryption should fail with mismatched keys"
