@@ -3,6 +3,7 @@ Test bootstrap functionality for X3DH key generation
 """
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any, Dict
 
@@ -21,7 +22,10 @@ from syft_crypto.key_storage import (
     private_key_path,
     save_private_keys,
 )
+from syft_crypto.x3dh import EncryptedPayload, decrypt_message, encrypt_message
 from syft_crypto.x3dh_bootstrap import bootstrap_user, ensure_bootstrap
+
+from tests.conftest import create_temp_client
 
 
 def test_bootstrap_private_keys(unbootstrapped_client: Client) -> None:
@@ -438,3 +442,348 @@ def test_multiple_clients_have_different_private_keys(
     assert len(alice_hash) == 8, f"Alice's hash should be 8 characters: {alice_hash}"
     assert len(bob_hash) == 8, f"Bob's hash should be 8 characters: {bob_hash}"
     assert len(eve_hash) == 8, f"Eve's hash should be 8 characters: {eve_hash}"
+
+
+def test_ensure_bootstrap_fails_when_did_exists_but_keys_missing(
+    temp_workspace: Path,
+) -> None:
+    """Test that ensure_bootstrap fails when DID exists but private keys are missing
+
+    This is the core cryptobug scenario:
+    - Container restart without persistent volume
+    - DID synced from server but private keys lost
+    - Should FAIL FAST with clear error, not silently regenerate
+    """
+    # Create a client and bootstrap it
+    client: Client = create_temp_client("test@example.com", temp_workspace)
+    bootstrap_user(client)
+
+    # Verify keys and DID exist
+    assert keys_exist(client)
+    assert did_path(client).exists()
+
+    # Simulate key loss (e.g., container restart without volume)
+    key_file: Path = private_key_path(client)
+    key_file.unlink()  # Delete private keys
+
+    # Verify DID still exists but keys don't
+    assert did_path(client).exists()
+    assert not keys_exist(client)
+
+    # Try to ensure_bootstrap without force flag - should FAIL
+    with pytest.raises(RuntimeError) as exc_info:
+        ensure_bootstrap(client)
+
+    # Verify error message contains helpful guidance
+    error_message: str = str(exc_info.value)
+    assert "DID DOCUMENT EXISTS BUT PRIVATE KEYS NOT FOUND" in error_message
+    assert "MOUNT PERSISTENT VOLUME" in error_message
+    assert "IMPORT KEYS" in error_message
+    assert "RECREATE KEYS" in error_message
+    assert "force_recreate_crypto_keys=True" in error_message
+
+
+def test_ensure_bootstrap_force_recreate_archives_old_did(
+    temp_workspace: Path,
+) -> None:
+    """Test that force_recreate_crypto_keys archives old DID and creates new identity
+
+    Scenario: User explicitly chooses to recreate identity after key loss
+    Expected: Old DID archived, new keys created, data loss acknowledged
+    """
+    # Create client and bootstrap
+    client: Client = create_temp_client("test@example.com", temp_workspace)
+    bootstrap_user(client)
+
+    # Save original DID for comparison
+    original_did: Dict[str, Any] = get_did_document(client, client.config.email)
+    original_spk: str = original_did["keyAgreement"][0]["publicKeyJwk"]["x"]
+    did_file: Path = did_path(client)
+
+    # Simulate key loss
+    key_file: Path = private_key_path(client)
+    key_file.unlink()
+
+    # Force recreate identity
+    ensure_bootstrap(client, force_recreate_crypto_keys=True)
+
+    # Verify new keys were created
+    assert keys_exist(client)
+
+    # Verify new DID was created with different SPK
+    new_did: Dict[str, Any] = get_did_document(client, client.config.email)
+    new_spk: str = new_did["keyAgreement"][0]["publicKeyJwk"]["x"]
+    assert new_spk != original_spk, "New SPK should be different from original"
+
+    # Verify old DID was archived (not deleted)
+    did_dir: Path = did_file.parent
+    archived_files: list[Path] = list(did_dir.glob("did.retired.*.json"))
+    assert len(archived_files) >= 1, "Old DID should be archived"
+
+    # Verify archived DID contains original SPK
+    with open(archived_files[0], "r") as f:
+        archived_did: Dict[str, Any] = json.load(f)
+    archived_spk: str = archived_did["keyAgreement"][0]["publicKeyJwk"]["x"]
+    assert archived_spk == original_spk, "Archived DID should contain original SPK"
+
+
+def test_ensure_bootstrap_detects_did_conflict(temp_workspace: Path) -> None:
+    """Test that ensure_bootstrap detects and fails on DID conflicts
+
+    Scenario: did.conflict.json exists (from SyftBox detecting version conflict)
+    Expected: FAIL with clear message to manually resolve conflict
+    """
+    # Create client and bootstrap
+    client: Client = create_temp_client("test@example.com", temp_workspace)
+    bootstrap_user(client)
+
+    # Get DID document
+    did_file: Path = did_path(client)
+    with open(did_file, "r") as f:
+        did_content: str = f.read()
+
+    # Create a conflict file (simulate SyftBox detecting conflict)
+    conflict_file: Path = did_file.parent / "did.conflict.json"
+    with open(conflict_file, "w") as f:
+        f.write(did_content)
+
+    # Try to ensure_bootstrap - should FAIL on conflict
+    with pytest.raises(RuntimeError) as exc_info:
+        ensure_bootstrap(client)
+
+    # Verify error message
+    error_message: str = str(exc_info.value)
+    assert "DID conflict detected" in error_message
+    assert "did.conflict.json" in str(conflict_file)
+    assert "Manual resolution required" in error_message
+
+
+def test_ensure_bootstrap_fresh_start_succeeds(unbootstrapped_client: Client) -> None:
+    """Test normal bootstrap when neither DID nor keys exist
+
+    Scenario: Fresh deployment, no previous identity
+    Expected: Successfully bootstrap new identity
+    """
+    # Verify no keys or DID initially
+    assert not keys_exist(unbootstrapped_client)
+    assert not did_path(unbootstrapped_client).exists()
+
+    # Ensure bootstrap should create new identity
+    result: Client = ensure_bootstrap(unbootstrapped_client)
+
+    # Verify keys and DID were created
+    assert result == unbootstrapped_client
+    assert keys_exist(unbootstrapped_client)
+    assert did_path(unbootstrapped_client).exists()
+
+    # Verify DID is valid
+    did_doc: Dict[str, Any] = get_did_document(
+        unbootstrapped_client, unbootstrapped_client.config.email
+    )
+    assert "keyAgreement" in did_doc
+    assert "verificationMethod" in did_doc
+
+
+def test_ensure_bootstrap_preserves_existing_keys(alice_client: Client) -> None:
+    """Test that ensure_bootstrap preserves existing keys and DID
+
+    Scenario: Normal operation, keys and DID both exist
+    Expected: No regeneration, idempotent behavior
+    """
+    # Alice already has keys from fixture
+    original_did: Dict[str, Any] = get_did_document(
+        alice_client, alice_client.config.email
+    )
+    original_spk: str = original_did["keyAgreement"][0]["publicKeyJwk"]["x"]
+
+    # Load original private keys
+    original_identity_key, original_spk_key = load_private_keys(alice_client)
+    original_identity_bytes: bytes = (
+        original_identity_key.public_key().public_bytes_raw()
+    )
+    original_spk_bytes: bytes = original_spk_key.public_key().public_bytes_raw()
+
+    # Call ensure_bootstrap
+    ensure_bootstrap(alice_client)
+
+    # Verify DID unchanged
+    current_did: Dict[str, Any] = get_did_document(
+        alice_client, alice_client.config.email
+    )
+    current_spk: str = current_did["keyAgreement"][0]["publicKeyJwk"]["x"]
+    assert current_spk == original_spk, "SPK should not change"
+
+    # Verify private keys unchanged
+    current_identity_key, current_spk_key = load_private_keys(alice_client)
+    current_identity_bytes: bytes = current_identity_key.public_key().public_bytes_raw()
+    current_spk_bytes: bytes = current_spk_key.public_key().public_bytes_raw()
+
+    assert (
+        current_identity_bytes == original_identity_bytes
+    ), "Identity key should not change"
+    assert current_spk_bytes == original_spk_bytes, "SPK key should not change"
+
+
+def test_private_keys_lost(temp_workspace: Path) -> None:
+    """
+    This test simulates this scenario:
+
+    1. Client bootstraps successfully
+    2. DID syncs to datasites (persisted)
+    3. Client accidentally removes `.syftbox/` directory
+    4. Client tries to initialize
+
+    Expected: Clear error preventing silent regeneration
+    """
+    # Step 1: Initial bootstrap (first container run)
+    client: Client = create_temp_client("user@example.com", temp_workspace)
+    bootstrap_user(client)
+
+    did_file: Path = did_path(client)
+    original_did: Dict[str, Any] = get_did_document(client, client.config.email)
+
+    # Simulate DID sync to datasites (already done by bootstrap)
+    assert did_file.exists()
+
+    # Step 2: `.syftbox/` directory lost
+    key_file: Path = private_key_path(client)
+    syftbox_dir: Path = key_file.parent.parent  # .syftbox directory
+    shutil.rmtree(syftbox_dir)
+
+    # Verify: DID still exists (synced) but keys gone
+    assert did_file.exists(), "DID should remain in datasites"
+    assert not key_file.exists(), "Keys should be gone"
+
+    # Step 3: Try to initialize (would call ensure_bootstrap)
+    # This should FAIL FAST, not silently regenerate
+    with pytest.raises(RuntimeError) as exc_info:
+        ensure_bootstrap(client)
+
+    error_message: str = str(exc_info.value)
+    assert "DID DOCUMENT EXISTS BUT PRIVATE KEYS NOT FOUND" in error_message
+
+    # Verify DID was NOT changed
+    current_did: Dict[str, Any] = get_did_document(client, client.config.email)
+    assert current_did == original_did, "DID should not be modified on failure"
+
+
+def test_force_recreate_allows_successful_encryption_decryption(
+    temp_workspace: Path,
+) -> None:
+    """Test complete key lifecycle: original keys work → loss → recreation → new keys work
+
+    This validates the entire cryptobug fix lifecycle:
+    PHASE 1: Original keys work (baseline)
+    PHASE 2: Key loss event (cryptobug scenario)
+    PHASE 3: Force recreation
+    PHASE 4: New keys work (recovery validated)
+    """
+
+    # Setup: Create DO (Data Owner) and DS (Data Scientist) clients
+    do_client: Client = create_temp_client("do@example.com", temp_workspace)
+    ds_client: Client = create_temp_client("ds@example.com", temp_workspace)
+
+    # Bootstrap both clients
+    bootstrap_user(do_client)
+    bootstrap_user(ds_client)
+
+    # ==================== PHASE 1: Test Original Keys Work ====================
+    # This establishes baseline that encryption/decryption works with original keys
+
+    original_message: str = "Message encrypted with ORIGINAL keys"
+
+    # DS encrypts to DO using original public keys
+    original_encrypted: EncryptedPayload = encrypt_message(
+        original_message,
+        do_client.config.email,
+        ds_client,
+    )
+
+    # DO decrypts using original private keys
+    original_decrypted: str = decrypt_message(
+        original_encrypted,
+        do_client,
+    )
+
+    # Verify original keys work perfectly
+    assert original_decrypted == original_message, "Original keys should work"
+
+    # Save original DID for comparison
+    original_did: Dict[str, Any] = get_did_document(do_client, do_client.config.email)
+    original_spk: str = original_did["keyAgreement"][0]["publicKeyJwk"]["x"]
+
+    # ==================== PHASE 2: Simulate Key Loss ====================
+    # DO's key directory lost (simulates container restart for DO only)
+
+    do_key_file: Path = private_key_path(do_client)
+    do_key_dir: Path = do_key_file.parent  # Just DO's hash directory
+    shutil.rmtree(do_key_dir)  # Only delete DO's keys, not DS's
+
+    # Verify cryptobug scenario: DID exists but keys gone
+    assert did_path(do_client).exists(), "DID should remain (synced)"
+    assert not keys_exist(do_client), "DO keys should be lost"
+    assert keys_exist(ds_client), "DS keys should still exist"
+
+    # ==================== PHASE 3: Force Recreate Keys ====================
+
+    # DO explicitly chooses to recreate identity
+    ensure_bootstrap(do_client, force_recreate_crypto_keys=True)
+
+    # Verify new keys and DID created
+    assert keys_exist(do_client), "New keys should exist"
+    new_did: Dict[str, Any] = get_did_document(do_client, do_client.config.email)
+    new_spk: str = new_did["keyAgreement"][0]["publicKeyJwk"]["x"]
+
+    # Verify SPK changed (new cryptographic identity)
+    assert new_spk != original_spk, "New SPK should be different from original"
+
+    # Verify old DID was archived
+    did_dir: Path = did_path(do_client).parent
+    archived_files: list[Path] = list(did_dir.glob("did.retired.*.json"))
+    assert len(archived_files) >= 1, "Old DID should be archived"
+
+    # ==================== PHASE 4: Test New Keys Work ====================
+    # Validate complete recovery - new crypto system functional
+
+    new_message: str = "Message encrypted with NEW keys after force recreation"
+
+    # DS encrypts to DO using NEW public keys (from updated DID)
+    new_encrypted: EncryptedPayload = encrypt_message(
+        new_message,
+        do_client.config.email,
+        ds_client,
+    )
+
+    # DO decrypts using NEW private keys
+    new_decrypted: str = decrypt_message(
+        new_encrypted,
+        do_client,
+    )
+
+    # Verify new keys work perfectly
+    assert new_decrypted == new_message, "New keys should work after recreation"
+
+    # ==================== PHASE 5: Test Bidirectional Communication ====================
+    # Ensure DO can also send messages back to DS
+
+    response_message: str = "DS, I can send you encrypted messages with my new keys!"
+
+    encrypted_response: EncryptedPayload = encrypt_message(
+        response_message,
+        ds_client.config.email,
+        do_client,
+    )
+
+    decrypted_response: str = decrypt_message(
+        encrypted_response,
+        ds_client,
+    )
+
+    assert decrypted_response == response_message, "DO→DS communication should work"
+
+    # ==================== Summary ====================
+    # ✅ Original keys worked
+    # ✅ Key loss detected
+    # ✅ Force recreation succeeded
+    # ✅ New keys work perfectly
+    # ✅ Complete recovery validated - no InvalidTag errors!

@@ -3,6 +3,7 @@
 X3DH bootstrap module for generating keys and DID documents for SyftBox users
 """
 
+from datetime import datetime
 from typing import Optional
 
 from cryptography.hazmat.primitives import serialization
@@ -75,20 +76,96 @@ def bootstrap_user(client: Client, force: bool = False) -> bool:
     return True
 
 
-def ensure_bootstrap(client: Optional[Client] = None) -> Client:
+def ensure_bootstrap(
+    client: Optional[Client] = None, force_recreate_crypto_keys: bool = False
+) -> Client:
     """Ensure user has been bootstrapped with crypto keys
 
     Args:
         client: Optional SyftBox client instance
+        force_recreate_crypto_keys: If True, recreate keys even if DID exists.
+                                WARNING: Makes old encrypted data unrecoverable!
 
     Returns:
         Client: The client instance (loaded if not provided)
+
+    Raises:
+        RuntimeError: If DID exists but keys don't (without force flag)
+        RuntimeError: If unresolved DID conflicts exist
     """
     if client is None:
         client = Client.load()
 
+    # Construct paths to DID files
+    did_file = client.datasites / client.config.email / "public" / "did.json"
+    did_conflict_file = (
+        client.datasites / client.config.email / "public" / "did.conflict.json"
+    )
+
+    # Check for DID conflicts first
+    if did_conflict_file.exists():
+        raise RuntimeError(
+            f"❌ DID conflict detected: {did_conflict_file}\n"
+            f"\n"
+            f"Multiple versions of your identity exist.\n"
+            f"Manual resolution required:\n"
+            f"  1. Check which DID matches your private keys\n"
+            f"  2. Keep the correct version, delete the other\n"
+            f"  3. See CRYPTOBUG_FIX.md for instructions\n"
+        )
+
+    # Critical case: did.json exists but keys don't
+    if did_file.exists() and not keys_exist(client):
+        if force_recreate_crypto_keys:
+            logger.warning(
+                "⚠️  RECREATING CRYPTO KEYS (force_recreate_crypto_keys=True)\n"
+                "Old encrypted messages will become UNRECOVERABLE!"
+            )
+            # Archive old DID
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            archive_file = did_file.parent / f"did.retired.{timestamp}.json"
+            did_file.rename(archive_file)
+            logger.info(f"📦 Old DID archived to: {archive_file}")
+
+            # Generate new keys and DID
+            bootstrap_user(client, force=True)
+
+        else:
+            # Fail with clear instructions
+            key_path = private_key_path(client)
+            raise RuntimeError(
+                f"❌ DID DOCUMENT EXISTS BUT PRIVATE KEYS NOT FOUND\n"
+                f"\n"
+                f"DID location: {did_file}\n"
+                f"Expected keys: {key_path}\n"
+                f"\n"
+                f"Common causes:\n"
+                f"  • Container restart without persistent volume\n"
+                f"  • Setting up same account on new device\n"
+                f"  • Keys were deleted/lost\n"
+                f"\n"
+                f"SOLUTIONS:\n"
+                f"\n"
+                f"1. MOUNT PERSISTENT VOLUME (recommended for containers):\n"
+                f"   docker run -v syftbox-keys:/home/syftboxuser/.syftbox ...\n"
+                f"   Then restore keys or bootstrap once\n"
+                f"\n"
+                f"2. IMPORT KEYS from another device:\n"
+                f"   Copy keys from working device to: {key_path}\n"
+                f"\n"
+                f"3. RECREATE KEYS (⚠️  WARNING: old encrypted data becomes unrecoverable!):\n"
+                f"   Python API:\n"
+                f"     from syft_crypto import ensure_bootstrap\n"
+                f"     ensure_bootstrap(client, force_recreate_crypto_keys=True)\n"
+                f"   \n"
+            )
+
+    # Safe to bootstrap - no DID exists
     if not keys_exist(client):
+        logger.info(f"No keys found. Bootstrapping {client.config.email}...")
         bootstrap_user(client)
+    else:
+        logger.debug(f"✅ Keys exist for {client.config.email}")
 
     return client
 
