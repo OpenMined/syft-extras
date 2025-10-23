@@ -886,7 +886,7 @@ def test_cryptobug_detection_keys_dont_match(temp_workspace: Path):
 
     # Verify error message
     error_msg = str(exc_info.value)
-    assert "CRYPTOBUG DETECTED" in error_msg, "Should detect cryptobug"
+    assert "Crypto keys mismatch detected" in error_msg, "Should detect keys mismatch"
     assert "Private keys don't match DID document" in error_msg
     assert "SOLUTIONS" in error_msg, "Should provide solutions"
 
