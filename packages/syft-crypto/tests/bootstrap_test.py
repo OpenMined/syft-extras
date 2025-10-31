@@ -477,17 +477,17 @@ def test_ensure_bootstrap_fails_when_did_exists_but_keys_missing(
 
     # Verify error message contains helpful guidance
     error_message: str = str(exc_info.value)
-    assert "DID DOCUMENT EXISTS BUT PRIVATE KEYS NOT FOUND" in error_message
-    assert "MOUNT PERSISTENT VOLUME" in error_message
-    assert "IMPORT KEYS" in error_message
-    assert "RECREATE KEYS" in error_message
-    assert "force_recreate_crypto_keys=True" in error_message
+    assert "PRIVATE KEYS MISSING BUT DID" in error_message
+    assert "DOCKER/CONTAINER SETUP" in error_message
+    assert "persistent volumes" in error_message
+    assert "NEW DEVICE SETUP" in error_message
+    assert "KEYS DELETED/LOST" in error_message
 
 
 def test_ensure_bootstrap_force_recreate_deletes_old_did(
     temp_workspace: Path,
 ) -> None:
-    """Test that force_recreate_crypto_keys deletes old DID and creates new identity
+    """Test manual identity recreation by deleting DID and recreating keys
 
     Scenario: User explicitly chooses to recreate identity after key loss
     Expected: Old DID deleted, new keys created, data loss acknowledged
@@ -505,8 +505,11 @@ def test_ensure_bootstrap_force_recreate_deletes_old_did(
     key_file: Path = private_key_path(client)
     key_file.unlink()
 
-    # Force recreate identity
-    ensure_bootstrap(client, force_recreate_crypto_keys=True)
+    # Manually delete DID to recreate identity (as instructed in error message)
+    did_file.unlink()
+
+    # Bootstrap will create fresh identity
+    ensure_bootstrap(client)
 
     # Verify new keys were created
     assert keys_exist(client)
@@ -517,7 +520,7 @@ def test_ensure_bootstrap_force_recreate_deletes_old_did(
     assert new_spk != original_spk, "New SPK should be different from original"
 
     # Verify no archived DID files exist (old DID should be deleted, not archived)
-    did_dir: Path = did_file.parent
+    did_dir: Path = did_path(client).parent
     archived_files: list[Path] = list(did_dir.glob("did.retired.*.json"))
     assert len(archived_files) == 0, "Old DID should be deleted, not archived"
 
@@ -550,7 +553,8 @@ def test_ensure_bootstrap_detects_did_conflict(temp_workspace: Path) -> None:
     error_message: str = str(exc_info.value)
     assert "DID conflict detected" in error_message
     assert "did.conflict.json" in str(conflict_file)
-    assert "Manual resolution required" in error_message
+    assert "RESOLUTION:" in error_message
+    assert "Multiple versions of your identity exist" in error_message
 
 
 def test_ensure_bootstrap_fresh_start_succeeds(unbootstrapped_client: Client) -> None:
@@ -655,7 +659,7 @@ def test_private_keys_lost(temp_workspace: Path) -> None:
         ensure_bootstrap(client)
 
     error_message: str = str(exc_info.value)
-    assert "DID DOCUMENT EXISTS BUT PRIVATE KEYS NOT FOUND" in error_message
+    assert "PRIVATE KEYS MISSING BUT DID" in error_message
 
     # Verify DID was NOT changed
     current_did: Dict[str, Any] = get_did_document(client, client.config.email)
@@ -719,10 +723,13 @@ def test_force_recreate_allows_successful_encryption_decryption(
     assert not keys_exist(do_client), "DO keys should be lost"
     assert keys_exist(ds_client), "DS keys should still exist"
 
-    # ==================== PHASE 3: Force Recreate Keys ====================
+    # ==================== PHASE 3: Manually Recreate Identity ====================
 
-    # DO explicitly chooses to recreate identity
-    ensure_bootstrap(do_client, force_recreate_crypto_keys=True)
+    # DO explicitly chooses to recreate identity by deleting DID manually
+    did_path(do_client).unlink()
+
+    # Bootstrap will create fresh identity
+    ensure_bootstrap(do_client)
 
     # Verify new keys and DID created
     assert keys_exist(do_client), "New keys should exist"
