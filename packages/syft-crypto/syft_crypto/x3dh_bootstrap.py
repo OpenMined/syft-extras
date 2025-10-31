@@ -86,22 +86,19 @@ def bootstrap_user(client: Client, force: bool = False) -> bool:
     return True
 
 
-def ensure_bootstrap(
-    client: Optional[Client] = None, force_recreate_crypto_keys: bool = False
-) -> Client:
+def ensure_bootstrap(client: Optional[Client] = None) -> Client:
     """Ensure user has been bootstrapped with crypto keys
 
     Args:
         client: Optional SyftBox client instance
-        force_recreate_crypto_keys: If True, recreate keys even if DID exists.
-                                WARNING: Makes old encrypted data unrecoverable!
 
     Returns:
         Client: The client instance (loaded if not provided)
 
     Raises:
-        RuntimeError: If DID exists but keys don't (without force flag)
+        RuntimeError: If DID exists but keys don't
         RuntimeError: If unresolved DID conflicts exist
+        RuntimeError: If keys don't match DID document
     """
     if client is None:
         client = Client.load()
@@ -114,20 +111,20 @@ def ensure_bootstrap(
 
     # Check for DID conflicts first
     if did_conflict_file.exists():
-        if force_recreate_crypto_keys:
-            # Delete conflict file when forcing recreation (new identity will be created anyway)
-            did_conflict_file.unlink()
-            logger.warning(f"🗑️  DID conflict file deleted: {did_conflict_file}")
-        else:
-            raise RuntimeError(
-                f"❌ DID conflict detected: {did_conflict_file}\n"
-                f"\n"
-                f"Multiple versions of your identity exist.\n"
-                f"Manual resolution required:\n"
-                f"  1. Check which DID matches your private keys\n"
-                f"  2. Keep the correct version, delete the other\n"
-                f"  3. Or use force_recreate_crypto_keys=True to recreate identity\n"
-            )
+        raise RuntimeError(
+            f"❌ DID conflict detected: {did_conflict_file}\n"
+            f"\n"
+            f"Multiple versions of your identity exist.\n"
+            f"\n"
+            f"RESOLUTION:\n"
+            f"  1. Check which DID matches your private keys\n"
+            f"  2. Keep the correct version, delete: {did_conflict_file}\n"
+            f"  3. Or delete both DIDs to recreate identity (⚠️ old encrypted data will become undecryptable):\n"
+            f"     rm {did_file}\n"
+            f"     rm {did_conflict_file}\n"
+            f"     # Then restart application\n"
+            f"\n"
+        )
 
     # Auto-recovery: Keys exist but DID doesn't (safe to regenerate)
     if keys_exist(client) and not did_file.exists():
@@ -140,48 +137,40 @@ def ensure_bootstrap(
 
     # Critical case: did.json exists but keys don't
     if did_file.exists() and not keys_exist(client):
-        if force_recreate_crypto_keys:
-            logger.warning(
-                "⚠️  RECREATING CRYPTO KEYS (force_recreate_crypto_keys=True)\n"
-                "Old encrypted messages will become UNRECOVERABLE!"
-            )
-            # Delete old DID (new identity will be created)
-            if did_file.exists():
-                did_file.unlink()
-                logger.info(f"🗑️  Old DID deleted: {did_file}")
-
-            # Generate new keys and DID
-            bootstrap_user(client, force=True)
-
-        else:
-            # Fail with clear instructions
-            key_path = private_key_path(client)
-            raise RuntimeError(
-                f"❌ DID DOCUMENT EXISTS BUT PRIVATE KEYS NOT FOUND\n"
-                f"\n"
-                f"DID location: {did_file}\n"
-                f"Expected keys: {key_path}\n"
-                f"\n"
-                f"Common causes:\n"
-                f"  • Container restart without persistent volume\n"
-                f"  • Setting up same account on new device without moving keys to the new device\n"
-                f"  • Keys were deleted/lost\n"
-                f"\n"
-                f"SOLUTIONS:\n"
-                f"\n"
-                f"1. MOUNT PERSISTENT VOLUME (recommended for containers):\n"
-                f"   docker run -v syftbox-keys:/home/syftboxuser/.syftbox ...\n"
-                f"   Then restore keys or bootstrap once\n"
-                f"\n"
-                f"2. IMPORT KEYS from another device:\n"
-                f"   Copy keys from working device to: {key_path}\n"
-                f"\n"
-                f"3. RECREATE KEYS (⚠️  WARNING: old encrypted data becomes unrecoverable!):\n"
-                f"   Python API:\n"
-                f"     from syft_crypto import ensure_bootstrap\n"
-                f"     ensure_bootstrap(client, force_recreate_crypto_keys=True)\n"
-                f"   \n"
-            )
+        # Fail with comprehensive guidance
+        key_path = private_key_path(client)
+        raise RuntimeError(
+            f"❌ PRIVATE KEYS MISSING BUT DID document EXISTS\n"
+            f"\n"
+            f"Your DID document exists but private keys are missing.\n"
+            f"This usually happens in one of these scenarios:\n"
+            f"\n"
+            f"DID location: {did_file}\n"
+            f"Expected keys: {key_path}\n"
+            f"\n"
+            f"🐳 DOCKER/CONTAINER SETUP (most common):\n"
+            f"   Add persistent volumes for keys:\n"
+            f"     docker run \\\n"
+            f"       --volume syftbox-keys:/home/syftboxuser/.syftbox \\\n"
+            f"       --volume syftbox-data:/home/syftboxuser/SyftBox \\\n"
+            f"       [other options...]\n"
+            f"\n"
+            f"💻 NEW DEVICE SETUP:\n"
+            f"   Import keys from your other device:\n"
+            f"     # On original device:\n"
+            f"     tar czf keys-backup.tar.gz ~/.syftbox/*/pvt.jwks.json\n"
+            f"     # Transfer and restore on new device:\n"
+            f"     tar xzf keys-backup.tar.gz -C ~/\n"
+            f"\n"
+            f"🗑️  KEYS DELETED/LOST:\n"
+            f"   Restore from backup (if available):\n"
+            f"     ls ~/.syftbox/backups/\n"
+            f"   Or recreate identity (⚠️ old encrypted data will become undecryptable):\n"
+            f"     rm {did_file}\n"
+            f"     # Then restart application\n"
+            f"\n"
+            f"💬 Support: https://openmined.org/get-involved/\n"
+        )
 
     # Safe to bootstrap - no DID exists
     if not keys_exist(client):
@@ -209,13 +198,12 @@ def ensure_bootstrap(
                 f"   Copy the correct keys to: {key_path}\n"
                 f"   Then restart\n"
                 f"\n"
-                f"2. RECREATE KEYS AND DID (⚠️  WARNING: old encrypted data becomes unrecoverable!):\n"
-                f"   Delete DID manually: rm {did_file}\n"
-                f"   Then run:\n"
-                f"     from syft_crypto import ensure_bootstrap\n"
-                f"     ensure_bootstrap(client, force_recreate_crypto_keys=True)\n"
+                f"2. RECREATE KEYS AND DID (⚠️ old encrypted data becomes undecryptable!):\n"
+                f"   Delete DID manually:\n"
+                f"     rm {did_file}\n"
+                f"   Then restart application (will bootstrap fresh)\n"
                 f"\n"
-                f"See CRYPTOBUG_FIX.md for detailed information.\n"
+                f"💬 Support: https://openmined.org/get-involved/\n"
             )
         logger.debug(f"✅ Keys match DID for {client.config.email}")
 
