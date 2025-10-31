@@ -415,7 +415,9 @@ class SyftEvents:
                 return
 
             if processed_req.is_expired:
-                logger.debug(f"Request expired: {processed_req}")
+                logger.debug(
+                    f"Request expired: ID = {processed_req.id}, URL = {processed_req.url}, sender = {processed_req.sender}"
+                )
                 if encrypt_reply:
                     rpc.reply_to(
                         processed_req,
