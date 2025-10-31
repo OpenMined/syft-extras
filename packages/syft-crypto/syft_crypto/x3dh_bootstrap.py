@@ -105,11 +105,11 @@ def ensure_bootstrap(client: Optional[Client] = None) -> Client:
 
     # Construct paths to DID files
     did_file = client.datasites / client.config.email / "public" / "did.json"
+
+    # Check for DID conflicts first
     did_conflict_file = (
         client.datasites / client.config.email / "public" / "did.conflict.json"
     )
-
-    # Check for DID conflicts first
     if did_conflict_file.exists():
         raise RuntimeError(
             f"❌ DID conflict detected: {did_conflict_file}\n"
