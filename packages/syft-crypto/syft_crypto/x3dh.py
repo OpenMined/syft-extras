@@ -107,7 +107,6 @@ def encrypt_message(
     # Load receiver's DID document
     try:
         receiver_did = get_did_document(client, to)
-        logger.debug(f"✓ Loaded receiver's DID document for {to}")
     except Exception as e:
         logger.error(f"Failed to load receiver's DID document: {e}")
         raise
@@ -115,12 +114,6 @@ def encrypt_message(
     # Extract receiver's public key
     try:
         receiver_spk_public = get_public_key_from_did(receiver_did)
-        receiver_spk_bytes = receiver_spk_public.public_bytes(
-            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
-        )
-        logger.debug(
-            f"✓ Extracted receiver's SPK (first 8 bytes): {receiver_spk_bytes[:8].hex()}"
-        )
     except Exception as e:
         logger.error(f"Failed to extract receiver's public key: {e}")
         raise
@@ -128,7 +121,6 @@ def encrypt_message(
     # Verify the signed prekey signature before proceeding
     try:
         _verify_signed_prekey(receiver_did, receiver_spk_public)
-        logger.debug("✓ Verified receiver's signed prekey signature")
     except Exception as e:
         logger.error(f"Signature verification failed: {e}")
         raise
@@ -136,11 +128,6 @@ def encrypt_message(
     # Load our private keys
     try:
         _, spk_private_key = load_private_keys(client)
-        our_spk_public = spk_private_key.public_key()
-        our_spk_bytes = our_spk_public.public_bytes(
-            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
-        )
-        logger.debug(f"✓ Loaded our SPK (first 8 bytes): {our_spk_bytes[:8].hex()}")
     except Exception as e:
         logger.error(f"Failed to load our private keys: {e}")
         raise
@@ -148,22 +135,14 @@ def encrypt_message(
     # Generate ephemeral key pair
     ephemeral_private = x25519.X25519PrivateKey.generate()
     ephemeral_public = ephemeral_private.public_key()
-    ephemeral_public_bytes = ephemeral_public.public_bytes(
-        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
-    )
-    logger.debug(
-        f"✓ Generated ephemeral key (first 8 bytes): {ephemeral_public_bytes[:8].hex()}"
-    )
 
     # Perform X3DH key agreement
     try:
         # DH1 = DH(SPK_a, SPK_b) - our private signed prekey with their public signed prekey
         dh1 = spk_private_key.exchange(receiver_spk_public)
-        logger.debug(f"✓ DH1 computed (first 8 bytes): {dh1[:8].hex()}")
 
         # DH2 = DH(EK_a, SPK_b) - our private ephemeral key with their public signed prekey
         dh2 = ephemeral_private.exchange(receiver_spk_public)
-        logger.debug(f"✓ DH2 computed (first 8 bytes): {dh2[:8].hex()}")
     except Exception as e:
         logger.error(f"DH key exchange failed: {e}")
         raise
@@ -178,7 +157,6 @@ def encrypt_message(
             info=b"X3DH-SyftBox",
             backend=default_backend(),
         ).derive(shared_key_material)
-        logger.debug(f"✓ Derived shared key (first 8 bytes): {shared_key[:8].hex()}")
     except Exception as e:
         logger.error(f"Key derivation failed: {e}")
         raise
@@ -193,11 +171,7 @@ def encrypt_message(
     encryptor = cipher.encryptor()
 
     try:
-        logger.debug(f"Encrypting with AES-GCM (plaintext size: {len(message)} bytes)")
         ciphertext = encryptor.update(message.encode()) + encryptor.finalize()
-        logger.debug("✓ AES-GCM encryption successful")
-        logger.debug(f"   IV (first 8 bytes): {iv[:8].hex()}")
-        logger.debug(f"   Tag (first 8 bytes): {encryptor.tag[:8].hex()}")
     except Exception as e:
         logger.error(f"AES-GCM encryption failed: {e}")
         raise
@@ -248,7 +222,6 @@ def decrypt_message(
     # Load sender's DID document
     try:
         sender_did = get_did_document(client, payload.sender)
-        logger.debug(f"✓ Loaded sender's DID document for {payload.sender}")
     except Exception as e:
         logger.error(f"Failed to load sender's DID document: {e}")
         raise
@@ -256,12 +229,6 @@ def decrypt_message(
     # Extract sender's public key
     try:
         sender_spk_public = get_public_key_from_did(sender_did)
-        sender_spk_bytes = sender_spk_public.public_bytes(
-            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
-        )
-        logger.debug(
-            f"✓ Extracted sender's SPK (first 8 bytes): {sender_spk_bytes[:8].hex()}"
-        )
     except Exception as e:
         logger.error(f"Failed to extract sender's public key: {e}")
         raise
@@ -269,7 +236,6 @@ def decrypt_message(
     # Verify the sender's signed prekey signature
     try:
         _verify_signed_prekey(sender_did, sender_spk_public)
-        logger.debug("✓ Verified sender's signed prekey signature")
     except Exception as e:
         logger.error(f"Signature verification failed: {e}")
         raise
@@ -277,9 +243,6 @@ def decrypt_message(
     # Reconstruct sender's ephemeral public key
     try:
         sender_ephemeral_public = x25519.X25519PublicKey.from_public_bytes(payload.ek)
-        logger.debug(
-            f"✓ Reconstructed sender's ephemeral key (first 8 bytes): {payload.ek[:8].hex()}"
-        )
     except Exception as e:
         logger.error(f"Failed to reconstruct ephemeral key: {e}")
         raise
@@ -287,11 +250,6 @@ def decrypt_message(
     # Load our private keys
     try:
         _, spk_private_key = load_private_keys(client)
-        our_spk_public = spk_private_key.public_key()
-        our_spk_bytes = our_spk_public.public_bytes(
-            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
-        )
-        logger.debug(f"✓ Loaded our SPK (first 8 bytes): {our_spk_bytes[:8].hex()}")
     except Exception as e:
         logger.error(f"Failed to load our private keys: {e}")
         raise
@@ -300,11 +258,9 @@ def decrypt_message(
     try:
         # DH1 = DH(SPK_b, SPK_a) - our signed prekey with their signed prekey
         dh1 = spk_private_key.exchange(sender_spk_public)
-        logger.debug(f"✓ DH1 computed (first 8 bytes): {dh1[:8].hex()}")
 
         # DH2 = DH(SPK_b, EK_a) - our signed prekey with their ephemeral key
         dh2 = spk_private_key.exchange(sender_ephemeral_public)
-        logger.debug(f"✓ DH2 computed (first 8 bytes): {dh2[:8].hex()}")
     except Exception as e:
         logger.error(f"DH key exchange failed: {e}")
         raise
@@ -319,7 +275,6 @@ def decrypt_message(
             info=b"X3DH-SyftBox",
             backend=default_backend(),
         ).derive(shared_key_material)
-        logger.debug(f"✓ Derived shared key (first 8 bytes): {shared_key[:8].hex()}")
     except Exception as e:
         logger.error(f"Key derivation failed: {e}")
         raise
@@ -333,11 +288,7 @@ def decrypt_message(
     decryptor = cipher.decryptor()
 
     try:
-        logger.debug(
-            f"Attempting AES-GCM decryption (ciphertext size: {len(payload.ciphertext)} bytes)"
-        )
         decrypted_bytes = decryptor.update(payload.ciphertext) + decryptor.finalize()
-        logger.debug("✓ AES-GCM decryption successful")
     except Exception as e:
         error_type = type(e).__name__
         error_msg = str(e) if str(e) else "(empty error message)"
