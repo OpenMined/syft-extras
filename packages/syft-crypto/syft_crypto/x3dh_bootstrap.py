@@ -178,10 +178,10 @@ def ensure_bootstrap(client: Optional[Client] = None) -> Client:
 
     # Determine if DID exists (prefer server, fallback to local synced file)
     did_exists = server_did is not None or did_file.exists()
-    has_keys = keys_exist(client)
+    private_keys_exist = keys_exist(client)
 
     # Auto-recovery: Keys exist but DID doesn't exist anywhere (safe to regenerate)
-    if has_keys and not did_exists:
+    if private_keys_exist and not did_exists:
         logger.info(
             f"Private keys exist but DID missing (checked server and local) for {client.config.email}. "
             f"Regenerating DID from existing keys..."
@@ -190,14 +190,14 @@ def ensure_bootstrap(client: Optional[Client] = None) -> Client:
         return client
 
     # Critical case: DID exists (on server or locally) but keys don't
-    if did_exists and not has_keys:
+    if did_exists and not private_keys_exist:
         # Fail with comprehensive guidance
         key_path = private_key_path(client)
         did_location = "server" if server_did else "local file"
         did_url = f"https://{client.config.server_url.host}/datasites/{client.config.email}/public/did.json"
 
         raise RuntimeError(
-            f"❌ PRIVATE KEYS MISSING BUT DID document EXISTS\n"
+            f"❌ PRIVATE KEYS MISSING BUT DID document that contains public keys EXISTS\n"
             f"\n"
             f"Your DID document exists ({did_location}) but private keys are missing.\n"
             f"This usually happens in one of these scenarios:\n"
@@ -209,7 +209,6 @@ def ensure_bootstrap(client: Optional[Client] = None) -> Client:
             f"   Add persistent volumes for keys:\n"
             f"     docker run \\\n"
             f"       --volume syftbox-keys:/home/syftboxuser/.syftbox \\\n"
-            f"       --volume syftbox-data:/home/syftboxuser/SyftBox \\\n"
             f"       [other options...]\n"
             f"\n"
             f"💻 NEW DEVICE SETUP:\n"
@@ -226,19 +225,19 @@ def ensure_bootstrap(client: Optional[Client] = None) -> Client:
             f"     rm {did_file}\n"
             f"     # Then restart application\n"
             f"\n"
-            f"💬 Support: https://openmined.org/get-involved/\n"
+            f"💬 Support: https://openmined.org/get-involved/ \n"
         )
 
     # Safe to bootstrap - no DID exists anywhere, no keys
-    if not has_keys and not did_exists:
+    if not private_keys_exist and not did_exists:
         logger.info(f"No keys or DID found. Bootstrapping {client.config.email}...")
         bootstrap_user(client)
-    elif has_keys:
-        logger.debug(f"✅ Keys exist for {client.config.email}")
+    elif private_keys_exist:
+        logger.debug(f"✅ Private keys exist for {client.config.email}")
 
     # Verify keys match DID (if both exist)
     # Use server DID if available, otherwise use local file
-    if has_keys and did_exists:
+    if private_keys_exist and did_exists:
         if not _verify_key_pair_matches(client, server_did):
             key_path = private_key_path(client)
             did_source = "server" if server_did else "local synced file"
@@ -262,9 +261,11 @@ def ensure_bootstrap(client: Optional[Client] = None) -> Client:
                 f"     rm {did_file}\n"
                 f"   Then restart application (will bootstrap fresh)\n"
                 f"\n"
-                f"💬 Support: https://openmined.org/get-involved/\n"
+                f"💬 Support: https://openmined.org/get-involved/ \n"
             )
-        logger.debug(f"✅ Keys match DID for {client.config.email}")
+        logger.debug(
+            f"✅ Private keys match public keys in DID document for {client.config.email}"
+        )
 
     return client
 
@@ -290,10 +291,14 @@ def _verify_key_pair_matches(client: Client, server_did: Optional[dict] = None) 
         # Use server DID if provided, otherwise load from local file
         if server_did is not None:
             did_doc = server_did
-            logger.debug("Verifying keys against server DID")
+            logger.debug(
+                "Verifying private keys against server DID that contains public keys"
+            )
         else:
             did_doc = get_did_document(client, client.config.email)
-            logger.debug("Verifying keys against local DID")
+            logger.debug(
+                "Verifying private keys against local DID that contains public keys"
+            )
 
         # Extract public keys from DID
         did_identity_public = get_identity_public_key_from_did(did_doc)
