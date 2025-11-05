@@ -1284,7 +1284,7 @@ requires-dist = [
 
 [[package]]
 name = "syft-rpc"
-version = "0.4.0"
+version = "0.4.1"
 source = { editable = "packages/syft-rpc" }
 dependencies = [
     { name = "pydantic" },
