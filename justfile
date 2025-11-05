@@ -34,6 +34,29 @@ build-all:
     uv build --all-packages
 
 [group('utils')]
+clean:
+    #!/bin/sh
+    echo "{{ _cyan }}Cleaning up files and directories...{{ _nc }}"
+
+    remove_dirs() {
+        dir_name=$1
+        dirs=$(find . -type d -name "$dir_name" 2>/dev/null)
+        if [ -n "$dirs" ]; then
+            echo "$dirs" | while read -r dir; do
+                echo "  {{ _red }}✗{{ _nc }} Removing $dir"
+                rm -rf "$dir"
+            done
+        fi
+    }
+    # Remove directories by name pattern
+    remove_dirs "dist"
+    remove_dirs ".pytest_cache"
+    remove_dirs "__pycache__"
+    remove_dirs ".ipynb_checkpoints"
+
+    echo "{{ _green }}✓ Clean complete!{{ _nc }}"
+
+[group('utils')]
 run-jupyter jupyter_args="":
     uv sync
 
