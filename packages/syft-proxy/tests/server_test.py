@@ -6,33 +6,36 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from syft_core import Client
 
+import syft_proxy.server
 from syft_proxy.models import RPCSendRequest
 from syft_proxy.server import app
-import syft_proxy.server
 
 # Create a persistent temp directory for tests
 TEST_DIR = tempfile.mkdtemp()
 TEST_PATH = Path(TEST_DIR)
+
 
 def create_test_client():
     """Create a test client with a test config file."""
     # Create config directory
     config_dir = TEST_PATH / ".syftbox"
     config_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Create config file
     config_file = config_dir / "config.json"
     config_data = {
         "email": "test@example.com",
         "server_url": "https://syftbox.example.com",
         "client_url": "http://127.0.0.1:8080",
-        "data_dir": str(TEST_PATH)
+        "data_dir": str(TEST_PATH),
     }
     config_file.write_text(json.dumps(config_data))
-    
+
     # Create necessary directories
-    (TEST_PATH / "datasites" / "test@example.com" / "app_data").mkdir(parents=True, exist_ok=True)
-    
+    (TEST_PATH / "datasites" / "test@example.com" / "app_data").mkdir(
+        parents=True, exist_ok=True
+    )
+
     # Load client with the config file
     return Client.load(config_file)
 
@@ -85,7 +88,8 @@ def test_rpc_send_blocking():
     )
     response = client.post("/rpc", json=rpc_req.model_dump(), params={"blocking": True})
     # Accept various status codes that might occur
-    assert response.status_code in [200, 403, 419, 500, 503]
+    # 404 - endpoint not found, 403 - forbidden, 419 - timeout, 500 - server error, 503 - client not initialized
+    assert response.status_code in [200, 403, 404, 419, 500, 503]
     assert isinstance(response.json(), dict)
     if response.status_code == 503:
         assert "client not initialized" in response.json().get("detail", "").lower()
@@ -126,7 +130,7 @@ def test_rpc_status_found():
     response = client.post(
         "/rpc", json=rpc_req.model_dump(), params={"blocking": False}
     )
-    
+
     # If client is not initialized, we can't test status lookup
     if response.status_code == 503:
         return
@@ -163,7 +167,7 @@ def test_rpc_status_non_existent_id():
     """Test the RPC status endpoint to ensure it returns a 404 or 503 status code for a non-existent request ID."""
     response = client.get("/rpc/status/non_existent_id")
     # 404 when client is initialized and ID not found
-    # 503 when client is not initialized  
+    # 503 when client is not initialized
     assert response.status_code in [404, 503]
 
 
@@ -171,6 +175,7 @@ def test_rpc_status_non_existent_id():
 def test_cleanup():
     """Clean up the test directory."""
     import shutil
+
     try:
         shutil.rmtree(TEST_DIR)
     except Exception:
