@@ -102,38 +102,64 @@ def encrypt_message(
         FileNotFoundError: If recipient's DID document not found
         ValueError: If recipient's DID document is invalid
     """
+    logger.debug(f"🔍 Encrypting message from {client.config.email} to {to}")
+
     # Load receiver's DID document
-    receiver_did = get_did_document(client, to)
+    try:
+        receiver_did = get_did_document(client, to)
+    except Exception as e:
+        logger.error(f"Failed to load receiver's DID document: {e}")
+        raise
 
     # Extract receiver's public key
-    receiver_spk_public = get_public_key_from_did(receiver_did)
+    try:
+        receiver_spk_public = get_public_key_from_did(receiver_did)
+    except Exception as e:
+        logger.error(f"Failed to extract receiver's public key: {e}")
+        raise
 
     # Verify the signed prekey signature before proceeding
-    _verify_signed_prekey(receiver_did, receiver_spk_public)
+    try:
+        _verify_signed_prekey(receiver_did, receiver_spk_public)
+    except Exception as e:
+        logger.error(f"Signature verification failed: {e}")
+        raise
 
     # Load our private keys
-    _, spk_private_key = load_private_keys(client)
+    try:
+        _, spk_private_key = load_private_keys(client)
+    except Exception as e:
+        logger.error(f"Failed to load our private keys: {e}")
+        raise
 
     # Generate ephemeral key pair
     ephemeral_private = x25519.X25519PrivateKey.generate()
     ephemeral_public = ephemeral_private.public_key()
 
     # Perform X3DH key agreement
-    # DH1 = DH(SPK_a, SPK_b) - our private signed prekey with their public signed prekey
-    dh1 = spk_private_key.exchange(receiver_spk_public)
+    try:
+        # DH1 = DH(SPK_a, SPK_b) - our private signed prekey with their public signed prekey
+        dh1 = spk_private_key.exchange(receiver_spk_public)
 
-    # DH2 = DH(EK_a, SPK_b) - our private ephemeral key with their public signed prekey
-    dh2 = ephemeral_private.exchange(receiver_spk_public)
+        # DH2 = DH(EK_a, SPK_b) - our private ephemeral key with their public signed prekey
+        dh2 = ephemeral_private.exchange(receiver_spk_public)
+    except Exception as e:
+        logger.error(f"DH key exchange failed: {e}")
+        raise
 
     # Derive shared secret using HKDF
-    shared_key_material = dh1 + dh2
-    shared_key = HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=None,
-        info=b"X3DH-SyftBox",
-        backend=default_backend(),
-    ).derive(shared_key_material)
+    try:
+        shared_key_material = dh1 + dh2
+        shared_key = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=None,
+            info=b"X3DH-SyftBox",
+            backend=default_backend(),
+        ).derive(shared_key_material)
+    except Exception as e:
+        logger.error(f"Key derivation failed: {e}")
+        raise
 
     # Encrypt the message using AES-GCM
     iv = os.urandom(
@@ -143,7 +169,12 @@ def encrypt_message(
         algorithms.AES(shared_key), modes.GCM(iv), backend=default_backend()
     )
     encryptor = cipher.encryptor()
-    ciphertext = encryptor.update(message.encode()) + encryptor.finalize()
+
+    try:
+        ciphertext = encryptor.update(message.encode()) + encryptor.finalize()
+    except Exception as e:
+        logger.error(f"AES-GCM encryption failed: {e}")
+        raise
 
     # Create the encrypted payload
     encrypted_payload = EncryptedPayload(
@@ -186,37 +217,67 @@ def decrypt_message(
             f"Message is for {payload.receiver}, not {client.config.email}"
         )
 
+    logger.debug(f"🔍 Decrypting message from {payload.sender} to {payload.receiver}")
+
     # Load sender's DID document
-    sender_did = get_did_document(client, payload.sender)
+    try:
+        sender_did = get_did_document(client, payload.sender)
+    except Exception as e:
+        logger.error(f"Failed to load sender's DID document: {e}")
+        raise
 
     # Extract sender's public key
-    sender_spk_public = get_public_key_from_did(sender_did)
+    try:
+        sender_spk_public = get_public_key_from_did(sender_did)
+    except Exception as e:
+        logger.error(f"Failed to extract sender's public key: {e}")
+        raise
 
     # Verify the sender's signed prekey signature
-    _verify_signed_prekey(sender_did, sender_spk_public)
+    try:
+        _verify_signed_prekey(sender_did, sender_spk_public)
+    except Exception as e:
+        logger.error(f"Signature verification failed: {e}")
+        raise
 
     # Reconstruct sender's ephemeral public key
-    sender_ephemeral_public = x25519.X25519PublicKey.from_public_bytes(payload.ek)
+    try:
+        sender_ephemeral_public = x25519.X25519PublicKey.from_public_bytes(payload.ek)
+    except Exception as e:
+        logger.error(f"Failed to reconstruct ephemeral key: {e}")
+        raise
 
     # Load our private keys
-    _, spk_private_key = load_private_keys(client)
+    try:
+        _, spk_private_key = load_private_keys(client)
+    except Exception as e:
+        logger.error(f"Failed to load our private keys: {e}")
+        raise
 
     # Perform X3DH key agreement (reverse of encryption)
-    # DH1 = DH(SPK_b, SPK_a) - our signed prekey with their signed prekey
-    dh1 = spk_private_key.exchange(sender_spk_public)
+    try:
+        # DH1 = DH(SPK_b, SPK_a) - our signed prekey with their signed prekey
+        dh1 = spk_private_key.exchange(sender_spk_public)
 
-    # DH2 = DH(SPK_b, EK_a) - our signed prekey with their ephemeral key
-    dh2 = spk_private_key.exchange(sender_ephemeral_public)
+        # DH2 = DH(SPK_b, EK_a) - our signed prekey with their ephemeral key
+        dh2 = spk_private_key.exchange(sender_ephemeral_public)
+    except Exception as e:
+        logger.error(f"DH key exchange failed: {e}")
+        raise
 
     # Derive shared secret using HKDF (it's a symmetric secret key (32 bytes))
-    shared_key_material = dh1 + dh2
-    shared_key = HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=None,
-        info=b"X3DH-SyftBox",
-        backend=default_backend(),
-    ).derive(shared_key_material)
+    try:
+        shared_key_material = dh1 + dh2
+        shared_key = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=None,
+            info=b"X3DH-SyftBox",
+            backend=default_backend(),
+        ).derive(shared_key_material)
+    except Exception as e:
+        logger.error(f"Key derivation failed: {e}")
+        raise
 
     # Decrypt the message using AES-GCM
     cipher = Cipher(
@@ -229,9 +290,15 @@ def decrypt_message(
     try:
         decrypted_bytes = decryptor.update(payload.ciphertext) + decryptor.finalize()
     except Exception as e:
+        error_type = type(e).__name__
+        error_msg = str(e) if str(e) else "(empty error message)"
+        logger.error(f"❌ AES-GCM decryption failed: {error_type}: {error_msg}")
+        logger.error(f"   IV (first 8 bytes): {payload.iv[:8].hex()}")
+        logger.error(f"   Tag (first 8 bytes): {payload.tag[:8].hex()}")
+        logger.error(f"   Shared key (first 8 bytes): {shared_key[:8].hex()}")
         if verbose:
             logger.error(f"Decryption failed with error: {e}")
-        raise ValueError(f"Decryption failed: {e}")
+        raise ValueError(f"Decryption failed ({error_type}): {error_msg}")
 
     message = decrypted_bytes.decode()
 

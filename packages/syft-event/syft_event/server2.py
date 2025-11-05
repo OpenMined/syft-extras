@@ -7,22 +7,15 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
-from typing import Any, Callable, List, Optional, Type, Union
 
 import pathspec
 from loguru import logger
 from pydantic import ValidationError
 from syft_core import Client
 from syft_crypto import EncryptedPayload, decrypt_message
-from syft_event.cleanup import PeriodicCleanup, create_cleanup_callback
-from syft_event.deps import func_args_from_request
-from syft_event.handlers import AnyPatternHandler, RpcRequestHandler
-from syft_event.router import EventRouter
-from syft_event.schema import generate_schema
-from syft_event.types import Response
 from syft_rpc import rpc
 from syft_rpc.protocol import SyftRequest, SyftStatus
-from typing_extensions import Callable, List, Optional, Type, Union
+from typing_extensions import Any, Callable, List, Optional, Type, Union
 from watchdog.events import (
     FileCreatedEvent,
     FileModifiedEvent,
@@ -30,6 +23,13 @@ from watchdog.events import (
     FileSystemEvent,
 )
 from watchdog.observers import Observer
+
+from syft_event.cleanup import PeriodicCleanup, create_cleanup_callback
+from syft_event.deps import func_args_from_request
+from syft_event.handlers import AnyPatternHandler, RpcRequestHandler
+from syft_event.router import EventRouter
+from syft_event.schema import generate_schema
+from syft_event.types import Response
 
 DEFAULT_WATCH_EVENTS: List[Type[FileSystemEvent]] = [
     FileCreatedEvent,
@@ -50,13 +50,13 @@ rules:
   access:
     read:
     - 'USER'
-    write: 
+    write:
     - 'USER'
 - pattern: '**/{{.UserEmail}}/*.response'
   access:
-    read: 
+    read:
     - 'USER'
-    write: 
+    write:
     - 'USER'
 """
 
@@ -65,9 +65,12 @@ LEGACY_REQUEST_PATH_PATTERN = pathspec.PathSpec.from_lines(
     pathspec.patterns.GitWildMatchPattern, ["*/*.request"]
 )
 
-# New request path pattern: matches requests in sender subdirectories (two levels deeper)
+# New request path pattern: matches requests in sender subdirectories
+# Supports multi-level endpoints (e.g., user_code/create/sender_identifier/file.request)
+# Pattern: {endpoint_path...}/{sender_identifier}/{file}.request
+# where endpoint_path can be any depth (e.g., "job" or "user_code/create")
 REQUEST_PATH_PATTERN = pathspec.PathSpec.from_lines(
-    pathspec.patterns.GitWildMatchPattern, ["*/*/*.request"]
+    pathspec.patterns.GitWildMatchPattern, ["**/*/*.request"]
 )
 
 
@@ -157,6 +160,9 @@ class SyftEvents:
             # Auto-decrypt if we're the intended recipient
             if encrypted_payload.receiver == self.client.email:
                 logger.debug(f"Auto-decrypting request from {encrypted_payload.sender}")
+                logger.debug(f"  Receiver: {encrypted_payload.receiver}")
+                logger.debug(f"  Sender: {encrypted_payload.sender}")
+                logger.debug(f"  Version: {encrypted_payload.version}")
 
                 decrypted_data = decrypt_message(encrypted_payload, client=self.client)
 
@@ -182,7 +188,14 @@ class SyftEvents:
             # Not encrypted, return original
             return req
         except Exception as e:
-            logger.warning(f"Failed to decrypt request: {e}")
+            error_type = type(e).__name__
+            error_msg = str(e) if str(e) else "(empty error message)"
+            logger.warning(f"Failed to decrypt request: {error_type}: {error_msg}")
+            logger.debug("Decryption error details:", exc_info=True)
+            if "encrypted_payload" in locals():
+                logger.debug(f"  Payload sender: {encrypted_payload.sender}")
+                logger.debug(f"  Expected receiver: {self.client.email}")
+                logger.debug(f"  Payload version: {encrypted_payload.version}")
             return req  # Return original on decryption failure
 
     def init(self) -> None:
@@ -402,7 +415,9 @@ class SyftEvents:
                 return
 
             if processed_req.is_expired:
-                logger.debug(f"Request expired: {processed_req}")
+                logger.debug(
+                    f"Request expired: ID = {processed_req.id}, URL = {processed_req.url}, sender = {processed_req.sender}"
+                )
                 if encrypt_reply:
                     rpc.reply_to(
                         processed_req,

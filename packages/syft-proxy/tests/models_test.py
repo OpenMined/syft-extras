@@ -113,6 +113,8 @@ def test_rpc_status_missing_fields():
     This test verifies that the RPCStatus class accepts empty ID
     since there's no validation for it in the model.
     """
-    status = RPCStatus(id="", status=RPCStatusCode.NOT_FOUND, request=None, response=None)
+    status = RPCStatus(
+        id="", status=RPCStatusCode.NOT_FOUND, request=None, response=None
+    )
     assert status.id == ""
     assert status.status == RPCStatusCode.NOT_FOUND

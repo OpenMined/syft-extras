@@ -142,6 +142,33 @@ def create_x3dh_did_document(
     }
 
 
+def get_identity_public_key_from_did(did_doc: dict) -> ed25519.Ed25519PublicKey:
+    """Extract and reconstruct identity public key from DID document
+
+    Args:
+        did_doc: The DID document
+
+    Returns:
+        Ed25519PublicKey: The reconstructed identity public key
+
+    Raises:
+        ValueError: If identity key not found in DID document
+    """
+    key_jwk = None
+    for verification_method in did_doc.get("verificationMethod", []):
+        if verification_method["id"].endswith("#identity-key"):
+            key_jwk = verification_method["publicKeyJwk"]
+            break
+
+    if not key_jwk:
+        raise ValueError("No identity-key found in DID document")
+
+    # Reconstruct public key from JWK
+    return ed25519.Ed25519PublicKey.from_public_bytes(
+        base64.urlsafe_b64decode(key_jwk["x"] + "===")
+    )
+
+
 def get_public_key_from_did(
     did_doc: dict, key_type: str = "signed-prekey"
 ) -> x25519.X25519PublicKey:
